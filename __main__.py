@@ -1,5 +1,4 @@
-"""  Convenience wrapper for sfdump to run directly from source tree
-"""
+"""Convenience wrapper for sfdump to run directly from source tree"""
 
 from sfdump.cli import cli
 

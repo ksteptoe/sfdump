@@ -6,6 +6,7 @@
 
 import logging
 import sys
+
 from sfdump import __version__
 
 _logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ def setup_logging(loglevel):
     )
 
 
-def sfdump_api(loglevel: int ):
+def sfdump_api(loglevel: int):
     """Wrapper allowing :func: $(package) to be called with string arguments in a CLI fashion
 
     Args:
@@ -33,5 +34,3 @@ def sfdump_api(loglevel: int ):
     _logger.info(f"Version: {__version__}")
     # Code Here
     _logger.info("Script ends here")
-
-

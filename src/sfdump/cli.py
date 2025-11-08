@@ -4,7 +4,9 @@ which will install the command $(package) inside your current environment.
 """
 
 import logging
+
 import click
+
 from .api import sfdump_api
 
 __author__ = "Kevin Steptoe"
@@ -17,9 +19,9 @@ _logger = logging.getLogger(__name__)
 
 
 @click.command()
-@click.version_option(__version__, '--version')
-@click.option('-v', '--verbose', 'loglevel', type=int, flag_value=logging.INFO)
-@click.option('-vv', '--very_verbose', 'loglevel', type=int, flag_value=logging.DEBUG)
+@click.version_option(__version__, "--version")
+@click.option("-v", "--verbose", "loglevel", type=int, flag_value=logging.INFO)
+@click.option("-vv", "--very_verbose", "loglevel", type=int, flag_value=logging.DEBUG)
 def cli(loglevel):
     """Calls :func:`main` passing the CLI arguments extracted from click
 

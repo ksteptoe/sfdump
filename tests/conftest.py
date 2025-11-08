@@ -1,9 +1,10 @@
 """
-    Example conftest.py for sfdump
-    Read more about conftest.py under:
-    - https://docs.pytest.org/en/stable/fixture.html
-    - https://docs.pytest.org/en/stable/writing_plugins.html
+Example conftest.py for sfdump
+Read more about conftest.py under:
+- https://docs.pytest.org/en/stable/fixture.html
+- https://docs.pytest.org/en/stable/writing_plugins.html
 """
+
 from collections import namedtuple
 from os import chdir
 from pathlib import Path
@@ -61,6 +62,6 @@ def build_env(td, datadir_copy):
         for f in l_of_files:
             s_file = datadir_copy[f]
     datadir = Path(s_file.dirname)
-    with (datadir) as f:
+    with datadir as f:
         chdir(f)
     yield td
