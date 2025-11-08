@@ -1,0 +1,64 @@
+[build-system]
+# Use modern backend with versioning via setuptools_scm
+requires = ["setuptools>=69", "setuptools_scm>=8.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sfdump"
+dynamic = ["version"]
+description = "A project scaffolded using PyScaffold Clickstart"
+readme = "README.rst"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Your Name", email = "you@example.com" }]
+
+# Runtime-only deps
+dependencies = [
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+# Everything needed for local dev, tests, linting & releases
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "pytest-xdist>=3.6",
+    "pytest-timeout>=2.3",
+    "ruff>=0.6",
+    "pre-commit>=3.7",
+    "build>=1.2",
+    "twine>=5",
+]
+
+[project.urls]
+Homepage = "https://example.com/sfdump"
+Repository = "https://github.com/example/sfdump"
+
+[project.scripts]
+sfdump = "sfdump.cli:cli"
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "dirty-tag"
+fallback_version = "0.0.1"
+write_to = "src/sfdump/_version.py"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+select = ["E", "F", "I", "B"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q --disable-warnings"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["sfdump"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
