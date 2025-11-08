@@ -8,6 +8,7 @@ import click
 
 from . import __version__
 from .command_csv import csv_cmd
+from .command_files import files_cmd
 from .command_objects import objects_cmd
 from .exceptions import MissingCredentialsError
 from .logging_config import configure_logging
@@ -122,3 +123,4 @@ def cmd_query(soql: str, pretty: bool) -> None:
 
 cli.add_command(objects_cmd)
 cli.add_command(csv_cmd)
+cli.add_command(files_cmd)
