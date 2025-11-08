@@ -16,7 +16,10 @@ except Exception:
 
 @click.command("objects")
 @click.option(
-    "--all", "show_all", is_flag=True, help="Show all sObjects (default: only queryable)."
+    "--all",
+    "show_all",
+    is_flag=True,
+    help="Show all sObjects (default: only queryable).",
 )
 def objects_cmd(show_all: bool) -> None:
     """List sObjects (queryable by default)."""
