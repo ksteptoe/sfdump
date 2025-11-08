@@ -206,6 +206,31 @@ class SalesforceAPI:
             r.raise_for_status()
         raise RuntimeError("Exceeded maximum retries.")
 
+    # --- Convenience for discovery & paging ---
+
+    def describe_global(self) -> dict:
+        """Return /sobjects (global describe)."""
+        url = f"{self.instance_url}/services/data/{self.api_version}/sobjects"
+        return self._get(url).json()
+
+    def describe_object(self, name: str) -> dict:
+        """Return /sobjects/{name}/describe."""
+        url = f"{self.instance_url}/services/data/{self.api_version}/sobjects/{name}/describe"
+        return self._get(url).json()
+
+    def query_all_iter(self, soql: str):
+        """Yield records across pages via nextRecordsUrl."""
+        url = f"{self.instance_url}/services/data/{self.api_version}/query"
+        res = self._get(url, params={"q": soql}).json()
+        for r in res.get("records", []):
+            yield r
+        next_url = res.get("nextRecordsUrl")
+        while next_url:
+            res = self._get(f"{self.instance_url}{next_url}").json()
+            for r in res.get("records", []):
+                yield r
+            next_url = res.get("nextRecordsUrl")
+
 
 # ----------------------------------------------------------------------
 # CLI integration shim

@@ -7,6 +7,7 @@ from typing import Optional
 import click
 
 from . import __version__
+from .command_objects import objects_cmd
 from .logging_config import configure_logging
 
 # Import your API lazily so CLI can exist before API is done.
@@ -101,3 +102,6 @@ def cmd_query(soql: str, pretty: bool) -> None:
     api.connect()
     res = api.query(soql)
     click.echo(json.dumps(res, indent=2 if pretty else None))
+
+
+cli.add_command(objects_cmd)
