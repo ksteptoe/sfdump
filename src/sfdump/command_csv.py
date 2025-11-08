@@ -22,10 +22,15 @@ except Exception:
 @click.command("csv")
 @click.option("--object", "object_name", required=True, help="sObject name (e.g. Account).")
 @click.option(
-    "--out", "out_dir", required=True, type=click.Path(file_okay=False), help="Output directory."
+    "--out",
+    "out_dir",
+    required=True,
+    type=click.Path(file_okay=False),
+    help="Output directory.",
 )
 @click.option(
-    "--fields", help="Comma-separated field list; default: all queryable non-relationship fields."
+    "--fields",
+    help="Comma-separated field list; default: all queryable non-relationship fields.",
 )
 @click.option("--where", help="Optional SOQL WHERE clause (without the 'WHERE').")
 @click.option("--limit", type=int, help="Optional row limit (client-side stop).")
