@@ -55,3 +55,6 @@ MANIFEST
 
 
 src/sfdump/_version.py
+
+# DO NOT STORE CREDS
+.env
