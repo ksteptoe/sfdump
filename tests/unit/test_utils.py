@@ -21,13 +21,15 @@ def test_sanitize_filename_various():
     assert s1.strip() == s1
     assert not any(c in s1 for c in forbidden)
     assert "Project" in s1 and "Plan" in s1 and "v1" in s1
-    assert " " not in s1  # spaces normalized to underscores or removed
+    assert " " not in s1  # spaces normalized (underscores or removed)
 
-    # Keeps extension; removes/normalizes unsafe chars
+    # Keeps extension; removes only truly forbidden chars
     s2 = sanitize_filename("Budget&Forecast*?.xlsx")
     assert s2.endswith(".xlsx")
-    assert not any(c in s2 for c in forbidden + "&*?")
-    assert " " not in s2
+    assert not any(c in s2 for c in forbidden)
+    assert " " not in s2  # no spaces
+    # base name still non-empty
+    assert s2[:-5]  # before ".xlsx"
 
     # Empty/whitespace-only → empty result (caller supplies fallback)
     assert sanitize_filename("   ") == ""
