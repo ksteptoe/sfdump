@@ -35,7 +35,7 @@ E2E_DIR  := tests/e2e
 
 .PHONY: help bootstrap precommit lint format test test-all build upload \
         version fetch-tags release-show release-patch release-minor release-major \
-        clean clean-tests run-cli
+        clean clean-tests run-cli check-clean
 
 help:
 	@echo "Common targets:"
@@ -120,12 +120,35 @@ upload: build
 
 # -----------------------------------------------------------------------------#
 # Version & Release helpers (setuptools_scm + Git tags)
+
+LAST_TAG := $(shell git tag --list "v[0-9]*.[0-9]*.[0-9]*" --sort=-version:refname | head -n 1 || echo v0.0.0)
+MAJOR    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v([0-9]+)\..*/\1/')
+MINOR    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v[0-9]+\.([0-9]+)\..*/\1/')
+PATCH    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v[0-9]+\.[0-9]+\.([0-9]+)/\1/')
+
+# -----------------------------------------------------------------------------#
+# Version & Release helpers (setuptools_scm + Git tags)
+
 version:
 	@$(PYTHON) -m setuptools_scm || true
 
 fetch-tags:
 	git fetch --tags --force --prune 2>/dev/null || true
 
+# Safety check: ensure no uncommitted or unstaged changes before tagging
+check-clean:
+	@if ! git diff --quiet || ! git diff --cached --quiet; then \
+		echo "❌ Working directory not clean. Commit or stash changes before releasing."; \
+		git status -s; \
+		exit 1; \
+	fi
+	# Optional: ensure local branch is in sync with upstream
+	@if [ "$$(git rev-parse @)" != "$$(git rev-parse @{u})" ]; then \
+		echo "❌ Local branch not in sync with upstream (push/pull first)."; \
+		exit 1; \
+	fi
+
+# Pick the highest semantic version tag (vX.Y.Z). Fallback to v0.0.0
 LAST_TAG := $(shell git tag --list "v[0-9]*.[0-9]*.[0-9]*" --sort=-version:refname | head -n 1 || echo v0.0.0)
 MAJOR    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v([0-9]+)\..*/\1/')
 MINOR    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v[0-9]+\.([0-9]+)\..*/\1/')
@@ -137,20 +160,23 @@ release-show: fetch-tags
 	@echo "installed dist version:"; $(PYTHON) -c "import importlib.metadata as m; print(m.version('sfdump'))" || echo "(package not installed)"
 	@echo "Last Git tag: $(LAST_TAG)"
 
-release-patch: fetch-tags
-	NEW=v$(MAJOR).$(MINOR).$(( $(PATCH) + 1 ))
-	git tag -a "$NEW" -m "release: $NEW"
-	git push origin "$NEW"
+release-patch: fetch-tags check-clean
+	NEW=v$(MAJOR).$(MINOR).$$(($$(printf '%d' $(PATCH)) + 1))
+	git tag -a "$$NEW" -m "release: $$NEW"
+	git push origin "$$NEW"
+	@echo "Tagged $$NEW"
 
-release-minor: fetch-tags
-	NEW=v$(MAJOR).$(( $(MINOR) + 1 )).0
-	git tag -a "$NEW" -m "release: $NEW"
-	git push origin "$NEW"
+release-minor: fetch-tags check-clean
+	NEW=v$(MAJOR).$$(($$(printf '%d' $(MINOR)) + 1)).0
+	git tag -a "$$NEW" -m "release: $$NEW"
+	git push origin "$$NEW"
+	@echo "Tagged $$NEW"
 
-release-major: fetch-tags
-	NEW=v$(( $(MAJOR) + 1 )).0.0
-	git tag -a "$NEW" -m "release: $NEW"
-	git push origin "$NEW"
+release-major: fetch-tags check-clean
+	NEW=v$$(($$(printf '%d' $(MAJOR)) + 1)).0.0
+	git tag -a "$$NEW" -m "release: $$NEW"
+	git push origin "$$NEW"
+	@echo "Tagged $$NEW"
 
 # -----------------------------------------------------------------------------#
 # CLI convenience
