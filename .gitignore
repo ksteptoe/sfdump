@@ -58,3 +58,6 @@ src/sfdump/_version.py
 
 # DO NOT STORE CREDS
 .env
+
+# Ignore Makefile Stamps
+/.stamps/*
