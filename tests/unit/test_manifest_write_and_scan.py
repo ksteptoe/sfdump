@@ -1,3 +1,4 @@
+# tests/unit/test_manifest_write_and_scan.py
 from __future__ import annotations
 
 import csv
@@ -161,13 +162,17 @@ def test_write_manifest_makes_paths_relative(tmp_path):
     out_manifest = base / "manifest.json"
     write_manifest(str(out_manifest), mf)
 
-    # Validate JSON and that paths are now relative to `base`
+    # Validate JSON and that paths are now relative to `base` (normalize for Windows)
     payload = json.loads(out_manifest.read_text(encoding="utf-8"))
-    assert payload["csv_root"] == "csv"
-    assert payload["files"][0]["meta_csv"] == "links/content_versions.csv"
-    assert payload["files"][0]["links_csv"] == "links/content_document_links.csv"
-    assert payload["files"][0]["root"] == "files"
-    assert payload["objects"][0]["csv"] == "csv/Account.csv"
+
+    def norm(p):
+        return str(p).replace("\\", "/")
+
+    assert norm(payload["csv_root"]) == "csv"
+    assert norm(payload["files"][0]["meta_csv"]) == "links/content_versions.csv"
+    assert norm(payload["files"][0]["links_csv"]) == "links/content_document_links.csv"
+    assert norm(payload["files"][0]["root"]) == "files"
+    assert norm(payload["objects"][0]["csv"]) == "csv/Account.csv"
 
 
 def test_rel_if_helper(tmp_path):
@@ -179,6 +184,6 @@ def test_rel_if_helper(tmp_path):
 
     # None → None
     assert _rel_if(None, str(base)) is None
-    # Absolute → relative
+    # Absolute → relative (normalize for Windows)
     rel = _rel_if(str(abs_file), str(base))
     assert rel.replace("\\", "/").endswith("y/file.txt")
