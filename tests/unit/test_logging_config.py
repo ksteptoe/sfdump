@@ -3,12 +3,21 @@ import logging
 from sfdump.logging_config import configure_logging
 
 
-def test_configure_logging_none_ok():
-    # should not crash and should return a logger configured
+def test_configure_logging_levels(caplog):
+    # None: keep default WARNING (>=20)
     configure_logging(None)
-    assert logging.getLogger().getEffectiveLevel() in (logging.WARNING, logging.INFO, logging.DEBUG)
+    logger = logging.getLogger("sfdump.test")
+    logger.warning("warn")
+    assert any("warn" in rec.message for rec in caplog.records)
 
-
-def test_configure_logging_info():
+    # INFO lowers threshold
+    caplog.clear()
     configure_logging(logging.INFO)
-    assert logging.getLogger().getEffectiveLevel() == logging.INFO
+    logger.info("info-ok")
+    assert any("info-ok" in rec.message for rec in caplog.records)
+
+    # DEBUG includes debug
+    caplog.clear()
+    configure_logging(logging.DEBUG)
+    logger.debug("dbg")
+    assert any("dbg" in rec.message for rec in caplog.records)
