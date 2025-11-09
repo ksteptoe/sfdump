@@ -13,7 +13,6 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
       # 1) Checkout full history so setuptools_scm can see tags
       - uses: actions/checkout@v4
@@ -49,4 +48,14 @@ jobs:
         run: make test
 
       # 6) Upload coverage.xml
-      - name: Upload cov
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-3.12
+          path: coverage.xml
+          if-no-files-found: warn
+
+      # 7) Optional: verify packaging still works
+      - name: Build package
+        run: python -m build
