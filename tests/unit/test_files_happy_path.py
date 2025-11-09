@@ -40,7 +40,6 @@ class _APIHappy:
     def query_all_iter(self, soql: str):
         up = soql.upper()
         if "FROM CONTENTVERSION" in up:
-            # yield latest
             for r in self._cv:
                 yield dict(r)
         elif "FROM CONTENTDOCUMENTLINK" in up:
@@ -85,12 +84,9 @@ def test_dump_content_versions_nonempty(tmp_path):
     rows = _read_csv_dicts(res["meta_csv"])
     assert len(rows) == 1
     r = rows[0]
-    # path is relative to out_dir
     assert r["path"].replace("\\", "/").startswith("files/")
-    # sha256 matches what we wrote
     assert r["sha256"] == _sha256_bytes(b"123456")
 
-    # Links CSV created with one row
     links = _read_csv_dicts(res["links_csv"])
     assert len(links) == 1
     assert links[0]["ContentDocumentId"] == "069D"
