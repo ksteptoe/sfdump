@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from .exceptions import MissingCredentialsError
+
 __author__ = "Kevin Steptoe"
 __copyright__ = "Kevin Steptoe"
 __license__ = "MIT"
@@ -109,7 +111,7 @@ class SalesforceAPI:
             if not v
         ]
         if missing:
-            raise RuntimeError(f"Missing required env vars: {', '.join(missing)}")
+            raise MissingCredentialsError(missing)
 
         data = {
             "grant_type": "password",

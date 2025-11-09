@@ -8,7 +8,15 @@ import click
 
 from . import __version__
 from .command_objects import objects_cmd
+from .exceptions import MissingCredentialsError
 from .logging_config import configure_logging
+
+try:
+    from dotenv import load_dotenv  # optional
+
+    load_dotenv()
+except Exception:
+    pass
 
 # Import your API lazily so CLI can exist before API is done.
 try:
@@ -50,11 +58,7 @@ def cli(ctx: click.Context, loglevel: Optional[int]) -> None:
 
 
 @cli.command("login")
-@click.option(
-    "--show-json",
-    is_flag=True,
-    help="Print raw JSON for identity and limits.",
-)
+@click.option("--show-json", is_flag=True, help="Print raw JSON for identity and limits.")
 def cmd_login(show_json: bool) -> None:
     """Authenticate and print identity + API limits."""
     if SalesforceAPI is None or SFConfig is None:
@@ -63,7 +67,18 @@ def cmd_login(show_json: bool) -> None:
 
     api = SalesforceAPI(SFConfig.from_env())
     _logger.info("Connecting to Salesforce...")
-    api.connect()
+    try:
+        api.connect()
+    except MissingCredentialsError as e:
+        msg = (
+            "Missing Salesforce credentials.\n\n"
+            "Required variables:\n"
+            "  SF_CLIENT_ID, SF_CLIENT_SECRET, SF_USERNAME, SF_PASSWORD\n\n"
+            "Hint: create a .env next to your project and add them. "
+            "SF_PASSWORD should include your security token if required."
+        )
+        raise click.ClickException(msg) from e
+
     _logger.info("Connected. instance=%s, api=%s", api.instance_url, api.api_version)
 
     who = api.whoami()
