@@ -125,6 +125,7 @@ def cmd_query(soql: str, pretty: bool) -> None:
     click.echo(json.dumps(res, indent=2 if pretty else None))
 
 
+# Cast ensures IDE knows of the Command type
 cli.add_command(cast(Command, objects_cmd))
 cli.add_command(cast(Command, csv_cmd))
 cli.add_command(cast(Command, files_cmd))
