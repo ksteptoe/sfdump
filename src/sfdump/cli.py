@@ -78,7 +78,7 @@ def cmd_login(show_json: bool) -> None:
 
     core = limits.get("DailyApiRequests", {})
     click.echo(
-        "API Core Used:  " f"{core.get('Max', '?')} max / {core.get('Remaining', '?')} remaining"
+        f"API Core Used:  {core.get('Max', '?')} max / {core.get('Remaining', '?')} remaining"
     )
 
     if show_json:
