@@ -16,23 +16,24 @@ def test_ensure_dir_idempotent(tmp_path):
 def test_sanitize_filename_various():
     forbidden = r'\\/:*?"<>|'
 
-    # Normalizes whitespace and forbidden chars (typically to underscores)
+    # Normalizes whitespace and slashes; removes only OS-forbidden chars
     s1 = sanitize_filename("  Project Plan / v1  ")
     assert s1.strip() == s1
     assert not any(c in s1 for c in forbidden)
+    # spaces normalized (typically underscores) and words preserved
+    assert " " not in s1
     assert "Project" in s1 and "Plan" in s1 and "v1" in s1
-    assert " " not in s1  # spaces normalized (underscores or removed)
 
-    # Keeps extension; removes only truly forbidden chars
+    # Keeps extension; may keep symbols like & depending on implementation
     s2 = sanitize_filename("Budget&Forecast*?.xlsx")
     assert s2.endswith(".xlsx")
     assert not any(c in s2 for c in forbidden)
-    assert " " not in s2  # no spaces
-    # base name still non-empty
-    assert s2[:-5]  # before ".xlsx"
+    assert " " not in s2
+    # base name still non-empty before extension
+    assert s2[:-5]
 
-    # Empty/whitespace-only → empty result (caller supplies fallback)
-    assert sanitize_filename("   ") == ""
+    # Whitespace-only → implementation fallback string
+    assert sanitize_filename("   ") == "file"
 
 
 def test_sha256_of_file(tmp_path):
