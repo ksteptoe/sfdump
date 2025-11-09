@@ -24,7 +24,10 @@ NO_CACHE   ?= 0
 PYTEST         := $(PYTHON) -m pytest
 PYTEST_Q       := -q
 PYTEST_WARN    := --disable-warnings
-PYTEST_COV     := --cov=sfdump --cov-report=xml --cov-fail-under=40
+# Do NOT enforce fail-under per-stamp; we’ll enforce once at the end
+PYTEST_COV_BASE := --cov=sfdump
+PYTEST_COV_UNIT := $(PYTEST_COV_BASE) --cov-report= --cov-append
+PYTEST_COV_INTEG := $(PYTEST_COV_BASE) --cov-report= --cov-append
 PYTEST_XDIST   ?= -n auto
 PYTEST_TIMEOUT ?= --timeout=60
 
@@ -96,6 +99,7 @@ $(PYTHON) -m pytest $(1) $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) $(PYTE
 endef
 
 $(UNIT_STAMP): | $(STAMPS_DIR)
+	@rm -f .coverage  # fresh coverage run
 	@tests_sig=$( $(call compute_dir_sig,$(UNIT_DIR)) ); \
 	code_sig=$( $(call compute_dir_sig,$(CODE_DIRS)) ); \
 	conf_sig=$( sha1sum $(CONF_FILES) 2>/dev/null | awk '{print $$1}' | sha1sum | awk '{print $$1}' ); \
@@ -103,7 +107,7 @@ $(UNIT_STAMP): | $(STAMPS_DIR)
 	old_sig=$$(cat $(UNIT_SIG) 2>/dev/null || echo -n); \
 	if [ "$(NO_CACHE)" = "1" ] || [ "$$new_sig" != "$$old_sig" ] || [ ! -f $@ ]; then \
 	  echo "=== Running unit tests ==="; \
-	  $(call run_pytest,-q $(UNIT_DIR) -m "not live"); \
+	  $(PYTHON) -m pytest -q $(UNIT_DIR) -m "not live" $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) $(PYTEST_COV_UNIT); \
 	  echo "$$new_sig" > $(UNIT_SIG); \
 	  touch $@; \
 	else echo "No changes detected; skipping unit tests."; fi
@@ -116,17 +120,22 @@ $(INTEG_STAMP): | $(STAMPS_DIR)
 	old_sig=$$(cat $(INTEG_SIG) 2>/dev/null || echo -n); \
 	if [ "$(NO_CACHE)" = "1" ] || [ "$$new_sig" != "$$old_sig" ] || [ ! -f $@ ]; then \
 	  echo "=== Running integration tests ==="; \
-	  $(call run_pytest,-q $(INTEG_DIR) -m "not live"); \
+	  $(PYTHON) -m pytest -q $(INTEG_DIR) -m "not live" $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) $(PYTEST_COV_INTEG); \
 	  echo "$$new_sig" > $(INTEG_SIG); \
 	  touch $@; \
 	else echo "No changes detected; skipping integration tests."; fi
 
+
 test: $(UNIT_STAMP) $(INTEG_STAMP)
+	@echo "=== Aggregated coverage check (fail-under=40) ==="
+	$(PYTHON) -m coverage report --fail-under=40
+	$(PYTHON) -m coverage xml
 	@echo "✅ Unit + Integration tests up-to-date (not live)"
 
 # Full non-live run, no stamps (useful before releases)
 test-all:
-	$(PYTHON) -m pytest -v -m "not live" $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) $(PYTEST_COV)
+	$(PYTHON) -m pytest -v -m "not live" $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) --cov=sfdump --cov-report=term-missing --cov-report=xml --cov-fail-under=40
+
 
 # Live tests are explicit & uncached (gentle on API; clearer intent)
 test-live:
@@ -205,6 +214,6 @@ run-cli:
 
 # -----------------------------------------------------------------------------#
 clean:
-	rm -rf build dist .eggs *.egg-info .coverage htmlcov .pytest_cache
+	rm -rf build dist .eggs *.egg-info .coverage htmlcov .pytest_cache coverage.xml
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
 	rm -rf $(STAMPS_DIR)
