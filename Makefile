@@ -2,7 +2,7 @@
 # Provides:
 #   - Auto versioned builds (setuptools_scm)
 #   - Linting/formatting via Ruff
-#   - Incremental pytest testing
+#   - Incremental pytest testing via STAMPs
 #   - Release helpers (Git tag based)
 # -----------------------------------------------------------------------------
 
@@ -16,7 +16,7 @@ PYTHON := $(shell command -v python >/dev/null 2>&1 && echo python || echo py -3
 
 # Main code package
 CODE_DIRS   := src/sfdump
-CONF_FILES  := pyproject.toml
+CONF_FILES  := pyproject.toml pytest.ini
 STAMPS_DIR  := .stamps
 NO_CACHE   ?= 0
 
@@ -28,14 +28,16 @@ PYTEST_COV     := --cov=sfdump --cov-report=xml --cov-fail-under=40
 PYTEST_XDIST   ?= -n auto
 PYTEST_TIMEOUT ?= --timeout=60
 
-# Directories
-UNIT_DIR := tests/unit
-CLI_DIR  := tests/cli
-E2E_DIR  := tests/e2e
+# Test directories (align with our layout)
+UNIT_DIR    := tests/unit
+INTEG_DIR   := tests/integration
+SYSTEM_DIR  := tests/system  # live/system tests (opt-in, uncached)
 
-.PHONY: help bootstrap precommit lint format test test-all build upload \
-        version fetch-tags release-show release-patch release-minor release-major \
-        clean clean-tests run-cli check-clean
+.PHONY: help bootstrap precommit lint format \
+        test test-all test-live clean-tests \
+        build upload version fetch-tags release-show \
+        release-patch release-minor release-major \
+        clean run-cli check-clean
 
 help:
 	@echo "Common targets:"
@@ -43,8 +45,9 @@ help:
 	@echo "  make precommit           - install pre-commit hook"
 	@echo "  make lint                - run Ruff checks"
 	@echo "  make format              - auto-fix via Ruff"
-	@echo "  make test                - run cached unit tests"
-	@echo "  make test-all            - run all tests"
+	@echo "  make test                - run cached unit+integration tests (not live)"
+	@echo "  make test-all            - run all non-live tests (no stamps)"
+	@echo "  make test-live           - run @live tests only (no cache)"
 	@echo "  make build               - build wheel+sdist"
 	@echo "  make upload              - upload to PyPI (via Twine)"
 	@echo "  make version             - print setuptools_scm inferred version"
@@ -53,7 +56,7 @@ help:
 	@echo "  make release-minor       - tag vX.(Y+1).0"
 	@echo "  make release-major       - tag v(X+1).0.0"
 	@echo "  make clean               - remove build artifacts"
-	@echo "  make run-cli             - run CLI entry point"
+	@echo "  make run-cli             - run CLI entry point (pass CLI_ARGS=...)"
 
 bootstrap:
 	$(PYTHON) -m pip install -U pip setuptools wheel
@@ -73,36 +76,61 @@ format:
 	ruff format .
 
 # -----------------------------------------------------------------------------#
-# Incremental Testing (simple cache mechanism)
+# Incremental Testing (cache via stamps)
+
 $(STAMPS_DIR):
 	mkdir -p $(STAMPS_DIR)
 
-UNIT_STAMP := $(STAMPS_DIR)/unit.ok
-UNIT_SIG   := $(STAMPS_DIR)/unit.sig
+UNIT_STAMP  := $(STAMPS_DIR)/unit.ok
+UNIT_SIG    := $(STAMPS_DIR)/unit.sig
+INTEG_STAMP := $(STAMPS_DIR)/integration.ok
+INTEG_SIG   := $(STAMPS_DIR)/integration.sig
 
 define compute_dir_sig
 { [ -d "$(1)" ] && find $(1) -type f -not -path "*/__pycache__/*" -print0 || true; } \
 | LC_ALL=C sort -z | xargs -0r sha1sum | sha1sum | awk '{print $1}'
 endef
 
+define run_pytest
+$(PYTHON) -m pytest $(1) $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) $(PYTEST_COV)
+endef
+
 $(UNIT_STAMP): | $(STAMPS_DIR)
 	@tests_sig=$( $(call compute_dir_sig,$(UNIT_DIR)) ); \
 	code_sig=$( $(call compute_dir_sig,$(CODE_DIRS)) ); \
-	conf_sig=$( sha1sum $(CONF_FILES) 2>/dev/null | awk '{print $1}' | sha1sum | awk '{print $1}' ); \
-	new_sig=$( printf "%s\n%s\n%s\n" "$tests_sig" "$code_sig" "$conf_sig" | sha1sum | awk '{print $1}' ); \
-	old_sig=$(cat $(UNIT_SIG) 2>/dev/null || echo -n); \
-	if [ "$(NO_CACHE)" = "1" ] || [ "$new_sig" != "$old_sig" ] || [ ! -f $@ ]; then \
+	conf_sig=$( sha1sum $(CONF_FILES) 2>/dev/null | awk '{print $$1}' | sha1sum | awk '{print $$1}' ); \
+	new_sig=$( printf "%s\n%s\n%s\n" "$$tests_sig" "$$code_sig" "$$conf_sig" | sha1sum | awk '{print $$1}' ); \
+	old_sig=$$(cat $(UNIT_SIG) 2>/dev/null || echo -n); \
+	if [ "$(NO_CACHE)" = "1" ] || [ "$$new_sig" != "$$old_sig" ] || [ ! -f $@ ]; then \
 	  echo "=== Running unit tests ==="; \
-	  $(PYTEST) $(PYTEST_Q) $(UNIT_DIR) $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) $(PYTEST_COV); \
-	  echo "$new_sig" > $(UNIT_SIG); \
+	  $(call run_pytest,-q $(UNIT_DIR) -m "not live"); \
+	  echo "$$new_sig" > $(UNIT_SIG); \
 	  touch $@; \
 	else echo "No changes detected; skipping unit tests."; fi
 
-test: $(UNIT_STAMP)
-	@echo "✅ Unit tests up-to-date"
+$(INTEG_STAMP): | $(STAMPS_DIR)
+	@tests_sig=$( $(call compute_dir_sig,$(INTEG_DIR)) ); \
+	code_sig=$( $(call compute_dir_sig,$(CODE_DIRS)) ); \
+	conf_sig=$( sha1sum $(CONF_FILES) 2>/dev/null | awk '{print $$1}' | sha1sum | awk '{print $$1}' ); \
+	new_sig=$( printf "%s\n%s\n%s\n" "$$tests_sig" "$$code_sig" "$$conf_sig" | sha1sum | awk '{print $$1}' ); \
+	old_sig=$$(cat $(INTEG_SIG) 2>/dev/null || echo -n); \
+	if [ "$(NO_CACHE)" = "1" ] || [ "$$new_sig" != "$$old_sig" ] || [ ! -f $@ ]; then \
+	  echo "=== Running integration tests ==="; \
+	  $(call run_pytest,-q $(INTEG_DIR) -m "not live"); \
+	  echo "$$new_sig" > $(INTEG_SIG); \
+	  touch $@; \
+	else echo "No changes detected; skipping integration tests."; fi
 
+test: $(UNIT_STAMP) $(INTEG_STAMP)
+	@echo "✅ Unit + Integration tests up-to-date (not live)"
+
+# Full non-live run, no stamps (useful before releases)
 test-all:
-	$(PYTEST) $(PYTEST_Q) $(PYTEST_WARN) $(PYTEST_COV)
+	$(PYTHON) -m pytest -v -m "not live" $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) $(PYTEST_COV)
+
+# Live tests are explicit & uncached (gentle on API; clearer intent)
+test-live:
+	SF_LIVE_TESTS=true $(PYTHON) -m pytest -v -m live $(PYTEST_WARN) --timeout=180 --cov=sfdump --cov-report=xml
 
 clean-tests:
 	rm -rf $(STAMPS_DIR)
@@ -120,45 +148,35 @@ upload: build
 
 # -----------------------------------------------------------------------------#
 # Version & Release helpers (setuptools_scm + Git tags)
-
-LAST_TAG := $(shell git tag --list "v[0-9]*.[0-9]*.[0-9]*" --sort=-version:refname | head -n 1 || echo v0.0.0)
-MAJOR    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v([0-9]+)\..*/\1/')
-MINOR    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v[0-9]+\.([0-9]+)\..*/\1/')
-PATCH    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v[0-9]+\.[0-9]+\.([0-9]+)/\1/')
-
-# -----------------------------------------------------------------------------#
-# Version & Release helpers (setuptools_scm + Git tags)
-
-version:
-	@$(PYTHON) -m setuptools_scm || true
-
 fetch-tags:
 	git fetch --tags --force --prune 2>/dev/null || true
 
-# Safety check: ensure no uncommitted or unstaged changes before tagging
-check-clean:
-	@if ! git diff --quiet || ! git diff --cached --quiet; then \
-		echo "❌ Working directory not clean. Commit or stash changes before releasing."; \
-		git status -s; \
-		exit 1; \
-	fi
-	# Optional: ensure local branch is in sync with upstream
-	@if [ "$$(git rev-parse @)" != "$$(git rev-parse @{u})" ]; then \
-		echo "❌ Local branch not in sync with upstream (push/pull first)."; \
-		exit 1; \
-	fi
-
-# Pick the highest semantic version tag (vX.Y.Z). Fallback to v0.0.0
+# Single, non-duplicated tag derivation
 LAST_TAG := $(shell git tag --list "v[0-9]*.[0-9]*.[0-9]*" --sort=-version:refname | head -n 1 || echo v0.0.0)
 MAJOR    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v([0-9]+)\..*/\1/')
 MINOR    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v[0-9]+\.([0-9]+)\..*/\1/')
 PATCH    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v[0-9]+\.[0-9]+\.([0-9]+)/\1/')
+
+version:
+	@$(PYTHON) -m setuptools_scm || true
 
 release-show: fetch-tags
 	@echo "python exe:"; $(PYTHON) -c "import sys; print(sys.executable)"
 	@echo "setuptools_scm version:"; $(PYTHON) -m setuptools_scm || echo "(unavailable)"
 	@echo "installed dist version:"; $(PYTHON) -c "import importlib.metadata as m; print(m.version('sfdump'))" || echo "(package not installed)"
 	@echo "Last Git tag: $(LAST_TAG)"
+
+# Safety check: ensure clean working tree and synced branch before tagging
+check-clean:
+	@if ! git diff --quiet || ! git diff --cached --quiet; then \
+		echo "❌ Working directory not clean. Commit or stash changes before releasing."; \
+		git status -s; \
+		exit 1; \
+	fi
+	@if [ "$$(git rev-parse @ 2>/dev/null)" != "$$(git rev-parse @{u} 2>/dev/null)" ]; then \
+		echo "❌ Local branch not in sync with upstream (push/pull first)."; \
+		exit 1; \
+	fi
 
 release-patch: fetch-tags check-clean
 	NEW=v$(MAJOR).$(MINOR).$$(($$(printf '%d' $(PATCH)) + 1))
