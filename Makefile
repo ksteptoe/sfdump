@@ -127,8 +127,9 @@ $(INTEG_STAMP): | $(STAMPS_DIR)
 
 
 test: $(UNIT_STAMP) $(INTEG_STAMP)
-	@echo "=== Aggregated coverage check (fail-under=40) ==="
-	$(PYTHON) -m coverage report --fail-under=40
+	@echo "=== Aggregated coverage check (adaptive gate) ==="
+	$(PYTHON) -m coverage report
+	$(PYTHON) tools/coverage_gate.py
 	$(PYTHON) -m coverage xml
 	@echo "✅ Unit + Integration tests up-to-date (not live)"
 
