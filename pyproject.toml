@@ -30,6 +30,7 @@ dev = [
     "pre-commit>=3.7",
     "build>=1.2",
     "twine>=5",
+    "setuptools_scm>=8.0",
 ]
 
 [project.urls]
