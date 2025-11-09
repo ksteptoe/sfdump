@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+from typing import Optional, cast
 
 import click
+from click import Command
 
 from . import __version__
+
+# Command Files
 from .command_csv import csv_cmd
 from .command_files import files_cmd
+from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
 from .exceptions import MissingCredentialsError
 from .logging_config import configure_logging
@@ -121,6 +125,8 @@ def cmd_query(soql: str, pretty: bool) -> None:
     click.echo(json.dumps(res, indent=2 if pretty else None))
 
 
-cli.add_command(objects_cmd)
-cli.add_command(csv_cmd)
-cli.add_command(files_cmd)
+# Cast ensures IDE knows of the Command type
+cli.add_command(cast(Command, objects_cmd))
+cli.add_command(cast(Command, csv_cmd))
+cli.add_command(cast(Command, files_cmd))
+cli.add_command(cast(Command, manifest_cmd))
