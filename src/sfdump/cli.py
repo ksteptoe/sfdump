@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Optional, cast
 
 import click
+import requests
 from click import Command
 
 from . import __version__
@@ -32,6 +34,25 @@ except Exception:  # pragma: no cover
     SFConfig = None  # type: ignore[assignment]
 
 _logger = logging.getLogger(__name__)
+
+
+# --- Optional .env loading ---
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+# Try to load .env or .dotenv from project root or current dir
+if load_dotenv:
+    # Prefer .env, fallback to .dotenv
+    for candidate in (".env", ".dotenv"):
+        env_path = Path.cwd() / candidate
+        if env_path.exists():
+            load_dotenv(env_path)
+            logging.getLogger(__name__).debug("Loaded environment variables from %s", env_path)
+            break
+else:
+    logging.getLogger(__name__).warning("python-dotenv not installed; skipping .env loading.")
 
 
 @click.group(
@@ -73,6 +94,7 @@ def cmd_login(show_json: bool) -> None:
 
     api = SalesforceAPI(SFConfig.from_env())
     _logger.info("Connecting to Salesforce...")
+
     try:
         api.connect()
     except MissingCredentialsError as e:
@@ -85,6 +107,27 @@ def cmd_login(show_json: bool) -> None:
         )
         raise click.ClickException(msg) from e
 
+    except requests.HTTPError as e:
+        # Graceful catch for 4xx/5xx responses
+        click.echo("\n[HTTP ERROR]", err=True)
+        click.echo(str(e), err=True)
+        try:
+            # Try to print JSON error payload if available
+            err_json = e.response.json()
+            click.echo(f"  -> {json.dumps(err_json, indent=2)}", err=True)
+        except Exception:
+            # Fallback: show raw response text if no JSON
+            if e.response is not None and e.response.text:
+                click.echo(f"  -> {e.response.text[:400]}...", err=True)
+        raise click.Abort() from e
+
+    except Exception as e:
+        # Catch-all safety net for unexpected failures
+        click.echo(f"\n[UNEXPECTED ERROR] {type(e).__name__}: {e}", err=True)
+        _logger.debug("Unexpected exception", exc_info=True)
+        raise click.Abort() from e
+
+    # ✅ Only runs if login succeeded
     _logger.info("Connected. instance=%s, api=%s", api.instance_url, api.api_version)
 
     who = api.whoami()
