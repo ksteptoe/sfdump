@@ -163,8 +163,28 @@ def cmd_query(soql: str, pretty: bool) -> None:
 
     _logger.debug("Running SOQL: %s", soql)
     api = SalesforceAPI(SFConfig.from_env())
-    api.connect()
-    res = api.query(soql)
+
+    try:
+        api.connect()
+        res = api.query(soql)
+    except requests.HTTPError as e:
+        click.echo("\n[HTTP ERROR]", err=True)
+        click.echo(str(e), err=True)
+        try:
+            # Try to pretty-print JSON error body
+            err_json = e.response.json()
+            click.echo(f"  -> {json.dumps(err_json, indent=2)}", err=True)
+        except Exception:
+            if e.response is not None and e.response.text:
+                click.echo(f"  -> {e.response.text[:400]}...", err=True)
+        raise click.Abort() from e
+
+    except Exception as e:
+        click.echo(f"\n[UNEXPECTED ERROR] {type(e).__name__}: {e}", err=True)
+        _logger.debug("Unexpected exception", exc_info=True)
+        raise click.Abort() from e
+
+    # ✅ Only executes on success
     click.echo(json.dumps(res, indent=2 if pretty else None))
 
 
