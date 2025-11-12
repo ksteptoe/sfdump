@@ -62,3 +62,7 @@ src/sfdump/_version.py
 # Ignore Makefile Stamps
 /.stamps/*
 .coverage_target
+/curl.bash
+/jwt.bash
+/server.crt
+/server.key
