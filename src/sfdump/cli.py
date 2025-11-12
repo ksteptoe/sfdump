@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Optional, cast
 
@@ -53,6 +54,24 @@ if load_dotenv:
             break
 else:
     logging.getLogger(__name__).warning("python-dotenv not installed; skipping .env loading.")
+
+
+def get_salesforce_token() -> str:
+    """Return an access token using the Client Credentials flow."""
+    login_url = os.getenv("SF_LOGIN_URL")
+    client_id = os.getenv("SF_CLIENT_ID")
+    client_secret = os.getenv("SF_CLIENT_SECRET")
+
+    resp = requests.post(
+        f"{login_url}/services/oauth2/token",
+        data={
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+        },
+    )
+    resp.raise_for_status()
+    return resp.json()["access_token"]
 
 
 @click.group(
