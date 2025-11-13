@@ -110,6 +110,7 @@ def cmd_login(show_json: bool) -> None:
     # -------------------------------
     click.echo("Connected to Salesforce.")
     click.echo(f"Instance URL: {api.instance_url}")
+    click.echo(f"API Version: {api.api_version}")
     click.echo(f"Access Token: {api.access_token[:4]}...")
 
     # JSON branch required by tests
