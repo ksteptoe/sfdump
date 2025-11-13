@@ -8,7 +8,7 @@ from typing import Optional, cast
 import click
 from click import Command
 
-from sfdump.sf_auth import get_salesforce_token, run_salesforce_query
+from sfdump.sf_auth import run_salesforce_query
 
 from . import __version__
 
@@ -17,6 +17,7 @@ from .command_csv import csv_cmd
 from .command_files import files_cmd
 from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
+from .exceptions import MissingCredentialsError
 from .logging_config import configure_logging
 
 try:
@@ -85,16 +86,44 @@ def cli(ctx: click.Context, loglevel: Optional[int]) -> None:
 
 
 @cli.command("login")
-def cmd_login() -> None:
-    """Fetch and cache a new Salesforce token."""
+@click.option("--show-json", is_flag=True, help="Show raw token JSON.")
+def cmd_login(show_json: bool) -> None:
+    """Authenticate with Salesforce and store token."""
+
+    # Fail early if env vars missing
     try:
-        token = get_salesforce_token()
-        click.echo("✅  Salesforce token refreshed and cached successfully.")
-        click.echo(f"Cache file: {Path.home() / '.sfdump_token.json'}")
-        click.echo(f"Token preview: {token[:10]}...{token[-6:]}")
+        config = SFConfig.from_env()
+    except MissingCredentialsError as e:
+        click.echo(f"❌ Missing credentials: {e}", err=True)
+        raise click.Abort() from None
+
+    # Attempt login
+    try:
+        api = SalesforceAPI(config)
+        token_data = api.connect()
     except Exception as e:
         click.echo(f"❌  Login failed: {e}", err=True)
         raise click.Abort() from None
+
+    # -------------------------------
+    # REQUIRED TEST OUTPUT
+    # -------------------------------
+    click.echo("Connected to Salesforce.")
+    click.echo(f"Instance URL: {api.instance_url}")
+    click.echo(f"Access Token: {api.access_token[:4]}...")
+
+    # JSON branch required by tests
+    if show_json:
+        click.echo(json.dumps(token_data, indent=2))
+        return
+
+    # -------------------------------
+    # Your new optional messaging
+    # -------------------------------
+    cache_file = token_data.get("cache_file", "<no-cache>")
+    click.echo("✅  Salesforce token refreshed and cached successfully.")
+    click.echo(f"Cache file: {cache_file}")
+    click.echo(f"Token preview: {api.access_token[:20]}...")
 
 
 @cli.command("query")
