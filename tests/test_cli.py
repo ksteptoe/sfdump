@@ -12,26 +12,18 @@ def dummy_api(monkeypatch):
     """Patch SalesforceAPI and SFConfig so CLI runs offline."""
 
     class DummyAPI:
-        def __init__(self, cfg=None):
+        def __init__(self, config):
+            self.config = config
+            self.access_token = "00DFAKE-TOKEN"
             self.instance_url = "https://example.my.salesforce.com"
-            self.api_version = "v62.0"
 
         def connect(self):
-            pass
-
-        def whoami(self):
+            # Must return data used by tests and CLI:
             return {
-                "organization_id": "ORG123",
-                "user_id": "USR456",
-                "email": "user@example.com",
-                "name": "Test User",
+                "access_token": self.access_token,
+                "instance_url": self.instance_url,
+                "cache_file": "/tmp/dummy.json",
             }
-
-        def limits(self):
-            return {"DailyApiRequests": {"Max": 15000, "Remaining": 14999}}
-
-        def query(self, soql):
-            return {"records": [{"Id": "001", "Name": "Acme"}]}
 
     class DummyConfig:
         @classmethod
