@@ -15,22 +15,17 @@ def mock_salesforce_api(monkeypatch):
 
     class DummyAPI:
         def __init__(self, config):
+            self.access_token = "00DFAKE-INTEGRATION-TOKEN"
             self.instance_url = "https://example.my.salesforce.com"
-            self.api_version = "v59.0"
+            self.api_version = "v60.0"
 
         def connect(self):
-            return True
-
-        def whoami(self):
             return {
-                "organization_id": "ORG123",
-                "user_id": "USER123",
-                "preferred_username": "test@example.com",
-                "name": "Test User",
+                "access_token": self.access_token,
+                "instance_url": self.instance_url,
+                "api_version": self.api_version,
+                "cache_file": "/tmp/integration.json",
             }
-
-        def limits(self):
-            return {"DailyApiRequests": {"Max": 15000, "Remaining": 14999}}
 
     class DummyConfig:
         @classmethod
