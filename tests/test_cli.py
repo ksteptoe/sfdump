@@ -16,13 +16,49 @@ def dummy_api(monkeypatch):
             self.config = config
             self.access_token = "00DFAKE-TOKEN"
             self.instance_url = "https://example.my.salesforce.com"
+            self.api_version = "v60.0"
 
         def connect(self):
-            # Must return data used by tests and CLI:
+            # This is what the CLI login tests expect
             return {
                 "access_token": self.access_token,
                 "instance_url": self.instance_url,
+                "api_version": self.api_version,
+                "organization_id": "ORG123",  # REQUIRED
                 "cache_file": "/tmp/dummy.json",
+                "user": "Test User",  # for integration tests
+                "limits": {
+                    "DailyApiRequests": 15000,
+                    "DailyBulkApiRequests": 5000,
+                },
+            }
+
+        def userinfo(self):
+            # CLI expects this block for "# whoami (userinfo)"
+            return {
+                "user_id": "005FAKE",
+                "username": "dummy@example.com",
+                "organization_id": "ORG123",
+            }
+
+        def limits(self):
+            # CLI expects this for "# limits"
+            return {
+                "DailyApiRequests": {"Remaining": 14999},
+                "DailyBulkApiRequests": {"Remaining": 4999},
+            }
+
+        def query(self, soql):
+            return {
+                "totalSize": 1,
+                "done": True,
+                "records": [
+                    {
+                        "Id": "001XYZ",
+                        "Name": "Acme Corporation",
+                        "attributes": {"type": "Account", "url": "/foo"},
+                    }
+                ],
             }
 
     class DummyConfig:
