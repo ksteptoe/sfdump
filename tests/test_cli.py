@@ -18,45 +18,46 @@ def dummy_api(monkeypatch):
             self.instance_url = "https://example.my.salesforce.com"
             self.api_version = "v60.0"
 
+        # NEW — fix login tests
         def connect(self):
-            # This is what the CLI login tests expect
             return {
                 "access_token": self.access_token,
                 "instance_url": self.instance_url,
                 "api_version": self.api_version,
-                "organization_id": "ORG123",  # REQUIRED
-                "cache_file": "/tmp/dummy.json",
-                "user": "Test User",  # for integration tests
-                "limits": {
-                    "DailyApiRequests": 15000,
-                    "DailyBulkApiRequests": 5000,
-                },
-            }
-
-        def userinfo(self):
-            # CLI expects this block for "# whoami (userinfo)"
-            return {
-                "user_id": "005FAKE",
-                "username": "dummy@example.com",
                 "organization_id": "ORG123",
+                "user_name": "Test User",
             }
 
-        def limits(self):
-            # CLI expects this for "# limits"
+        # NEW — used by --show-json tests
+        def userinfo(self):
             return {
-                "DailyApiRequests": {"Remaining": 14999},
-                "DailyBulkApiRequests": {"Remaining": 4999},
+                "organization_id": "ORG123",
+                "preferred_username": "test@example.com",
+                "user_name": "Test User",
             }
 
+        # NEW — used by --show-json tests
+        def limits(self):
+            return {
+                "DailyApiRequests": {
+                    "Max": 15000,
+                    "Remaining": 14999,
+                }
+            }
+
+        # NEW — query test requires "Acme" in output
         def query(self, soql):
             return {
                 "totalSize": 1,
                 "done": True,
                 "records": [
                     {
-                        "Id": "001XYZ",
-                        "Name": "Acme Corporation",
-                        "attributes": {"type": "Account", "url": "/foo"},
+                        "attributes": {
+                            "type": "Account",
+                            "url": "/services/data/v60.0/sobjects/Account/001",
+                        },
+                        "Id": "001",
+                        "Name": "Acme Corp",  # KEY PART
                     }
                 ],
             }
