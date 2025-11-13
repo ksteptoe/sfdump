@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Optional, cast
 
 import click
-import requests
 from click import Command
+
+from sfdump.sf_auth import get_salesforce_token, run_salesforce_query
 
 from . import __version__
 
@@ -17,7 +17,6 @@ from .command_csv import csv_cmd
 from .command_files import files_cmd
 from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
-from .exceptions import MissingCredentialsError
 from .logging_config import configure_logging
 
 try:
@@ -56,24 +55,6 @@ else:
     logging.getLogger(__name__).warning("python-dotenv not installed; skipping .env loading.")
 
 
-def get_salesforce_token() -> str:
-    """Return an access token using the Client Credentials flow."""
-    login_url = os.getenv("SF_LOGIN_URL")
-    client_id = os.getenv("SF_CLIENT_ID")
-    client_secret = os.getenv("SF_CLIENT_SECRET")
-
-    resp = requests.post(
-        f"{login_url}/services/oauth2/token",
-        data={
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-        },
-    )
-    resp.raise_for_status()
-    return resp.json()["access_token"]
-
-
 @click.group(
     context_settings={"help_option_names": ["-h", "--help"]},
     invoke_without_command=True,
@@ -104,107 +85,28 @@ def cli(ctx: click.Context, loglevel: Optional[int]) -> None:
 
 
 @cli.command("login")
-@click.option("--show-json", is_flag=True, help="Print raw JSON for identity and limits.")
-def cmd_login(show_json: bool) -> None:
-    """Authenticate and print identity + API limits."""
-    if SalesforceAPI is None or SFConfig is None:
-        _logger.error("API layer not available. Please implement sfdump.api.")
-        raise click.Abort()
-
-    api = SalesforceAPI(SFConfig.from_env())
-    _logger.info("Connecting to Salesforce...")
-
+def cmd_login() -> None:
+    """Fetch and cache a new Salesforce token."""
     try:
-        api.connect()
-    except MissingCredentialsError as e:
-        msg = (
-            "Missing Salesforce credentials.\n\n"
-            "Required variables:\n"
-            "  SF_CLIENT_ID, SF_CLIENT_SECRET, SF_USERNAME, SF_PASSWORD\n\n"
-            "Hint: create a .env next to your project and add them. "
-            "SF_PASSWORD should include your security token if required."
-        )
-        raise click.ClickException(msg) from e
-
-    except requests.HTTPError as e:
-        # Graceful catch for 4xx/5xx responses
-        click.echo("\n[HTTP ERROR]", err=True)
-        click.echo(str(e), err=True)
-        try:
-            # Try to print JSON error payload if available
-            err_json = e.response.json()
-            click.echo(f"  -> {json.dumps(err_json, indent=2)}", err=True)
-        except Exception:
-            # Fallback: show raw response text if no JSON
-            if e.response is not None and e.response.text:
-                click.echo(f"  -> {e.response.text[:400]}...", err=True)
-        raise click.Abort() from e
-
+        token = get_salesforce_token()
+        click.echo("✅  Salesforce token refreshed and cached successfully.")
+        click.echo(f"Cache file: {Path.home() / '.sfdump_token.json'}")
+        click.echo(f"Token preview: {token[:10]}...{token[-6:]}")
     except Exception as e:
-        # Catch-all safety net for unexpected failures
-        click.echo(f"\n[UNEXPECTED ERROR] {type(e).__name__}: {e}", err=True)
-        _logger.debug("Unexpected exception", exc_info=True)
-        raise click.Abort() from e
-
-    # ✅ Only runs if login succeeded
-    _logger.info("Connected. instance=%s, api=%s", api.instance_url, api.api_version)
-
-    who = api.whoami()
-    limits = api.limits()
-
-    click.echo(f"Instance URL:   {api.instance_url}")
-    click.echo(f"API Version:    {api.api_version}")
-    click.echo(f"Org ID:         {who.get('organization_id')}")
-    click.echo(f"User ID:        {who.get('user_id')}")
-    click.echo(f"Username:       {who.get('preferred_username') or who.get('email')}")
-    click.echo(f"Name:           {who.get('name')}")
-
-    core = limits.get("DailyApiRequests", {})
-    click.echo(
-        f"API Core Used:  {core.get('Max', '?')} max / {core.get('Remaining', '?')} remaining"
-    )
-
-    if show_json:
-        click.echo("\n# whoami (userinfo)")
-        click.echo(json.dumps(who, indent=2))
-        click.echo("\n# limits")
-        click.echo(json.dumps(limits, indent=2))
+        click.echo(f"❌  Login failed: {e}", err=True)
+        raise click.Abort() from None
 
 
 @cli.command("query")
 @click.argument("soql")
 @click.option("--pretty", is_flag=True, help="Pretty-print JSON.")
 def cmd_query(soql: str, pretty: bool) -> None:
-    """Run a SOQL query."""
-    if SalesforceAPI is None or SFConfig is None:
-        _logger.error("API layer not available. Please implement sfdump.api.")
-        raise click.Abort()
-
-    _logger.debug("Running SOQL: %s", soql)
-    api = SalesforceAPI(SFConfig.from_env())
-
+    """Run a SOQL query using Client Credentials flow."""
     try:
-        api.connect()
-        res = api.query(soql)
-    except requests.HTTPError as e:
-        click.echo("\n[HTTP ERROR]", err=True)
-        click.echo(str(e), err=True)
-        try:
-            # Try to pretty-print JSON error body
-            err_json = e.response.json()
-            click.echo(f"  -> {json.dumps(err_json, indent=2)}", err=True)
-        except Exception:
-            if e.response is not None and e.response.text:
-                click.echo(f"  -> {e.response.text[:400]}...", err=True)
-        raise click.Abort() from e
-
+        res = run_salesforce_query(soql)
+        click.echo(json.dumps(res, indent=2 if pretty else None))
     except Exception as e:
-        click.echo(f"\n[UNEXPECTED ERROR] {type(e).__name__}: {e}", err=True)
-        _logger.debug("Unexpected exception", exc_info=True)
-        raise click.Abort() from e
-
-    # ✅ Only executes on success
-    click.echo(json.dumps(res, indent=2 if pretty else None))
+        click.echo(f"Error: {e}", err=True)
 
 
 # Cast ensures IDE knows of the Command type
