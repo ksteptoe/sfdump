@@ -115,6 +115,7 @@ def cmd_login(show_json: bool) -> None:
 
     # JSON branch required by tests
     if show_json:
+        click.echo("# whoami")
         click.echo(json.dumps(token_data, indent=2))
         return
 
