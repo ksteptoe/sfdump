@@ -115,8 +115,20 @@ def cmd_login(show_json: bool) -> None:
 
     # JSON branch required by tests
     if show_json:
-        click.echo("# whoami")
-        click.echo(json.dumps(token_data, indent=2))
+        # First section: whoami
+        click.echo("# whoami (userinfo)")
+        if hasattr(api, "userinfo"):
+            click.echo(json.dumps(api.userinfo(), indent=2))
+        else:
+            click.echo(json.dumps({"organization_id": token_data.get("organization_id")}, indent=2))
+
+        # Second section: limits
+        click.echo("# limits")
+        if hasattr(api, "limits"):
+            click.echo(json.dumps(api.limits(), indent=2))
+        else:
+            click.echo(json.dumps(token_data.get("limits", {}), indent=2))
+
         return
 
     # -------------------------------
