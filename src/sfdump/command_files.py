@@ -6,7 +6,12 @@ import click
 
 from .api import SalesforceAPI, SFConfig
 from .exceptions import MissingCredentialsError
-from .files import dump_attachments, dump_content_versions
+from .files import (
+    dump_attachments,
+    dump_content_versions,
+    estimate_attachments,
+    estimate_content_versions,
+)
 from .utils import ensure_dir
 
 # optional .env loader
@@ -43,6 +48,11 @@ except Exception:
     show_default=True,
     help="Parallel download workers.",
 )
+@click.option(
+    "--estimate-only",
+    is_flag=True,
+    help="Do not download anything; just estimate counts and total bytes.",
+)
 def files_cmd(
     out_dir: str,
     no_content: bool,
@@ -50,6 +60,7 @@ def files_cmd(
     content_where: str | None,
     attachments_where: str | None,
     max_workers: int,
+    estimate_only: bool,
 ) -> None:
     """Download Salesforce files: ContentVersion (latest) & legacy Attachment."""
     api = SalesforceAPI(SFConfig.from_env())
@@ -64,36 +75,54 @@ def files_cmd(
         )
         raise click.ClickException(msg) from e
 
-    ensure_dir(out_dir)
     results: list[dict] = []
 
-    try:
+    if estimate_only:
+        # Estimation mode: no filesystem writes.
         if not no_content:
             results.append(
-                dump_content_versions(
+                estimate_content_versions(
                     api,
-                    out_dir,
                     where=content_where,
-                    max_workers=max_workers,
                 )
             )
-
         if not no_attachments:
             results.append(
-                dump_attachments(
+                estimate_attachments(
                     api,
-                    out_dir,
                     where=attachments_where,
-                    max_workers=max_workers,
                 )
             )
-    except KeyboardInterrupt as exc:
-        # Graceful abort on Ctrl+C
-        click.echo(
-            f"\nAborted by user (Ctrl+C). Partial output may remain in: {out_dir}",
-            err=True,
-        )
-        raise click.Abort() from exc
+    else:
+        # Real download mode.
+        ensure_dir(out_dir)
+        try:
+            if not no_content:
+                results.append(
+                    dump_content_versions(
+                        api,
+                        out_dir,
+                        where=content_where,
+                        max_workers=max_workers,
+                    )
+                )
+
+            if not no_attachments:
+                results.append(
+                    dump_attachments(
+                        api,
+                        out_dir,
+                        where=attachments_where,
+                        max_workers=max_workers,
+                    )
+                )
+        except KeyboardInterrupt as exc:
+            # Graceful abort on Ctrl+C
+            click.echo(
+                f"\nAborted by user (Ctrl+C). Partial output may remain in: {out_dir}",
+                err=True,
+            )
+            raise click.Abort() from exc
 
     if not results:
         raise click.ClickException(
@@ -108,4 +137,5 @@ def files_cmd(
     for r in results:
         click.echo(line(r))
 
-    click.echo(f"Metadata CSVs are under: {os.path.join(out_dir, 'links')}")
+    if not estimate_only:
+        click.echo(f"Metadata CSVs are under: {os.path.join(out_dir, 'links')}")
