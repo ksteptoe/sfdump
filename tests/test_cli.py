@@ -14,21 +14,21 @@ def dummy_api(monkeypatch):
     class DummyAPI:
         def __init__(self, config):
             self.config = config
-            self.access_token = "00DFAKE-TOKEN"
-            self.instance_url = "https://example.my.salesforce.com"
-            self.api_version = "v60.0"
 
-        # NEW — fix login tests
         def connect(self):
+            # What cmd_login() relies on
             return {
-                "access_token": self.access_token,
-                "instance_url": self.instance_url,
-                "api_version": self.api_version,
+                "access_token": "00DFAKE-TOKEN",
+                "instance_url": "https://example.my.salesforce.com",
+                "api_version": "v60.0",
                 "organization_id": "ORG123",
                 "user_name": "Test User",
+                "cache_file": "/tmp/dummy.json",
+                "limits": {
+                    "DailyApiRequests": {"Max": 15000, "Remaining": 14999},
+                },
             }
 
-        # NEW — used by --show-json tests
         def userinfo(self):
             return {
                 "organization_id": "ORG123",
@@ -36,17 +36,13 @@ def dummy_api(monkeypatch):
                 "user_name": "Test User",
             }
 
-        # NEW — used by --show-json tests
         def limits(self):
             return {
-                "DailyApiRequests": {
-                    "Max": 15000,
-                    "Remaining": 14999,
-                }
+                "DailyApiRequests": {"Max": 15000, "Remaining": 14999},
             }
 
-        # NEW — query test requires "Acme" in output
         def query(self, soql):
+            # Used by test_query_command
             return {
                 "totalSize": 1,
                 "done": True,
@@ -57,7 +53,7 @@ def dummy_api(monkeypatch):
                             "url": "/services/data/v60.0/sobjects/Account/001",
                         },
                         "Id": "001",
-                        "Name": "Acme Corp",  # KEY PART
+                        "Name": "Acme Corp",
                     }
                 ],
             }
@@ -86,9 +82,11 @@ def test_login_command(dummy_api, verbosity):
     args = verbosity + ["login"]
     result = runner.invoke(cli, args)
     assert result.exit_code == 0
+    assert "Connected to Salesforce." in result.output
     assert "Instance URL" in result.output
     assert "API Version" in result.output
     assert "ORG123" in result.output
+    assert "Test User" in result.output
 
 
 def test_login_show_json(dummy_api):
@@ -97,8 +95,10 @@ def test_login_show_json(dummy_api):
     result = runner.invoke(cli, ["login", "--show-json"])
     assert result.exit_code == 0
     assert "# whoami" in result.output
-    # Valid JSON section should parse correctly
-    parsed = json.loads(result.output.split("# whoami (userinfo)")[1].split("# limits")[0])
+
+    # Extract and parse the JSON between the headers
+    body = result.output.split("# whoami (userinfo)", 1)[1].split("# limits", 1)[0]
+    parsed = json.loads(body)
     assert parsed["organization_id"] == "ORG123"
 
 
@@ -113,7 +113,6 @@ def test_query_command(dummy_api):
 def test_logging_levels(monkeypatch, dummy_api, caplog):
     """Verify that -v/-vv adjust log level."""
     runner = CliRunner()
-
     with caplog.at_level(logging.DEBUG):
         result = runner.invoke(cli, ["-vv", "login"])
     assert result.exit_code == 0

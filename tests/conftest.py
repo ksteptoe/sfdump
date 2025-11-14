@@ -16,12 +16,17 @@ def dummy_api(monkeypatch):
             self.api_version = "v60.0"
 
         def connect(self):
+            # Everything cmd_login() needs
             return {
                 "access_token": self.access_token,
                 "instance_url": self.instance_url,
                 "api_version": self.api_version,
                 "organization_id": "ORG123",
                 "user_name": "Test User",
+                "cache_file": "/tmp/dummy.json",
+                "limits": {
+                    "DailyApiRequests": {"Max": 15000, "Remaining": 14999},
+                },
             }
 
         def userinfo(self):
@@ -32,7 +37,9 @@ def dummy_api(monkeypatch):
             }
 
         def limits(self):
-            return {"DailyApiRequests": {"Max": 15000, "Remaining": 14999}}
+            return {
+                "DailyApiRequests": {"Max": 15000, "Remaining": 14999},
+            }
 
         def query(self, soql):
             return {
@@ -50,11 +57,8 @@ def dummy_api(monkeypatch):
                 ],
             }
 
-    class DummyConfig:
-        @classmethod
-        def from_env(cls):
-            return cls()
-
-    # Global patch
+    # Global patch: **only** the API, leave SFConfig real
     monkeypatch.setattr("sfdump.cli.SalesforceAPI", DummyAPI)
-    monkeypatch.setattr("sfdump.cli.SFConfig", DummyConfig)
+    # DO NOT patch SFConfig here – real env/validation logic is needed
+
+    return DummyAPI

@@ -90,7 +90,7 @@ def cli(ctx: click.Context, loglevel: Optional[int]) -> None:
 def cmd_login(show_json: bool) -> None:
     """Authenticate with Salesforce and store token."""
 
-    # Fail early if env vars missing
+    # Fail early if env vars / config missing (your original behaviour)
     try:
         config = SFConfig.from_env()
     except MissingCredentialsError as e:
@@ -105,39 +105,64 @@ def cmd_login(show_json: bool) -> None:
         click.echo(f"❌  Login failed: {e}", err=True)
         raise click.Abort() from None
 
+    # Use only the dict returned by connect()
+    instance_url = token_data.get("instance_url", "")
+    api_version = token_data.get("api_version", "")
+    access_token = token_data.get("access_token", "")
+    org_id = token_data.get("organization_id") or token_data.get("org_id")
+    user_name = (
+        token_data.get("user_name")
+        or token_data.get("username")
+        or token_data.get("preferred_username")
+    )
+
     # -------------------------------
-    # REQUIRED TEST OUTPUT
+    # REQUIRED OUTPUT
     # -------------------------------
     click.echo("Connected to Salesforce.")
-    click.echo(f"Instance URL: {api.instance_url}")
-    click.echo(f"API Version: {api.api_version}")
-    click.echo(f"Access Token: {api.access_token[:4]}...")
+    if instance_url:
+        click.echo(f"Instance URL: {instance_url}")
+    if api_version:
+        click.echo(f"API Version: {api_version}")
+    if access_token:
+        click.echo(f"Access Token: {access_token[:4]}...")
+
+    if org_id:
+        click.echo(f"Org ID: {org_id}")
+    if user_name:
+        click.echo(f"User: {user_name}")
 
     # JSON branch required by tests
     if show_json:
         # First section: whoami
         click.echo("# whoami (userinfo)")
         if hasattr(api, "userinfo"):
-            click.echo(json.dumps(api.userinfo(), indent=2))
+            userinfo = api.userinfo()
         else:
-            click.echo(json.dumps({"organization_id": token_data.get("organization_id")}, indent=2))
+            userinfo = {
+                "organization_id": org_id,
+                "user_name": user_name,
+            }
+        click.echo(json.dumps(userinfo, indent=2))
 
         # Second section: limits
         click.echo("# limits")
         if hasattr(api, "limits"):
-            click.echo(json.dumps(api.limits(), indent=2))
+            limits = api.limits()
         else:
-            click.echo(json.dumps(token_data.get("limits", {}), indent=2))
+            limits = token_data.get("limits", {})
+        click.echo(json.dumps(limits, indent=2))
 
         return
 
     # -------------------------------
-    # Your new optional messaging
+    # Your existing optional messaging
     # -------------------------------
     cache_file = token_data.get("cache_file", "<no-cache>")
     click.echo("✅  Salesforce token refreshed and cached successfully.")
     click.echo(f"Cache file: {cache_file}")
-    click.echo(f"Token preview: {api.access_token[:20]}...")
+    if access_token:
+        click.echo(f"Token preview: {access_token[:20]}...")
 
 
 @cli.command("query")
