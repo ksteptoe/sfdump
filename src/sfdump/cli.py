@@ -8,7 +8,7 @@ from typing import Optional, cast
 import click
 from click import Command
 
-from sfdump.sf_auth import run_salesforce_query
+from sfdump.sf_auth import get_salesforce_token, run_salesforce_query
 
 from . import __version__
 
@@ -17,7 +17,6 @@ from .command_csv import csv_cmd
 from .command_files import files_cmd
 from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
-from .exceptions import MissingCredentialsError
 from .logging_config import configure_logging
 
 try:
@@ -86,83 +85,16 @@ def cli(ctx: click.Context, loglevel: Optional[int]) -> None:
 
 
 @cli.command("login")
-@click.option("--show-json", is_flag=True, help="Show raw token JSON.")
-def cmd_login(show_json: bool) -> None:
-    """Authenticate with Salesforce and store token."""
-
-    # Fail early if env vars / config missing (your original behaviour)
+def cmd_login() -> None:
+    """Fetch and cache a new Salesforce token."""
     try:
-        config = SFConfig.from_env()
-    except MissingCredentialsError as e:
-        click.echo(f"❌ Missing credentials: {e}", err=True)
-        raise click.Abort() from None
-
-    # Attempt login
-    try:
-        api = SalesforceAPI(config)
-        token_data = api.connect()
+        token = get_salesforce_token()
+        click.echo("✅  Salesforce token refreshed and cached successfully.")
+        click.echo(f"Cache file: {Path.home() / '.sfdump_token.json'}")
+        click.echo(f"Token preview: {token[:10]}...{token[-6:]}")
     except Exception as e:
         click.echo(f"❌  Login failed: {e}", err=True)
         raise click.Abort() from None
-
-    # Use only the dict returned by connect()
-    instance_url = token_data.get("instance_url", "")
-    api_version = token_data.get("api_version", "")
-    access_token = token_data.get("access_token", "")
-    org_id = token_data.get("organization_id") or token_data.get("org_id")
-    user_name = (
-        token_data.get("user_name")
-        or token_data.get("username")
-        or token_data.get("preferred_username")
-    )
-
-    # -------------------------------
-    # REQUIRED OUTPUT
-    # -------------------------------
-    click.echo("Connected to Salesforce.")
-    if instance_url:
-        click.echo(f"Instance URL: {instance_url}")
-    if api_version:
-        click.echo(f"API Version: {api_version}")
-    if access_token:
-        click.echo(f"Access Token: {access_token[:4]}...")
-
-    if org_id:
-        click.echo(f"Org ID: {org_id}")
-    if user_name:
-        click.echo(f"User: {user_name}")
-
-    # JSON branch required by tests
-    if show_json:
-        # First section: whoami
-        click.echo("# whoami (userinfo)")
-        if hasattr(api, "userinfo"):
-            userinfo = api.userinfo()
-        else:
-            userinfo = {
-                "organization_id": org_id,
-                "user_name": user_name,
-            }
-        click.echo(json.dumps(userinfo, indent=2))
-
-        # Second section: limits
-        click.echo("# limits")
-        if hasattr(api, "limits"):
-            limits = api.limits()
-        else:
-            limits = token_data.get("limits", {})
-        click.echo(json.dumps(limits, indent=2))
-
-        return
-
-    # -------------------------------
-    # Your existing optional messaging
-    # -------------------------------
-    cache_file = token_data.get("cache_file", "<no-cache>")
-    click.echo("✅  Salesforce token refreshed and cached successfully.")
-    click.echo(f"Cache file: {cache_file}")
-    if access_token:
-        click.echo(f"Token preview: {access_token[:20]}...")
 
 
 @cli.command("query")
