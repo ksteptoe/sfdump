@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from .env_loader import load_env_files
 from .exceptions import MissingCredentialsError
 
 __author__ = "Kevin Steptoe"
@@ -15,6 +16,9 @@ __copyright__ = "Kevin Steptoe"
 __license__ = "MIT"
 
 _logger = logging.getLogger(__name__)
+
+# Ensure .env is loaded for library use as well (e.g., scripts importing SalesforceAPI)
+load_env_files(quiet=True)
 
 
 # ----------------------------------------------------------------------
@@ -24,24 +28,30 @@ _logger = logging.getLogger(__name__)
 class SFConfig:
     """Configuration for Salesforce API authentication."""
 
-    host: str = "login.salesforce.com"
+    # Which auth flow to use – currently we only support client_credentials
+    auth_flow: str = "client_credentials"
+
+    # Base login URL (not the instance URL)
+    login_url: str = "https://login.salesforce.com"
+
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None  # append security token if required
+
+    # Optional: pre-provided token / instance URL (e.g. from cache)
     access_token: Optional[str] = None
     instance_url: Optional[str] = None
+
+    # Optional: override API version (e.g. "v60.0"); otherwise auto-discover
     api_version: Optional[str] = None
 
     @classmethod
     def from_env(cls) -> SFConfig:
         """Load configuration from environment variables."""
         return cls(
-            host=os.getenv("SF_HOST", "login.salesforce.com"),
+            auth_flow=os.getenv("SF_AUTH_FLOW", "client_credentials"),
+            login_url=os.getenv("SF_LOGIN_URL", "https://login.salesforce.com"),
             client_id=os.getenv("SF_CLIENT_ID"),
             client_secret=os.getenv("SF_CLIENT_SECRET"),
-            username=os.getenv("SF_USERNAME"),
-            password=os.getenv("SF_PASSWORD"),
             access_token=os.getenv("SF_ACCESS_TOKEN"),
             instance_url=os.getenv("SF_INSTANCE_URL"),
             api_version=os.getenv("SF_API_VERSION"),
@@ -52,7 +62,7 @@ class SFConfig:
 # Main API client
 # ----------------------------------------------------------------------
 class SalesforceAPI:
-    """Minimal Salesforce REST API client."""
+    """Minimal Salesforce REST API client using OAuth client-credentials."""
 
     def __init__(self, cfg: Optional[SFConfig] = None) -> None:
         self.cfg = cfg or SFConfig.from_env()
@@ -64,14 +74,17 @@ class SalesforceAPI:
     # --------------------------- Public methods -----------------------
 
     def connect(self) -> None:
-        """Authenticate using either an existing token or OAuth login."""
+        """Authenticate using either an existing token or configured auth flow."""
         if self.cfg.access_token and self.cfg.instance_url:
-            _logger.debug("Using existing access token.")
+            _logger.debug("Using existing access token from configuration.")
             self.access_token = self.cfg.access_token
             self.instance_url = self.cfg.instance_url.rstrip("/")
         else:
-            _logger.info("Performing OAuth username–password login.")
-            self._oauth_login()
+            _logger.info("Performing OAuth login using auth flow: %s", self.cfg.auth_flow)
+            self._login_via_auth_flow()
+
+        if not self.access_token or not self.instance_url:
+            raise RuntimeError("Authentication did not yield access_token and instance_url.")
 
         self.session.headers.update({"Authorization": f"Bearer {self.access_token}"})
         self.api_version = self.cfg.api_version or self._discover_latest_api_version()
@@ -83,7 +96,7 @@ class SalesforceAPI:
 
     def whoami(self) -> Dict[str, Any]:
         """Return identity information for the current user."""
-        url = f"https://{self.cfg.host}/services/oauth2/userinfo"
+        url = f"{self.cfg.login_url.rstrip('/')}/services/oauth2/userinfo"
         return self._get(url).json()
 
     def limits(self) -> Dict[str, Any]:
@@ -98,31 +111,39 @@ class SalesforceAPI:
 
     # --------------------------- Internal helpers --------------------
 
-    def _oauth_login(self) -> None:
-        """Perform username-password OAuth2 flow."""
+    def _login_via_auth_flow(self) -> None:
+        """Dispatch to the configured auth flow."""
+        if self.cfg.auth_flow == "client_credentials":
+            self._client_credentials_login()
+        else:
+            raise RuntimeError(f"Unsupported SF_AUTH_FLOW: {self.cfg.auth_flow!r}")
+
+    def _client_credentials_login(self) -> None:
+        """Perform OAuth2 client credentials flow."""
         missing = [
             k
             for k, v in {
                 "SF_CLIENT_ID": self.cfg.client_id,
                 "SF_CLIENT_SECRET": self.cfg.client_secret,
-                "SF_USERNAME": self.cfg.username,
-                "SF_PASSWORD": self.cfg.password,
+                "SF_LOGIN_URL": self.cfg.login_url,
             }.items()
             if not v
         ]
         if missing:
             raise MissingCredentialsError(missing)
 
+        token_url = f"{self.cfg.login_url.rstrip('/')}/services/oauth2/token"
         data = {
-            "grant_type": "password",
+            "grant_type": "client_credentials",
             "client_id": self.cfg.client_id,
             "client_secret": self.cfg.client_secret,
-            "username": self.cfg.username,
-            "password": self.cfg.password,
         }
-        token_url = f"https://{self.cfg.host}/services/oauth2/token"
+
+        _logger.debug("Requesting access token from %s", token_url)
         r = self._post(token_url, data=data, auth_required=False)
         payload = r.json()
+
+        # Expect standard Salesforce fields
         self.access_token = payload["access_token"]
         self.instance_url = payload["instance_url"].rstrip("/")
 
@@ -170,7 +191,7 @@ class SalesforceAPI:
         timeout: float = 30.0,
     ) -> requests.Response:
         """Generic request with retry and logging."""
-        headers = {}
+        headers: Dict[str, str] = {}
         if auth_required and self.access_token:
             headers["Authorization"] = f"Bearer {self.access_token}"
 
@@ -238,9 +259,9 @@ class SalesforceAPI:
 # CLI integration shim
 # ----------------------------------------------------------------------
 def sfdump_api(loglevel: int) -> None:
-    """Entry point called from CLI (for now performs login test)."""
+    """Entry point called from CLI (for now performs connection test)."""
     logging.getLogger().setLevel(loglevel or logging.INFO)
-    _logger.info("Starting Salesforce API login test")
+    _logger.info("Starting Salesforce API connection test")
 
     api = SalesforceAPI(SFConfig.from_env())
     api.connect()

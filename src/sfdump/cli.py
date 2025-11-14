@@ -19,13 +19,6 @@ from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
 from .logging_config import configure_logging
 
-try:
-    from dotenv import load_dotenv  # optional
-
-    load_dotenv()
-except Exception:
-    pass
-
 # Import your API lazily so CLI can exist before API is done.
 try:
     from .api import SalesforceAPI, SFConfig
@@ -33,26 +26,12 @@ except Exception:  # pragma: no cover
     SalesforceAPI = None  # type: ignore[assignment]
     SFConfig = None  # type: ignore[assignment]
 
+from .env_loader import load_env_files
+
 _logger = logging.getLogger(__name__)
 
-
-# --- Optional .env loading ---
-try:
-    from dotenv import load_dotenv
-except ImportError:
-    load_dotenv = None
-
-# Try to load .env or .dotenv from project root or current dir
-if load_dotenv:
-    # Prefer .env, fallback to .dotenv
-    for candidate in (".env", ".dotenv"):
-        env_path = Path.cwd() / candidate
-        if env_path.exists():
-            load_dotenv(env_path)
-            logging.getLogger(__name__).debug("Loaded environment variables from %s", env_path)
-            break
-else:
-    logging.getLogger(__name__).warning("python-dotenv not installed; skipping .env loading.")
+# Load .env very early, so everything else sees env vars
+load_env_files()
 
 
 @click.group(
