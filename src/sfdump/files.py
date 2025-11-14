@@ -170,3 +170,63 @@ def dump_attachments(
         "bytes": total_bytes,
         "root": files_root,
     }
+
+
+def estimate_content_versions(
+    api,
+    *,
+    where: Optional[str] = None,
+) -> Dict[str, int | str | None]:
+    """Estimate total size of latest ContentVersion files (no download)."""
+    soql = (
+        "SELECT Id, ContentDocumentId, Title, FileType, ContentSize, VersionNumber "
+        "FROM ContentVersion WHERE IsLatest = true"
+    )
+    if where:
+        soql += f" AND ({where})"
+
+    count = 0
+    total_bytes = 0
+
+    for r in api.query_all_iter(soql):
+        # ContentSize is an int (bytes) but be defensive:
+        size = r.get("ContentSize") or 0
+        count += 1
+        total_bytes += int(size)
+
+    return {
+        "kind": "content_version (estimate)",
+        "meta_csv": None,
+        "links_csv": None,
+        "count": count,
+        "bytes": total_bytes,
+        "root": "(estimate only)",
+    }
+
+
+def estimate_attachments(
+    api,
+    *,
+    where: Optional[str] = None,
+) -> Dict[str, int | str | None]:
+    """Estimate total size of legacy Attachments (no download)."""
+    soql = "SELECT Id, ParentId, Name, BodyLength, ContentType FROM Attachment"
+    if where:
+        soql += f" WHERE {where}"
+
+    count = 0
+    total_bytes = 0
+
+    for r in api.query_all_iter(soql):
+        size = r.get("BodyLength") or 0
+        count += 1
+        total_bytes += int(size)
+
+    return {
+        "kind": "attachment (estimate)",
+        "meta_csv": None,
+        "links_csv": None,
+        "count": count,
+        "bytes": total_bytes,
+        "root": "(estimate only)",
+    }
