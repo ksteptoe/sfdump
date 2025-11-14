@@ -62,6 +62,28 @@ def dump_content_versions(
                 r["download_error"] = str(e)
             meta_rows.append(r)
 
+    # Links (which record a file is attached to)
+    doc_ids = {r.get("ContentDocumentId") for r in meta_rows if r.get("ContentDocumentId")}
+    cdl_rows: List[dict] = []
+
+    if doc_ids:
+        ids_list = list(doc_ids)
+
+        def _chunked(seq: List[str], size: int) -> List[List[str]]:
+            return [seq[i : i + size] for i in range(0, len(seq), size)]
+
+        for chunk in _chunked(ids_list, 200):
+            in_list = ",".join(f"'{id_}'" for id_ in chunk)
+            soql_links = (
+                "SELECT ContentDocumentId, LinkedEntityId, ShareType, Visibility "
+                "FROM ContentDocumentLink "
+                f"WHERE ContentDocumentId IN ({in_list})"
+            )
+            part = list(api.query_all_iter(soql_links))
+            for r in part:
+                r.pop("attributes", None)
+            cdl_rows.extend(part)
+
     links_dir = os.path.join(out_dir, "links")
     ensure_dir(links_dir)
 
@@ -72,15 +94,6 @@ def dump_content_versions(
     else:
         open(meta_csv, "w").close()
 
-    # Links (which record a file is attached to)
-    cdl_rows = list(
-        api.query_all_iter(
-            "SELECT ContentDocumentId, LinkedEntityId, ShareType, Visibility "
-            "FROM ContentDocumentLink"
-        )
-    )
-    for r in cdl_rows:
-        r.pop("attributes", None)
     cdl_csv = os.path.join(links_dir, "content_document_links.csv")
     if cdl_rows:
         write_csv(

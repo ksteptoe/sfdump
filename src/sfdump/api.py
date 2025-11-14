@@ -109,6 +109,36 @@ class SalesforceAPI:
         url = f"{self.instance_url}/services/data/{self.api_version}/query"
         return self._get(url, params={"q": soql}).json()
 
+    def download_path_to_file(self, rel_path: str, target: str, chunk_size: int = 8192) -> int:
+        """Download a binary resource given a relative REST path and save to file.
+
+        rel_path should start with '/', e.g.
+        '/services/data/v60.0/sobjects/ContentVersion/<Id>/VersionData'
+
+        Returns the number of bytes written.
+        """
+        if not getattr(self, "instance_url", None):
+            raise RuntimeError("Not connected: instance_url is not set. Call connect() first.")
+
+        # Build full URL: instance base + relative path
+        url = self.instance_url.rstrip("/") + rel_path
+
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+
+        total = 0
+        # Use the authenticated session (Authorization header already set in connect())
+        with self.session.get(url, stream=True) as resp:
+            resp.raise_for_status()
+            with open(target, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=chunk_size):
+                    if not chunk:
+                        continue
+                    f.write(chunk)
+                    total += len(chunk)
+
+        return total
+
     # --------------------------- Internal helpers --------------------
 
     def _login_via_auth_flow(self) -> None:
