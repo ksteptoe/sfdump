@@ -129,13 +129,35 @@ def files_cmd(
             "Nothing to do: both ContentVersion and Attachment were disabled."
         )
 
-    # short human summary
+    def _format_bytes(num: float) -> str:
+        """Human-readable byte format, like du -h."""
+        units = ("B", "KB", "MB", "GB", "TB", "PB")
+        value = num
+        for unit in units:
+            if value < 1024.0 or unit == units[-1]:
+                return f"{value:,.1f} {unit}"
+            value /= 1024.0
+        return f"{value:,.1f} PB"
+
+    # short human summary per kind
     def line(r: dict) -> str:
-        kb = (r["bytes"] or 0) / 1024.0
-        return f"{r['kind']}: {r['count']} files, {kb:,.0f} KB → {r['root']}"
+        bytes_val = int(r.get("bytes") or 0)
+        human = _format_bytes(float(bytes_val))
+        return (
+            f"{r['kind']}: {r['count']} files, {human} " f"({bytes_val:,.0f} bytes) → {r['root']}"
+        )
+
+    total_files = 0
+    total_bytes = 0
 
     for r in results:
         click.echo(line(r))
+        total_files += int(r.get("count") or 0)
+        total_bytes += int(r.get("bytes") or 0)
+
+    # overall total
+    total_human = _format_bytes(float(total_bytes))
+    click.echo(f"Total: {total_files} files, {total_human} ({total_bytes:,.0f} bytes)")
 
     if not estimate_only:
         click.echo(f"Metadata CSVs are under: {os.path.join(out_dir, 'links')}")
