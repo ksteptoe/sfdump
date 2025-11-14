@@ -20,14 +20,28 @@ except Exception:
 
 @click.command("files")
 @click.option(
-    "--out", "out_dir", required=True, type=click.Path(file_okay=False), help="Output directory."
+    "--out",
+    "out_dir",
+    required=True,
+    type=click.Path(file_okay=False),
+    help="Output directory.",
 )
 @click.option("--no-content", is_flag=True, help="Skip ContentVersion downloads.")
 @click.option("--no-attachments", is_flag=True, help="Skip legacy Attachment downloads.")
-@click.option("--content-where", help="Extra AND filter for ContentVersion (without WHERE).")
-@click.option("--attachments-where", help="WHERE clause for Attachment (without WHERE).")
 @click.option(
-    "--max-workers", type=int, default=8, show_default=True, help="Parallel download workers."
+    "--content-where",
+    help="Extra AND filter for ContentVersion (without WHERE).",
+)
+@click.option(
+    "--attachments-where",
+    help="WHERE clause for Attachment (without WHERE).",
+)
+@click.option(
+    "--max-workers",
+    type=int,
+    default=8,
+    show_default=True,
+    help="Parallel download workers.",
 )
 def files_cmd(
     out_dir: str,
@@ -45,21 +59,41 @@ def files_cmd(
         missing = ", ".join(e.missing)
         msg = (
             f"Missing Salesforce credentials: {missing}\n\n"
-            "Set env vars or create a .env file with SF_CLIENT_ID, SF_CLIENT_SECRET, SF_USERNAME, SF_PASSWORD."
+            "Set env vars or create a .env file with SF_CLIENT_ID, SF_CLIENT_SECRET, "
+            "SF_USERNAME, SF_PASSWORD."
         )
         raise click.ClickException(msg) from e
 
     ensure_dir(out_dir)
-    results = []
+    results: list[dict] = []
 
-    if not no_content:
-        results.append(
-            dump_content_versions(api, out_dir, where=content_where, max_workers=max_workers)
+    try:
+        if not no_content:
+            results.append(
+                dump_content_versions(
+                    api,
+                    out_dir,
+                    where=content_where,
+                    max_workers=max_workers,
+                )
+            )
+
+        if not no_attachments:
+            results.append(
+                dump_attachments(
+                    api,
+                    out_dir,
+                    where=attachments_where,
+                    max_workers=max_workers,
+                )
+            )
+    except KeyboardInterrupt as exc:
+        # Graceful abort on Ctrl+C
+        click.echo(
+            f"\nAborted by user (Ctrl+C). Partial output may remain in: {out_dir}",
+            err=True,
         )
-    if not no_attachments:
-        results.append(
-            dump_attachments(api, out_dir, where=attachments_where, max_workers=max_workers)
-        )
+        raise click.Abort() from exc
 
     if not results:
         raise click.ClickException(
