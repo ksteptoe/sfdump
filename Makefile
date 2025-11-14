@@ -99,7 +99,6 @@ $(PYTHON) -m pytest $(1) $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) $(PYTE
 endef
 
 $(UNIT_STAMP): | $(STAMPS_DIR)
-	@rm -f .coverage  # fresh coverage run
 	@tests_sig=$( $(call compute_dir_sig,$(UNIT_DIR)) ); \
 	code_sig=$( $(call compute_dir_sig,$(CODE_DIRS)) ); \
 	conf_sig=$( sha1sum $(CONF_FILES) 2>/dev/null | awk '{print $$1}' | sha1sum | awk '{print $$1}' ); \
@@ -107,6 +106,7 @@ $(UNIT_STAMP): | $(STAMPS_DIR)
 	old_sig=$$(cat $(UNIT_SIG) 2>/dev/null || echo -n); \
 	if [ "$(NO_CACHE)" = "1" ] || [ "$$new_sig" != "$$old_sig" ] || [ ! -f $@ ]; then \
 	  echo "=== Running unit tests ==="; \
+	  rm -f .coverage; \
 	  $(PYTHON) -m pytest -q $(UNIT_DIR) -m "not live" $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) $(PYTEST_COV_UNIT); \
 	  echo "$$new_sig" > $(UNIT_SIG); \
 	  touch $@; \
@@ -120,10 +120,19 @@ $(INTEG_STAMP): | $(STAMPS_DIR)
 	old_sig=$$(cat $(INTEG_SIG) 2>/dev/null || echo -n); \
 	if [ "$(NO_CACHE)" = "1" ] || [ "$$new_sig" != "$$old_sig" ] || [ ! -f $@ ]; then \
 	  echo "=== Running integration tests ==="; \
+	  set +e; \
 	  $(PYTHON) -m pytest -q $(INTEG_DIR) -m "not live" $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) $(PYTEST_COV_INTEG); \
+	  status=$$?; \
+	  set -e; \
+	  if [ "$$status" -eq 5 ]; then \
+	    echo "No integration tests collected; treating as success."; \
+	  elif [ "$$status" -ne 0 ]; then \
+	    exit $$status; \
+	  fi; \
 	  echo "$$new_sig" > $(INTEG_SIG); \
 	  touch $@; \
 	else echo "No changes detected; skipping integration tests."; fi
+
 
 
 test: $(UNIT_STAMP) $(INTEG_STAMP)
