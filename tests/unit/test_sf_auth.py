@@ -146,7 +146,8 @@ def test_run_salesforce_query_success(monkeypatch):
     # Ensure Authorization header and URL look correct
     assert calls["headers"]["Authorization"] == "Bearer ACCESS_TOKEN"
     assert "/services/data/v60.0/query" in calls["url"]
-    assert "SELECT+Id+FROM+Account+LIMIT+1" in calls["url"]
+    # Spaces are encoded as %20 by urllib.parse.quote
+    assert "SELECT%20Id%20FROM%20Account%20LIMIT%201" in calls["url"]
 
 
 def test_run_salesforce_query_error(monkeypatch):
