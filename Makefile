@@ -40,7 +40,7 @@ SYSTEM_DIR  := tests/system  # live/system tests (opt-in, uncached)
         test test-all test-live clean-tests \
         build upload version fetch-tags release-show \
         release-patch release-minor release-major \
-        clean run-cli check-clean
+        clean run-cli sf-exportcheck-clean
 
 help:
 	@echo "Common targets:"
@@ -60,6 +60,7 @@ help:
 	@echo "  make release-major       - tag v(X+1).0.0"
 	@echo "  make clean               - remove build artifacts"
 	@echo "  make run-cli             - run CLI entry point (pass CLI_ARGS=...)"
+	@echo "  make export-sf           - run make -f Makefile.export"
 
 bootstrap:
 	$(PYTHON) -m pip install -U pip setuptools wheel
@@ -227,6 +228,12 @@ ROOT ?= .
 CLI_ARGS ?=
 run-cli:
 	sfdump $(ROOT) $(CLI_ARGS)
+
+# -----------------------------------------------------------------------------#
+# Salesforce Export
+sf-export:
+	$(MAKE) -f Makefile.export export-all
+
 
 # -----------------------------------------------------------------------------#
 clean:
