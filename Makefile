@@ -69,6 +69,12 @@ precommit:
 	pre-commit install
 
 # -----------------------------------------------------------------------------#
+# Docs
+docs:
+	$(PYTHON) -m sphinx -b html docs docs/_build/html
+
+
+# -----------------------------------------------------------------------------#
 # Linting / Formatting
 lint:
 	ruff check .

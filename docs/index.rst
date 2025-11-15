@@ -1,26 +1,19 @@
-======
-sfdump
-======
+sfdump — Salesforce Data Export CLI
+===================================
 
-This is the documentation of **sfdump**.
+Welcome to the documentation for **sfdump**, a command-line tool that connects to Salesforce,
+extracts your data and attachments, and packages everything into a manifest and ZIP archive
+for long-term storage or analysis.
 
 .. note::
 
-    This is the main page of your project's `Sphinx`_ documentation.
-    It is formatted in `reStructuredText`_. Add additional pages
-    by creating rst-files in ``docs`` and adding them to the `toctree`_ below.
-    Use then `references`_ in order to link them from this page, e.g.
-    :ref:`authors` and :ref:`changes`.
+   This documentation is generated using `Sphinx`_.
+   You can rebuild it locally with::
 
-    It is also possible to refer to the documentation of other Python packages
-    with the `Python domain syntax`_. By default you can reference the
-    documentation of `Sphinx`_, `Python`_, `NumPy`_, `SciPy`_, `matplotlib`_,
-    `Pandas`_, `Scikit-Learn`_. You can add more by extending the
-    ``intersphinx_mapping`` in your Sphinx's ``conf.py``.
+       make -C docs html
 
-    The pretty useful extension `autodoc`_ is activated by default and lets
-    you include documentation from docstrings. Docstrings can be written in
-    `Google style`_ (recommended!), `NumPy style`_ and `classical style`_.
+   The table of contents below lists all available sections. Each corresponds
+   to an ``.rst`` file under ``docs/``.
 
 
 Contents
@@ -28,8 +21,11 @@ Contents
 
 .. toctree::
    :maxdepth: 2
+   :caption: User Documentation
 
    Overview <readme>
+   User Guide <user_guide>
+   Developer Guide <developer_guide>
    Contributions & Help <contributing>
    License <license>
    Authors <authors>
@@ -44,18 +40,18 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
-.. _toctree: https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html
-.. _reStructuredText: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
-.. _references: https://www.sphinx-doc.org/en/stable/markup/inline.html
-.. _Python domain syntax: https://www.sphinx-doc.org/en/master/usage/restructuredtext/domains.html#the-python-domain
-.. _Sphinx: https://www.sphinx-doc.org/
-.. _Python: https://docs.python.org/
-.. _Numpy: https://numpy.org/doc/stable
-.. _SciPy: https://docs.scipy.org/doc/scipy/reference/
-.. _matplotlib: https://matplotlib.org/contents.html#
-.. _Pandas: https://pandas.pydata.org/pandas-docs/stable
-.. _Scikit-Learn: https://scikit-learn.org/stable
-.. _autodoc: https://www.sphinx-doc.org/en/master/ext/autodoc.html
-.. _Google style: https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings
-.. _NumPy style: https://numpydoc.readthedocs.io/en/latest/format.html
-.. _classical style: https://www.sphinx-doc.org/en/master/domains.html#info-field-lists
+
+About this documentation
+========================
+
+This site is divided into two main parts:
+
+1. **User Documentation** — everything you need to *use* the CLI:
+   installation, authentication, and running commands like ``sfdump csv`` or ``sfdump manifest``.
+
+2. **Developer Documentation** — information for contributors:
+   internal module reference, development setup, and contribution guidelines.
+
+Both are linked in the **Contents** tree above.
+
+.. _Sphinx: https://www.sphinx-doc.org/en/master/
