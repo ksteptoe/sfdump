@@ -109,6 +109,13 @@ class SalesforceAPI:
         url = f"{self.instance_url}/services/data/{self.api_version}/query"
         return self._get(url, params={"q": soql}).json()
 
+    def iter_query(self, soql: str):
+        """Iterate over all records for a SOQL query.
+
+        Thin wrapper around query_all_iter for backwards/CLI compatibility.
+        """
+        yield from self.query_all_iter(soql)
+
     def download_path_to_file(self, rel_path: str, target: str, chunk_size: int = 8192) -> int:
         """Download a binary resource given a relative REST path and save to file.
 
