@@ -269,14 +269,11 @@ export-hr: $(HR_TARGETS)
 # Files / Attachments + indexes for key parent objects
 export-files:
 	@echo "=== Exporting Files & Attachments to $(FILES_DIR) ==="
-	mkdir -p "$(FILES_DIR)"
 	@echo "=== Indexing files by: $(FILE_INDEX_OBJECTS) ==="
-	@echo "# sfdump files --out DIR --index-by Obj1 --index-by Obj2 ..."
-	@echo $(SFDUMP) files --out "$(FILES_DIR)" $(INDEX_BY_FLAGS)
-	# ADJUST HERE IF NEEDED: syntax for your 'sfdump files' CLI
-	# NOTE: if index fails (e.g. missing iter_query), we DO NOT abort the whole export.
-	$(SFDUMP) files --out "$(FILES_DIR)" $(INDEX_BY_FLAGS) || \
-	  echo "WARNING: files export finished but index build failed (see sfdump stack trace above)."
+	@mkdir -p "$(FILES_DIR)"
+	@$(SFDUMP) files --out "$(FILES_DIR)" $(INDEX_BY_FLAGS) \
+	  || echo "WARNING: sfdump files failed (see above); continuing export-all."
+
 
 export-meta: $(META_DIR)/all_objects.txt
 	@echo "=== Object list written to $(META_DIR)/all_objects.txt ==="
