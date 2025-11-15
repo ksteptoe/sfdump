@@ -202,9 +202,11 @@ def build_files_index(
     "--index-by",
     "index_by",
     metavar="SOBJECT",
+    multiple=True,  # 👈 allow repeated flags
     help=(
-        "Also build a CSV index mapping SOBJECT records to their related "
-        "Attachments and Files (e.g. Opportunity, Account)."
+        "Also build CSV index(es) mapping SOBJECT records to their related "
+        "Attachments and Files (e.g. Opportunity, Account). "
+        "May be given multiple times."
     ),
 )
 def files_cmd(
@@ -215,12 +217,12 @@ def files_cmd(
     attachments_where: str | None,
     max_workers: int,
     estimate_only: bool,
-    index_by: str | None,
+    index_by: tuple[str, ...],
 ) -> None:
     """Download Salesforce files: ContentVersion (latest) & legacy Attachment.
 
-    Optionally, build a CSV index linking a given sObject (e.g. Opportunity)
-    to its related Attachments and Files via --index-by.
+    Optionally, build CSV index(es) linking one or more sObjects (e.g. Opportunity)
+    to their related Attachments and Files via --index-by.
     """
     api = SalesforceAPI(SFConfig.from_env())
     try:
@@ -283,21 +285,20 @@ def files_cmd(
             )
             raise click.Abort() from exc
 
-    # Optional: build index CSV mapping <index_by> records to Attachments/Files
+    # Optional: build index CSVs mapping <index_by> records to Attachments/Files
     if index_by:
-        try:
-            build_files_index(
-                api=api,
-                index_object=index_by,
-                out_dir=out_dir,
-                include_content=not no_content,
-                include_attachments=not no_attachments,
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            _logger.exception("Failed to build files index: %s", exc)
-            raise click.ClickException(
-                f"Failed to build files index for {index_by}: {exc}"
-            ) from exc
+        for obj in index_by:
+            try:
+                build_files_index(
+                    api=api,
+                    index_object=obj,
+                    out_dir=out_dir,
+                    include_content=not no_content,
+                    include_attachments=not no_attachments,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                _logger.exception("Failed to build files index for %s: %s", obj, exc)
+                raise click.ClickException(f"Failed to build files index for {obj}: {exc}") from exc
 
     if not results and not index_by:
         # If we didn't estimate, download, or index anything, bail out.

@@ -2,27 +2,99 @@
 # Salesforce + FinancialForce/ERP export via sfdump
 #
 # Usage:
-#   make -f Makefile.export export-all
-#   make -f Makefile.export export-files
-#   make -f Makefile.export export-crm-all
-#   make -f Makefile.export export-ffa
-#   make -f Makefile.export export-hr
-#   make -f Makefile.export export-archive
+#   make -f Makefile.export           # shows help
+#   make -f Makefile.export export-all \
+#       BASE_EXPORT_ROOT="C:/Users/kevin/OneDrive - Example Company/SF"
 #
-# You can override EXPORT_ROOT:
-#   make -f Makefile.export export-all EXPORT_ROOT=export-2025-11-30
+#   make -f Makefile.export export-all \
+#       BASE_EXPORT_ROOT="C:/Users/kevin/OneDrive - Example Company/SF" \
+#       EXPORT_DATE=2025-11-30
+#
+# NOTE: This assumes:
+#   - sfdump csv wants:   sfdump csv --object <SOBJECT> --out <DIR>
+#   - sfdump files wants: sfdump files --out <DIR> --index-by <SOBJECT> [--index-by ...]
+#   If your CLI differs, tweak the lines marked "ADJUST HERE IF NEEDED".
 
 # Default target: show help
 .DEFAULT_GOAL := help
 
-SFDUMP       ?= sfdump
+SFDUMP ?= sfdump
 
+# Base directory for all exports.
+# OVERRIDE this when you run make, e.g.:
+#   BASE_EXPORT_ROOT="C:/Users/kevin/OneDrive - Example Company/SF"
+BASE_EXPORT_ROOT ?= ./exports
+
+# Date and root directory for this run
 EXPORT_DATE  ?= $(shell date +%Y-%m-%d)
-EXPORT_ROOT  ?= export-$(EXPORT_DATE)
+EXPORT_ROOT  ?= $(BASE_EXPORT_ROOT)/export-$(EXPORT_DATE)
 
 CSV_DIR      := $(EXPORT_ROOT)/csv
 FILES_DIR    := $(EXPORT_ROOT)/files
 META_DIR     := $(EXPORT_ROOT)/meta
+
+# ------------------------------------------------------------------------------
+# FILE INDEX SETTINGS (for --index-by)
+# ------------------------------------------------------------------------------
+
+# Objects we care about when indexing files/attachments
+# (anchors for deals, financial docs, HR/employment)
+FILE_INDEX_OBJECTS = \
+  Opportunity \
+  Account \
+  Project__c \
+  Invoices__c \
+  SalesforceInvoice \
+  SalesforceContract \
+  SalesforceQuote \
+  fferpcore__BillingDocument__c \
+  ffc_statex__StatementAccount__c \
+  ffps_po__PurchaseOrder__c \
+  ffps_po__GoodsReceiptNote__c \
+  ffvat__VatReturn__c \
+  Engineer__c \
+  JobApplication__c \
+  HR_Activity__c \
+  Salary_History__c
+
+# Turn that into: --index-by Obj1 --index-by Obj2 ...
+INDEX_BY_FLAGS := $(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj))
+
+# ------------------------------------------------------------------------------
+# HELP
+# ------------------------------------------------------------------------------
+
+.PHONY: help \
+        export-all export-core-crm export-crm-all export-ffa export-hr \
+        export-files export-meta export-archive export-clean export-show-config
+
+help:
+	@echo "Salesforce / FinancialForce export Makefile"
+	@echo ""
+	@echo "Exports go under:"
+	@echo "  BASE_EXPORT_ROOT = $(BASE_EXPORT_ROOT)"
+	@echo "  EXPORT_ROOT      = $(EXPORT_ROOT)"
+	@echo ""
+	@echo "Usage:"
+	@echo "  make -f Makefile.export <target> [BASE_EXPORT_ROOT=path] [EXPORT_DATE=YYYY-MM-DD]"
+	@echo ""
+	@echo "Main targets:"
+	@echo "  help                Show this help."
+	@echo "  export-all          Files + all CRM + FFA + HR + object list."
+	@echo "  export-files        Export Files & Attachments + build indexes (--index-by ...)."
+	@echo "  export-crm-all      Export core CRM (Accounts, Contacts, Opps, Quotes, etc.)."
+	@echo "  export-core-crm     Export just the core CRM subset."
+	@echo "  export-ffa          Export FinancialForce/ERP objects (ff*)."
+	@echo "  export-hr           Export HR / employment objects."
+	@echo "  export-meta         Export full sObject list to meta/all_objects.txt."
+	@echo "  export-archive      Zip the entire EXPORT_ROOT directory."
+	@echo "  export-clean        Remove CSV/files/meta under EXPORT_ROOT (not the zip)."
+	@echo ""
+	@echo "Variables:"
+	@echo "  SFDUMP              sfdump executable (default: sfdump)"
+	@echo "  BASE_EXPORT_ROOT    Base dir for all exports (default: ./exports)"
+	@echo "  EXPORT_DATE         Date suffix (default: today from 'date +%Y-%m-%d')."
+	@echo "  EXPORT_ROOT         Full export dir; override to change entire location."
 
 # ------------------------------------------------------------------------------
 # CORE SALESFORCE OBJECT LISTS
@@ -103,7 +175,7 @@ HR_OBJECTS = \
   ResourceRoleMap__c
 
 # ------------------------------------------------------------------------------
-# FINANCIALFORCE / CERTINIA (ff… PREFIX) – ERP, BILLING, PO, VAT, LOGS
+# FINANCIALFORCE / CERTINIA (ff… PREFIX)
 # ------------------------------------------------------------------------------
 
 FF_ERP_CORE_OBJECTS = \
@@ -183,32 +255,6 @@ ALL_CRM_TARGETS       := $(CRM_CORE_TARGETS) $(CRM_ACTIVITY_TARGETS) $(CRM_SECUR
 # TOP-LEVEL EXPORT TARGETS
 # ------------------------------------------------------------------------------
 
-.PHONY: export-all export-core-crm export-crm-all export-ffa export-hr \
-        export-files export-meta export-archive export-clean export-show-config help
-
-help:
-	@echo "Salesforce / FinancialForce export Makefile"
-	@echo ""
-	@echo "Usage:"
-	@echo "  make -f Makefile.export <target> [EXPORT_ROOT=dir]"
-	@echo ""
-	@echo "Main targets:"
-	@echo "  help                Show this help."
-	@echo "  export-all          Files + all CRM + FFA + HR + object list."
-	@echo "  export-files        Export all Files & Attachments (ContentVersion, Attachment)."
-	@echo "  export-crm-all      Export core CRM (Accounts, Contacts, Opps, Quotes, etc.)."
-	@echo "  export-core-crm     Export just the core CRM subset."
-	@echo "  export-ffa          Export FinancialForce/ERP objects (ff*)."
-	@echo "  export-hr           Export HR / employment objects."
-	@echo "  export-meta         Export full sObject list to meta/all_objects.txt."
-	@echo "  export-archive      Zip the entire EXPORT_ROOT directory."
-	@echo "  export-clean        Remove CSV/files/meta under EXPORT_ROOT (not the zip)."
-	@echo ""
-	@echo "Variables:"
-	@echo "  SFDUMP              sfdump executable (default: sfdump)"
-	@echo "  EXPORT_ROOT         Export directory (default: export-\$$(date +%Y-%m-%d))"
-
-
 export-all: export-show-config export-files export-crm-all export-ffa export-hr export-meta
 	@echo "=== ALL EXPORTS COMPLETED → $(EXPORT_ROOT) ==="
 
@@ -224,10 +270,12 @@ export-ffa: $(FFA_TARGETS)
 export-hr: $(HR_TARGETS)
 	@echo "=== HR / employment export done → $(CSV_DIR) ==="
 
+# Files / Attachments + indexes for key parent objects
 export-files:
 	@echo "=== Exporting Files & Attachments to $(FILES_DIR) ==="
 	mkdir -p "$(FILES_DIR)"
-	$(SFDUMP) files --out "$(FILES_DIR)"
+	# ADJUST HERE IF NEEDED: syntax for your 'sfdump files' CLI
+	$(SFDUMP) files --out "$(FILES_DIR)" $(INDEX_BY_FLAGS)
 
 export-meta: $(META_DIR)/all_objects.txt
 	@echo "=== Object list written to $(META_DIR)/all_objects.txt ==="
@@ -244,11 +292,14 @@ export-clean:
 	rm -rf "$(CSV_DIR)" "$(FILES_DIR)" "$(META_DIR)"
 
 export-show-config:
-	@echo "SFDUMP      = $(SFDUMP)"
-	@echo "EXPORT_ROOT = $(EXPORT_ROOT)"
-	@echo "CSV_DIR     = $(CSV_DIR)"
-	@echo "FILES_DIR   = $(FILES_DIR)"
-	@echo "META_DIR    = $(META_DIR)"
+	@echo "SFDUMP          = $(SFDUMP)"
+	@echo "BASE_EXPORT_ROOT= $(BASE_EXPORT_ROOT)"
+	@echo "EXPORT_DATE     = $(EXPORT_DATE)"
+	@echo "EXPORT_ROOT     = $(EXPORT_ROOT)"
+	@echo "CSV_DIR         = $(CSV_DIR)"
+	@echo "FILES_DIR       = $(FILES_DIR)"
+	@echo "META_DIR        = $(META_DIR)"
+	@echo "FILE_INDEX_OBJECTS = $(FILE_INDEX_OBJECTS)"
 
 # ------------------------------------------------------------------------------
 # PATTERN RULE – HOW TO EXPORT ONE OBJECT
@@ -258,5 +309,6 @@ $(CSV_DIR)/%.done:
 	@obj=$*; \
 	echo "=== Exporting $$obj to $(CSV_DIR) ==="; \
 	mkdir -p "$(CSV_DIR)"; \
+	# ADJUST HERE IF NEEDED: csv syntax for your CLI
 	$(SFDUMP) csv --object "$$obj" --out "$(CSV_DIR)"; \
 	touch "$@"
