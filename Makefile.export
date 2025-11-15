@@ -258,5 +258,5 @@ $(CSV_DIR)/%.done:
 	@obj=$*; \
 	echo "=== Exporting $$obj to $(CSV_DIR) ==="; \
 	mkdir -p "$(CSV_DIR)"; \
-	$(SFDUMP) csv $$obj --out "$(CSV_DIR)"; \
+	$(SFDUMP) csv --object "$$obj" --out "$(CSV_DIR)"; \
 	touch "$@"
