@@ -1,0 +1,262 @@
+# Makefile.export
+# Salesforce + FinancialForce/ERP export via sfdump
+#
+# Usage:
+#   make -f Makefile.export export-all
+#   make -f Makefile.export export-files
+#   make -f Makefile.export export-crm-all
+#   make -f Makefile.export export-ffa
+#   make -f Makefile.export export-hr
+#   make -f Makefile.export export-archive
+#
+# You can override EXPORT_ROOT:
+#   make -f Makefile.export export-all EXPORT_ROOT=export-2025-11-30
+
+# Default target: show help
+.DEFAULT_GOAL := help
+
+SFDUMP       ?= sfdump
+
+EXPORT_DATE  ?= $(shell date +%Y-%m-%d)
+EXPORT_ROOT  ?= export-$(EXPORT_DATE)
+
+CSV_DIR      := $(EXPORT_ROOT)/csv
+FILES_DIR    := $(EXPORT_ROOT)/files
+META_DIR     := $(EXPORT_ROOT)/meta
+
+# ------------------------------------------------------------------------------
+# CORE SALESFORCE OBJECT LISTS
+# ------------------------------------------------------------------------------
+
+CRM_CORE_OBJECTS = \
+  Account \
+  Contact \
+  Opportunity \
+  OpportunityContactRole \
+  OpportunityLineItem \
+  Product2 \
+  Pricebook2 \
+  PricebookEntry \
+  Quote \
+  QuoteLineItem \
+  SalesforceInvoice \
+  SalesforceQuote \
+  SalesforceContract \
+  Invoices__c \
+  Project__c \
+  Customer \
+  Asset
+
+CRM_ACTIVITY_OBJECTS = \
+  Task \
+  Event \
+  EmailMessage \
+  EmailMessageRelation \
+  EmailTemplate \
+  Email__c \
+  Case \
+  CaseComment \
+  CaseHistory \
+  Lead \
+  LeadStatus \
+  Campaign \
+  CampaignMember
+
+CRM_SECURITY_OBJECTS = \
+  User \
+  UserRole \
+  Group \
+  GroupMember \
+  QueueSobject \
+  Profile \
+  PermissionSet \
+  PermissionSetAssignment \
+  PermissionSetGroup \
+  PermissionSetGroupComponent \
+  PermissionSetLicense \
+  PermissionSetLicenseAssign \
+  RecordType
+
+# ------------------------------------------------------------------------------
+# HR / EMPLOYMENT / PEOPLE-OPS OBJECTS
+# ------------------------------------------------------------------------------
+
+HR_OBJECTS = \
+  Engineer__c \
+  Engineer__History \
+  HR_Activity__c \
+  HR_Activity__History \
+  Hiring_Status_Statistic__c \
+  JobApplication__c \
+  JobApplication__Share \
+  Payscale__c \
+  Payscale__Share \
+  Salary_History__c \
+  Salary_History__History \
+  ProbationPeriodSettings__c \
+  TrainingCourse__c \
+  TrainingCourse__Share \
+  TrainingLog__c \
+  Vacancy_History__c \
+  Master_Skill__c \
+  Master_Skill__Share \
+  ResourceRoleMap__c
+
+# ------------------------------------------------------------------------------
+# FINANCIALFORCE / CERTINIA (ff… PREFIX) – ERP, BILLING, PO, VAT, LOGS
+# ------------------------------------------------------------------------------
+
+FF_ERP_CORE_OBJECTS = \
+  fferpcore__Company__c \
+  fferpcore__CompanySite__c \
+  fferpcore__CompanyTaxInformation__c \
+  fferpcore__AccountExtension__c \
+  fferpcore__AccountCreditTerms__c \
+  fferpcore__CompanyCreditTerms__c \
+  fferpcore__ERPProduct__c \
+  fferpcore__ProductExtension__c \
+  fferpcore__ProductProxy__c \
+  fferpcore__UserInformation__c \
+  fferpcore__UserInformationAssignment__c \
+  fferpcore__ExchangeRateEntry__c \
+  fferpcore__ExchangeRateGroup__c \
+  fferpcore__ExchangeRateHistory__c \
+  fferpcore__TaxCode__c \
+  fferpcore__TaxRate__c \
+  fferpcore__TaxDetail__c
+
+FF_FINANCIAL_TX_OBJECTS = \
+  fferpcore__BillingDocument__c \
+  fferpcore__BillingDocumentLineItem__c \
+  ffc_statex__StatementAccount__c \
+  ffc_statex__StatementAccountLine__c \
+  ffps_po__PurchaseOrder__c \
+  ffps_po__PurchaseOrderLineItem__c \
+  ffps_po__GoodsReceiptNote__c \
+  ffps_po__GoodsReceiptNoteLineItem__c \
+  ffvat__VATGroup__c \
+  ffvat__VATGroupItem__c \
+  ffvat__VatReportedTransaction__c \
+  ffvat__VatReturn__c
+
+FF_MISC_FINANCIAL_OBJECTS = \
+  ffbf__BankFormatDefinition__c \
+  ffbf__BankFormatMapping__c \
+  ffbf__BankFormatDocumentConversion__c \
+  ffbf__BankFormatTool__c \
+  ffcmutil__TransactionLineItemLog__c \
+  ffcmutil__TransactionLineItemLogInfo__c \
+  ffcmutil__CashMatchingHistoryLog__c \
+  ffcmutil__CashMatchingHistoryLogInfo__c \
+  ffcmutil__MatchingReferenceLog__c \
+  ffcmutil__MatchingReferenceLogInfo__c \
+  ffpsai__ExpenseTypeGLAMapping__c \
+  ffvat__VATGroup__History \
+  ffvat__VATGroupItem__History
+
+FF_SETTINGS_OBJECTS = \
+  ffc__Event__c \
+  ffc_statex__SendAccountStatementsSettings__c \
+  ffvat__VatReportSettings__c \
+  ffvat__VatReturnBatchSettings__c \
+  ffvat__VatReturn__c
+
+FFA_OBJECTS = \
+  $(FF_ERP_CORE_OBJECTS) \
+  $(FF_FINANCIAL_TX_OBJECTS) \
+  $(FF_MISC_FINANCIAL_OBJECTS) \
+  $(FF_SETTINGS_OBJECTS)
+
+# ------------------------------------------------------------------------------
+# SENTINEL TARGETS
+# ------------------------------------------------------------------------------
+
+CRM_CORE_TARGETS      := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(CRM_CORE_OBJECTS)))
+CRM_ACTIVITY_TARGETS  := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(CRM_ACTIVITY_OBJECTS)))
+CRM_SECURITY_TARGETS  := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(CRM_SECURITY_OBJECTS)))
+HR_TARGETS            := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(HR_OBJECTS)))
+FFA_TARGETS           := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(FFA_OBJECTS)))
+
+ALL_CRM_TARGETS       := $(CRM_CORE_TARGETS) $(CRM_ACTIVITY_TARGETS) $(CRM_SECURITY_TARGETS)
+
+# ------------------------------------------------------------------------------
+# TOP-LEVEL EXPORT TARGETS
+# ------------------------------------------------------------------------------
+
+.PHONY: export-all export-core-crm export-crm-all export-ffa export-hr \
+        export-files export-meta export-archive export-clean export-show-config help
+
+help:
+	@echo "Salesforce / FinancialForce export Makefile"
+	@echo ""
+	@echo "Usage:"
+	@echo "  make -f Makefile.export <target> [EXPORT_ROOT=dir]"
+	@echo ""
+	@echo "Main targets:"
+	@echo "  help                Show this help."
+	@echo "  export-all          Files + all CRM + FFA + HR + object list."
+	@echo "  export-files        Export all Files & Attachments (ContentVersion, Attachment)."
+	@echo "  export-crm-all      Export core CRM (Accounts, Contacts, Opps, Quotes, etc.)."
+	@echo "  export-core-crm     Export just the core CRM subset."
+	@echo "  export-ffa          Export FinancialForce/ERP objects (ff*)."
+	@echo "  export-hr           Export HR / employment objects."
+	@echo "  export-meta         Export full sObject list to meta/all_objects.txt."
+	@echo "  export-archive      Zip the entire EXPORT_ROOT directory."
+	@echo "  export-clean        Remove CSV/files/meta under EXPORT_ROOT (not the zip)."
+	@echo ""
+	@echo "Variables:"
+	@echo "  SFDUMP              sfdump executable (default: sfdump)"
+	@echo "  EXPORT_ROOT         Export directory (default: export-\$$(date +%Y-%m-%d))"
+
+
+export-all: export-show-config export-files export-crm-all export-ffa export-hr export-meta
+	@echo "=== ALL EXPORTS COMPLETED → $(EXPORT_ROOT) ==="
+
+export-core-crm: $(CRM_CORE_TARGETS)
+	@echo "=== Core CRM export done → $(CSV_DIR) ==="
+
+export-crm-all: $(ALL_CRM_TARGETS)
+	@echo "=== All CRM export done → $(CSV_DIR) ==="
+
+export-ffa: $(FFA_TARGETS)
+	@echo "=== FinancialForce/ERP export done → $(CSV_DIR) ==="
+
+export-hr: $(HR_TARGETS)
+	@echo "=== HR / employment export done → $(CSV_DIR) ==="
+
+export-files:
+	@echo "=== Exporting Files & Attachments to $(FILES_DIR) ==="
+	mkdir -p "$(FILES_DIR)"
+	$(SFDUMP) files --out "$(FILES_DIR)"
+
+export-meta: $(META_DIR)/all_objects.txt
+	@echo "=== Object list written to $(META_DIR)/all_objects.txt ==="
+
+$(META_DIR)/all_objects.txt:
+	mkdir -p "$(META_DIR)"
+	$(SFDUMP) objects --all > "$(META_DIR)/all_objects.txt"
+
+export-archive:
+	@echo "=== Creating archive $(EXPORT_ROOT).zip ==="
+	zip -r "$(EXPORT_ROOT).zip" "$(EXPORT_ROOT)"
+
+export-clean:
+	rm -rf "$(CSV_DIR)" "$(FILES_DIR)" "$(META_DIR)"
+
+export-show-config:
+	@echo "SFDUMP      = $(SFDUMP)"
+	@echo "EXPORT_ROOT = $(EXPORT_ROOT)"
+	@echo "CSV_DIR     = $(CSV_DIR)"
+	@echo "FILES_DIR   = $(FILES_DIR)"
+	@echo "META_DIR    = $(META_DIR)"
+
+# ------------------------------------------------------------------------------
+# PATTERN RULE – HOW TO EXPORT ONE OBJECT
+# ------------------------------------------------------------------------------
+
+$(CSV_DIR)/%.done:
+	@obj=$*; \
+	echo "=== Exporting $$obj to $(CSV_DIR) ==="; \
+	mkdir -p "$(CSV_DIR)"; \
+	$(SFDUMP) csv $$obj --out "$(CSV_DIR)"; \
+	touch "$@"
