@@ -66,3 +66,4 @@ src/sfdump/_version.py
 /jwt.bash
 /server.crt
 /server.key
+export-*/*
