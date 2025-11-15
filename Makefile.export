@@ -22,8 +22,8 @@ SFDUMP ?= sfdump
 
 # Base directory for all exports.
 # OVERRIDE this when you run make, e.g.:
-#   BASE_EXPORT_ROOT="C:/Users/kevin/OneDrive - Sondrel Ltd/SF"
-BASE_EXPORT_ROOT ?= ./exports
+BASE_EXPORT_ROOT=C:/Users/kevin/OneDrive\ -\ Sondrel\ Ltd/SF
+# BASE_EXPORT_ROOT ?= ./exports
 
 # Date and root directory for this run
 EXPORT_DATE  ?= $(shell date +%Y-%m-%d)
