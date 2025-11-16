@@ -72,28 +72,54 @@ def build_files_index(
 
     _logger.info("Building files index for %s into %s", object_name, csv_path)
 
-    # Decide which field to use as the human-readable label.
-    # Default is "Name", with overrides from INDEX_LABEL_FIELDS.
+    # Decide which field to use as the human-readable label
     label_field = INDEX_LABEL_FIELDS.get(object_name, "Name")
 
-    # 1) Fetch all records of the given object (Id + label_field)
+    # 1) Fetch all records of the given object (Id + label field)
     soql_records = f"SELECT Id, {label_field} FROM {object_name}"
     records: Dict[str, str] = {}
 
     _logger.debug(
-        "Querying %s records for indexing (%s as label): %s",
+        "Querying %s records for indexing with label field %s: %s",
         object_name,
         label_field,
         soql_records,
     )
 
-    # Assumes SalesforceAPI has an iter_query(soql: str) generator
-    for rec in api.iter_query(soql_records):
-        rec_id = rec.get("Id")
-        if not rec_id:
-            continue
-        rec_name = rec.get(label_field) or ""
-        records[rec_id] = rec_name
+    try:
+        # Assumes SalesforceAPI has an iter_query(soql: str) generator
+        for rec in api.iter_query(soql_records):
+            rec_id = rec.get("Id")
+            if not rec_id:
+                continue
+            rec_name = rec.get(label_field) or ""
+            records[rec_id] = rec_name
+    except Exception as exc:
+        # We want a *helpful* message when the label field is wrong, e.g.
+        # "No such column 'Name' on entity 'SalesforceContract'"
+        msg = str(exc)
+        if "No such column" in msg and label_field in msg:
+            hint_lines = [
+                f"Indexing failed for {object_name}: field {label_field!r} does not exist.",
+                "",
+                "Next steps:",
+                "  1. In Salesforce Setup → Object Manager, open the object:",
+                f"       - {object_name}",
+                "  2. Find a suitable label field (e.g. ContractNumber, Name__c, etc.).",
+                "  3. Add it to INDEX_LABEL_FIELDS in sfdump.command_files, e.g.:",
+                "",
+                "       INDEX_LABEL_FIELDS = {",
+                f"           {object_name!r}: 'YourLabelFieldHere',",
+                "           # … other mappings …",
+                "       }",
+                "",
+                "  4. Re-run the index-only target, for example:",
+                "       make -f Makefile.export EXPORT_DATE=YYYY-MM-DD export-files-index-only",
+            ]
+            raise click.ClickException("\n".join(hint_lines)) from exc
+
+        # For any other error, just re-raise and let the caller handle it
+        raise
 
     if not records:
         _logger.warning("No %s records found; index will be empty.", object_name)
@@ -122,7 +148,7 @@ def build_files_index(
             for batch in _chunk(record_ids, max_batch_size):
                 ids_str = ",".join(f"'{i}'" for i in batch)
                 soql_att = (
-                    f"SELECT Id, Name, ParentId FROM Attachment " f"WHERE ParentId IN ({ids_str})"
+                    "SELECT Id, Name, ParentId " "FROM Attachment " f"WHERE ParentId IN ({ids_str})"
                 )
                 _logger.debug("Indexing Attachments batch: %s", soql_att)
 
