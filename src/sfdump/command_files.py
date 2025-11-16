@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List
 
 import click
+import requests
 
 from .api import SalesforceAPI, SFConfig
 from .exceptions import MissingCredentialsError
@@ -94,11 +95,25 @@ def build_files_index(
                 continue
             rec_name = rec.get(label_field) or ""
             records[rec_id] = rec_name
-    except Exception as exc:
-        # We want a *helpful* message when the label field is wrong, e.g.
-        # "No such column 'Name' on entity 'SalesforceContract'"
-        msg = str(exc)
-        if "No such column" in msg and label_field in msg:
+    except requests.exceptions.HTTPError as exc:
+        # Pull the detailed Salesforce error message from the HTTP response
+        sf_msg = ""
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            try:
+                data = resp.json()
+                if isinstance(data, list):
+                    sf_msg = " ".join(e.get("message", "") for e in data)
+                elif isinstance(data, dict) and "message" in data:
+                    sf_msg = str(data.get("message", ""))
+                else:
+                    sf_msg = resp.text
+            except Exception:
+                sf_msg = resp.text or ""
+        else:
+            sf_msg = str(exc)
+
+        if "No such column" in sf_msg and label_field in sf_msg:
             hint_lines = [
                 f"Indexing failed for {object_name}: field {label_field!r} does not exist.",
                 "",
@@ -258,8 +273,8 @@ def build_files_index(
     "--index-only",
     is_flag=True,
     help=(
-        "Skip downloads and only (re)build file index CSVs for the given "
-        "--index-by SOBJECT(s). Requires at least one --index-by."
+        "Rebuild index CSVs only; do NOT download ContentVersion or Attachment bodies. "
+        "Intended for debugging / iterating on index logic after a full download."
     ),
 )
 def files_cmd(
@@ -273,14 +288,13 @@ def files_cmd(
     index_by: tuple[str, ...],
     index_only: bool,
 ) -> None:
-    """Download Salesforce files: ContentVersion (latest) & legacy Attachment.
+    """Download Salesforce files (ContentVersion & Attachment) and/or build file indexes.
 
-    Optionally, build CSV index(es) linking one or more sObjects (e.g. Opportunity)
-    to their related Attachments and Files via --index-by.
-
-    Use --index-only to rebuild indexes without re-downloading any file bodies.
+    - Normal mode: download ContentVersion and/or Attachment, then optionally build indexes.
+    - --estimate-only: no downloads, just size/count estimates.
+    - --index-only: no downloads, only (re)build indexes (requires previous full download).
     """
-    if index_only and estimate_only:
+    if estimate_only and index_only:
         raise click.ClickException("--index-only cannot be combined with --estimate-only.")
 
     api = SalesforceAPI(SFConfig.from_env())
@@ -295,35 +309,6 @@ def files_cmd(
         )
         raise click.ClickException(msg) from e
 
-    # ─────────────────────────────────────────────────────────────
-    # 1) Index-only mode: no downloads, just rebuild CSV indexes.
-    # ─────────────────────────────────────────────────────────────
-    if index_only:
-        if not index_by:
-            raise click.ClickException("--index-only requires at least one --index-by SOBJECT.")
-
-        ensure_dir(out_dir)
-
-        for obj in index_by:
-            try:
-                build_files_index(
-                    api=api,
-                    index_object=obj,
-                    out_dir=out_dir,
-                    include_content=not no_content,
-                    include_attachments=not no_attachments,
-                )
-            except Exception as exc:  # pragma: no cover - defensive
-                _logger.exception("Failed to build files index for %s: %s", obj, exc)
-                raise click.ClickException(f"Failed to build files index for {obj}: {exc}") from exc
-
-        click.echo(f"Rebuilt file index(es) for: {', '.join(index_by)}")
-        click.echo(f"Metadata CSVs are under: {os.path.join(out_dir, 'links')}")
-        return  # ✅ important: do not fall through to download logic
-
-    # ─────────────────────────────────────────────────────────────
-    # 2) Normal / estimate modes (downloads and optional indexing)
-    # ─────────────────────────────────────────────────────────────
     results: list[dict] = []
 
     if estimate_only:
@@ -342,6 +327,10 @@ def files_cmd(
                     where=attachments_where,
                 )
             )
+    elif index_only:
+        # Index-only mode: assume files already exist in out_dir; do not download again.
+        ensure_dir(out_dir)
+        # No entries added to results – we only care about index_by below.
     else:
         # Real download mode.
         ensure_dir(out_dir)
@@ -384,14 +373,22 @@ def files_cmd(
                     include_content=not no_content,
                     include_attachments=not no_attachments,
                 )
+            except click.ClickException as exc:
+                # build_files_index has already crafted a clear, user-facing message
+                # (e.g. missing label field). Let it pass through unchanged so we
+                # don't wrap it in another "Failed to build files index..." layer.
+                raise exc
             except Exception as exc:  # pragma: no cover - defensive
-                _logger.exception("Failed to build files index for %s: %s", obj, exc)
+                _logger.exception(
+                    "Unexpected error while building files index for %s: %s", obj, exc
+                )
                 raise click.ClickException(f"Failed to build files index for {obj}: {exc}") from exc
 
     if not results and not index_by:
-        # If we didn't estimate, download, or index anything, bail out.
+        # We didn't estimate, download, or index anything – bail out.
         raise click.ClickException(
-            "Nothing to do: both ContentVersion and Attachment were disabled."
+            "Nothing to do: both ContentVersion and Attachment were disabled, "
+            "and no --index-by objects were specified."
         )
 
     def _format_bytes(num: float) -> str:
@@ -408,7 +405,9 @@ def files_cmd(
     def line(r: dict) -> str:
         bytes_val = int(r.get("bytes") or 0)
         human = _format_bytes(float(bytes_val))
-        return f"{r['kind']}: {r['count']} files, {human} ({bytes_val:,.0f} bytes) → {r['root']}"
+        return (
+            f"{r['kind']}: {r['count']} files, {human} " f"({bytes_val:,.0f} bytes) → {r['root']}"
+        )
 
     total_files = 0
     total_bytes = 0
@@ -424,5 +423,5 @@ def files_cmd(
         click.echo(f"Total: {total_files} files, {total_human} ({total_bytes:,.0f} bytes)")
 
     # Metadata (including the new index) location hint
-    if not estimate_only or index_by:
+    if not estimate_only or index_by or index_only:
         click.echo(f"Metadata CSVs are under: {os.path.join(out_dir, 'links')}")
