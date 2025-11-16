@@ -117,20 +117,25 @@ def build_files_index(
 
         if "No such column" in sf_msg and label_field in sf_msg:
             hint_lines = [
-                f"Indexing failed for {object_name}: field {label_field!r} does not exist.",
+                f"Indexing failed for {object_name}: label field {label_field!r} does not exist.",
                 "",
-                "Next steps:",
-                "  1. In Salesforce Setup → Object Manager, open the object:",
-                f"       - {object_name}",
-                "  2. Find a suitable label field (e.g. ContractNumber, Name__c, etc.).",
-                "  3. Add it to INDEX_LABEL_FIELDS in sfdump.command_files, e.g.:",
+                "How to fix:",
+                "  1) Open Salesforce Workbench in your browser:",
+                "       https://workbench.developerforce.com/",
+                "  2) Log in with OAuth, then go to:",
+                "       Info → Standard & Custom Objects",
+                f"  3) Select the object: {object_name}",
+                "  4) Inspect the Fields section and choose a suitable label field",
+                "       (e.g. ContractNumber, Name__c, InvoiceNumber, etc.).",
+                "",
+                "  5) Add or update the mapping in INDEX_LABEL_FIELDS in sfdump.command_files, e.g.:",
                 "",
                 "       INDEX_LABEL_FIELDS = {",
                 f"           {object_name!r}: 'YourLabelFieldHere',",
                 "           # … other mappings …",
                 "       }",
                 "",
-                "  4. Re-run the index-only target, for example:",
+                "  6) Re-run the index-only target, for example:",
                 "       make -f Makefile.export EXPORT_DATE=YYYY-MM-DD export-files-index-only",
             ]
             raise click.ClickException("\n".join(hint_lines)) from exc
