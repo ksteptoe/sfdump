@@ -221,7 +221,7 @@ def build_files_index(
     "--index-by",
     "index_by",
     metavar="SOBJECT",
-    multiple=True,  # 👈 allow repeated flags
+    multiple=True,  # allow repeated flags
     help=(
         "Also build CSV index(es) mapping SOBJECT records to their related "
         "Attachments and Files (e.g. Opportunity, Account). "
@@ -231,7 +231,10 @@ def build_files_index(
 @click.option(
     "--index-only",
     is_flag=True,
-    help=("Only build index CSVs for --index-by objects; " "do not download or estimate files."),
+    help=(
+        "Skip downloads and only (re)build file index CSVs for the given "
+        "--index-by SOBJECT(s). Requires at least one --index-by."
+    ),
 )
 def files_cmd(
     out_dir: str,
@@ -244,21 +247,15 @@ def files_cmd(
     index_by: tuple[str, ...],
     index_only: bool,
 ) -> None:
-    """Download Salesforce files and/or build index CSVs.
+    """Download Salesforce files: ContentVersion (latest) & legacy Attachment.
 
-    By default this downloads ContentVersion (latest) & legacy Attachment.
     Optionally, build CSV index(es) linking one or more sObjects (e.g. Opportunity)
     to their related Attachments and Files via --index-by.
 
-    Modes:
-      * default          → download + (optional) index
-      * --estimate-only  → estimate sizes only, no downloads
-      * --index-only     → index only, no downloads or estimates
+    Use --index-only to rebuild indexes without re-downloading any file bodies.
     """
-    if estimate_only and index_only:
-        raise click.ClickException(
-            "Cannot use --estimate-only and --index-only together. " "Choose one mode."
-        )
+    if index_only and estimate_only:
+        raise click.ClickException("--index-only cannot be combined with --estimate-only.")
 
     api = SalesforceAPI(SFConfig.from_env())
     try:
@@ -272,9 +269,37 @@ def files_cmd(
         )
         raise click.ClickException(msg) from e
 
+    # ─────────────────────────────────────────────────────────────
+    # 1) Index-only mode: no downloads, just rebuild CSV indexes.
+    # ─────────────────────────────────────────────────────────────
+    if index_only:
+        if not index_by:
+            raise click.ClickException("--index-only requires at least one --index-by SOBJECT.")
+
+        ensure_dir(out_dir)
+
+        for obj in index_by:
+            try:
+                build_files_index(
+                    api=api,
+                    index_object=obj,
+                    out_dir=out_dir,
+                    include_content=not no_content,
+                    include_attachments=not no_attachments,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                _logger.exception("Failed to build files index for %s: %s", obj, exc)
+                raise click.ClickException(f"Failed to build files index for {obj}: {exc}") from exc
+
+        click.echo(f"Rebuilt file index(es) for: {', '.join(index_by)}")
+        click.echo(f"Metadata CSVs are under: {os.path.join(out_dir, 'links')}")
+        return  # ✅ important: do not fall through to download logic
+
+    # ─────────────────────────────────────────────────────────────
+    # 2) Normal / estimate modes (downloads and optional indexing)
+    # ─────────────────────────────────────────────────────────────
     results: list[dict] = []
 
-    # ── 1) Estimation / download ──────────────────────────────────────────────
     if estimate_only:
         # Estimation mode: no filesystem writes for file bodies.
         if not no_content:
@@ -291,8 +316,7 @@ def files_cmd(
                     where=attachments_where,
                 )
             )
-
-    elif not index_only:
+    else:
         # Real download mode.
         ensure_dir(out_dir)
         try:
@@ -323,16 +347,8 @@ def files_cmd(
             )
             raise click.Abort() from exc
 
-    # index_only: we deliberately skip both estimation and download.
-    # build_files_index doesn't read file bodies, so we just go straight to indexing.
-
-    # ── 2) Optional: build index CSVs mapping <index_by> records to Files/Attachments ─
+    # Optional: build index CSVs mapping <index_by> records to Attachments/Files
     if index_by:
-        _logger.info(
-            "Building file indexes%s for: %s",
-            " (index-only mode)" if index_only else "",
-            ", ".join(index_by),
-        )
         for obj in index_by:
             try:
                 build_files_index(
@@ -382,7 +398,5 @@ def files_cmd(
         click.echo(f"Total: {total_files} files, {total_human} ({total_bytes:,.0f} bytes)")
 
     # Metadata (including the new index) location hint
-    if (not estimate_only and not index_only) or index_by:
-        # - normal download: show hint
-        # - index-only with index_by: show hint
+    if not estimate_only or index_by:
         click.echo(f"Metadata CSVs are under: {os.path.join(out_dir, 'links')}")

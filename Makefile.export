@@ -279,8 +279,11 @@ export-files:
 export-files-index-only:
 	@echo "=== Rebuilding file indexes only (no download) in $(FILES_DIR) ==="
 	@mkdir -p "$(FILES_DIR)"
-	@$(SFDUMP) files --out "$(FILES_DIR)" --index-only $(FILE_INDEX_FLAGS) || \
-	  echo "WARNING: sfdump files --index-only failed (see above)."
+	@$(SFDUMP) files \
+		--out "$(FILES_DIR)" \
+		$(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj)) \
+		--index-only \
+	  || echo "WARNING: sfdump files --index-only failed (see above)."
 
 
 export-meta: $(META_DIR)/all_objects.txt
