@@ -28,6 +28,15 @@ try:
 except Exception:
     pass
 
+# For building human-readable indexes linking files to parent records.
+# Default is 'Name', but some objects use different label fields.
+INDEX_LABEL_FIELDS: dict[str, str] = {
+    # key = SObject API name, value = field to use as label in the index
+    "SalesforceInvoice": "InvoiceNumber",
+    # Add more special cases here if needed, e.g.:
+    # "ffps_po__PurchaseOrder__c": "Name__c",
+}
+
 
 def _chunk(seq: List[str], size: int) -> Iterable[List[str]]:
     """Yield fixed-size chunks from a list."""
@@ -63,17 +72,27 @@ def build_files_index(
 
     _logger.info("Building files index for %s into %s", object_name, csv_path)
 
-    # 1) Fetch all records of the given object (Id + Name)
-    soql_records = f"SELECT Id, Name FROM {object_name}"
+    # Decide which field to use as the human-readable label.
+    # Default is "Name", with overrides from INDEX_LABEL_FIELDS.
+    label_field = INDEX_LABEL_FIELDS.get(object_name, "Name")
+
+    # 1) Fetch all records of the given object (Id + label_field)
+    soql_records = f"SELECT Id, {label_field} FROM {object_name}"
     records: Dict[str, str] = {}
 
-    _logger.debug("Querying %s records for indexing: %s", object_name, soql_records)
+    _logger.debug(
+        "Querying %s records for indexing (%s as label): %s",
+        object_name,
+        label_field,
+        soql_records,
+    )
+
     # Assumes SalesforceAPI has an iter_query(soql: str) generator
     for rec in api.iter_query(soql_records):
         rec_id = rec.get("Id")
         if not rec_id:
             continue
-        rec_name = rec.get("Name") or ""
+        rec_name = rec.get(label_field) or ""
         records[rec_id] = rec_name
 
     if not records:
@@ -103,7 +122,7 @@ def build_files_index(
             for batch in _chunk(record_ids, max_batch_size):
                 ids_str = ",".join(f"'{i}'" for i in batch)
                 soql_att = (
-                    f"SELECT Id, Name, ParentId FROM Attachment WHERE ParentId IN ({ids_str})"
+                    f"SELECT Id, Name, ParentId FROM Attachment " f"WHERE ParentId IN ({ids_str})"
                 )
                 _logger.debug("Indexing Attachments batch: %s", soql_att)
 
@@ -209,6 +228,11 @@ def build_files_index(
         "May be given multiple times."
     ),
 )
+@click.option(
+    "--index-only",
+    is_flag=True,
+    help=("Only build index CSVs for --index-by objects; " "do not download or estimate files."),
+)
 def files_cmd(
     out_dir: str,
     no_content: bool,
@@ -218,12 +242,24 @@ def files_cmd(
     max_workers: int,
     estimate_only: bool,
     index_by: tuple[str, ...],
+    index_only: bool,
 ) -> None:
-    """Download Salesforce files: ContentVersion (latest) & legacy Attachment.
+    """Download Salesforce files and/or build index CSVs.
 
+    By default this downloads ContentVersion (latest) & legacy Attachment.
     Optionally, build CSV index(es) linking one or more sObjects (e.g. Opportunity)
     to their related Attachments and Files via --index-by.
+
+    Modes:
+      * default          → download + (optional) index
+      * --estimate-only  → estimate sizes only, no downloads
+      * --index-only     → index only, no downloads or estimates
     """
+    if estimate_only and index_only:
+        raise click.ClickException(
+            "Cannot use --estimate-only and --index-only together. " "Choose one mode."
+        )
+
     api = SalesforceAPI(SFConfig.from_env())
     try:
         api.connect()
@@ -238,6 +274,7 @@ def files_cmd(
 
     results: list[dict] = []
 
+    # ── 1) Estimation / download ──────────────────────────────────────────────
     if estimate_only:
         # Estimation mode: no filesystem writes for file bodies.
         if not no_content:
@@ -254,7 +291,8 @@ def files_cmd(
                     where=attachments_where,
                 )
             )
-    else:
+
+    elif not index_only:
         # Real download mode.
         ensure_dir(out_dir)
         try:
@@ -285,8 +323,16 @@ def files_cmd(
             )
             raise click.Abort() from exc
 
-    # Optional: build index CSVs mapping <index_by> records to Attachments/Files
+    # index_only: we deliberately skip both estimation and download.
+    # build_files_index doesn't read file bodies, so we just go straight to indexing.
+
+    # ── 2) Optional: build index CSVs mapping <index_by> records to Files/Attachments ─
     if index_by:
+        _logger.info(
+            "Building file indexes%s for: %s",
+            " (index-only mode)" if index_only else "",
+            ", ".join(index_by),
+        )
         for obj in index_by:
             try:
                 build_files_index(
@@ -336,5 +382,7 @@ def files_cmd(
         click.echo(f"Total: {total_files} files, {total_human} ({total_bytes:,.0f} bytes)")
 
     # Metadata (including the new index) location hint
-    if not estimate_only or index_by:
+    if (not estimate_only and not index_only) or index_by:
+        # - normal download: show hint
+        # - index-only with index_by: show hint
         click.echo(f"Metadata CSVs are under: {os.path.join(out_dir, 'links')}")
