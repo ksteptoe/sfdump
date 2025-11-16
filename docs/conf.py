@@ -36,7 +36,8 @@ except ImportError:
 output_dir = os.path.join(__location__, "api")
 module_dir = os.path.join(__location__, "../src/sfdump")
 try:
-    shutil.rmtree(output_dir)
+    # Be robust on Windows: don't blow up if the directory can't be fully removed
+    shutil.rmtree(output_dir, ignore_errors=True)
 except FileNotFoundError:
     pass
 
