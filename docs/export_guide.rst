@@ -114,5 +114,75 @@ errors, while other objects continue to use ``Name``.
 See also
 --------
 
-For a more detailed narrative guide (including troubleshooting tips), refer to
-the :file:`README-export.md` at the project root.
+The full, step-by-step export guide lives in the Markdown file
+``README-export.md`` in the project root. That document covers:
+
+* Directory layout and how exports are organised on disk
+* The ``EXPORT_DATE`` mechanism and how to re-run old exports
+* ``sfdump files`` usage, including file/attachment indexing
+* ``Makefile.export`` targets for CRM, HR and FinancialForce/ERP data
+* Troubleshooting common export issues
+
+
+Opening the full Export README
+------------------------------
+
+If you are viewing the HTML docs, you can open or download the full guide here:
+
+:download:`Export README (Markdown) <../README-export.md>`
+
+You can also open it directly from the repository root:
+
+.. code-block:: bash
+
+   # from the project root
+   cat README-export.md
+
+   # or open in your editor
+   code README-export.md        # VS Code
+   pycharm README-export.md     # PyCharm (if configured)
+
+
+Quick summary of the export flow
+--------------------------------
+
+For convenience, here is a high-level summary of how the export process fits
+together. See the Markdown README for full details and examples.
+
+1. Choose an export date (optional)
+
+   By default, ``Makefile.export`` uses today's date for the export directory.
+   You can override it, for example:
+
+   .. code-block:: bash
+
+      export EXPORT_DATE=2025-11-15   # Git Bash / Linux / macOS
+
+2. Run the full export
+
+   .. code-block:: bash
+
+      make -f Makefile.export export-all
+
+   This will:
+
+   * Download all files and attachments into the date-stamped ``files/`` folder
+   * Build helper indexes for key objects (e.g. ``Opportunity``, invoices, POs)
+   * Export core CRM, HR and FinancialForce/ERP objects into ``csv/``
+   * Write an object list into ``meta/all_objects.txt``
+
+3. Re-run or add objects for a given date
+
+   .. code-block:: bash
+
+      # export an additional object into an existing export
+      make -f Makefile.export EXPORT_DATE=2025-11-15 csv-one OBJ=Account
+
+4. Archive if needed
+
+   .. code-block:: bash
+
+      make -f Makefile.export EXPORT_DATE=2025-11-15 export-archive
+
+For more detail, examples and troubleshooting, refer to the full
+:download:`Export README (Markdown) <../README-export.md>`.

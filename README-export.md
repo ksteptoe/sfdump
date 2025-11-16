@@ -9,6 +9,7 @@ It covers:
 - Where exports go on disk
 - How the date handling works (`EXPORT_DATE`)
 - How to export files & attachments (with optional indexing)
+- How to rebuild file indexes without re-downloading everything (`--index-only`)
 - How to export CRM / HR / FinancialForce objects to CSV
 - How to re-run old exports
 
@@ -29,7 +30,7 @@ By default, each export lives in a date-stamped directory:
 In the Makefile the key variables are:
 
 ```make
-BASE_EXPORT_ROOT ?= ./exports
+BASE_EXPORT_ROOT ?= C:/Users/kevin/OneDrive - Sondrel Ltd/SF
 EXPORT_DATE      ?= $(shell date +%Y-%m-%d)
 EXPORT_ROOT      ?= $(BASE_EXPORT_ROOT)/export-$(EXPORT_DATE)
 
@@ -38,13 +39,26 @@ FILES_DIR        := $(EXPORT_ROOT)/files
 META_DIR         := $(EXPORT_ROOT)/meta
 ```
 
-So, for example, with `BASE_EXPORT_ROOT=./exports` and `EXPORT_DATE=2025-11-15`:
+So, for example, with:
 
 ```text
-EXPORT_ROOT = ./exports/export-2025-11-15
-CSV_DIR     = ./exports/export-2025-11-15/csv
-FILES_DIR   = ./exports/export-2025-11-15/files
-META_DIR    = ./exports/export-2025-11-15/meta
+BASE_EXPORT_ROOT = C:/Users/kevin/OneDrive - Sondrel Ltd/SF
+EXPORT_DATE      = 2025-11-15
+```
+
+you get:
+
+```text
+EXPORT_ROOT = C:/Users/kevin/OneDrive - Sondrel Ltd/SF/export-2025-11-15
+CSV_DIR     = C:/Users/kevin/OneDrive - Sondrel Ltd/SF/export-2025-11-15/csv
+FILES_DIR   = C:/Users/kevin/OneDrive - Sondrel Ltd/SF/export-2025-11-15/files
+META_DIR    = C:/Users/kevin/OneDrive - Sondrel Ltd/SF/export-2025-11-15/meta
+```
+
+If needed, you can override `BASE_EXPORT_ROOT` per run:
+
+```bash
+make -f Makefile.export BASE_EXPORT_ROOT="D:/Backups/SF" export-all
 ```
 
 ---
@@ -121,6 +135,12 @@ Common targets (run with `make -f Makefile.export <target>`):
   attempt to build helper indexes by key parent objects (e.g. `Opportunity`,
   `Account`, `SalesforceInvoice`, `fferpcore__BillingDocument__c`, etc.).
 
+- `export-files-index-only`
+  Rebuild only the file link indexes in `FILES_DIR` (no new downloads) using
+  `sfdump files --index-only` and the configured `FILE_INDEX_OBJECTS`. Requires
+  that you have already run `export-files` or `export-all` for the same
+  `EXPORT_DATE`.
+
 - `export-crm-all`
   Export core CRM objects and related activity objects to CSV.
 
@@ -145,7 +165,24 @@ Common targets (run with `make -f Makefile.export <target>`):
 The `export-files` target runs something equivalent to:
 
 ```bash
-sfdump files   --out "<FILES_DIR>"   --index-by Opportunity   --index-by Account   --index-by Project__c   --index-by Invoices__c   --index-by SalesforceInvoice   --index-by SalesforceContract   --index-by SalesforceQuote   --index-by fferpcore__BillingDocument__c   --index-by ffc_statex__StatementAccount__c   --index-by ffps_po__PurchaseOrder__c   --index-by ffps_po__GoodsReceiptNote__c   --index-by ffvat__VatReturn__c   --index-by Engineer__c   --index-by JobApplication__c   --index-by HR_Activity__c   --index-by Salary_History__c
+sfdump files \
+  --out "<FILES_DIR>" \
+  --index-by Opportunity \
+  --index-by Account \
+  --index-by Project__c \
+  --index-by Invoices__c \
+  --index-by SalesforceInvoice \
+  --index-by SalesforceContract \
+  --index-by SalesforceQuote \
+  --index-by fferpcore__BillingDocument__c \
+  --index-by ffc_statex__StatementAccount__c \
+  --index-by ffps_po__PurchaseOrder__c \
+  --index-by ffps_po__GoodsReceiptNote__c \
+  --index-by ffvat__VatReturn__c \
+  --index-by Engineer__c \
+  --index-by JobApplication__c \
+  --index-by HR_Activity__c \
+  --index-by Salary_History__c
 ```
 
 Behaviour:
@@ -158,6 +195,45 @@ Behaviour:
 The index files themselves live under `FILES_DIR` and make it easier to see
 “all files attached to a given Opportunity / Invoice / PO / JobApplication”.
 
+### 5.2 Index-only mode (debug-friendly)
+
+Once you have done **at least one full files export** for a given
+`EXPORT_DATE`, you can rebuild the indexes **without** re-downloading any
+files.
+
+`sfdump files` supports an `--index-only` mode:
+
+```bash
+# Full run (downloads + indexes)
+sfdump files \
+  --out "./exports/export-2025-11-15/files" \
+  --index-by Opportunity \
+  --index-by SalesforceInvoice \
+  ...
+
+# Later: rebuild only the index CSVs for the same folder
+sfdump files \
+  --out "./exports/export-2025-11-15/files" \
+  --index-by Opportunity \
+  --index-by SalesforceInvoice \
+  --index-only
+```
+
+The Makefile provides a convenience target:
+
+```bash
+make -f Makefile.export EXPORT_DATE=2025-11-15 export-files-index-only
+```
+
+This is ideal while iterating on the indexing logic (`build_files_index`,
+`INDEX_LABEL_FIELDS`, etc.) because it skips the long attachment download.
+
+**Important:**
+
+- `--index-only` does **not** download any file bodies; it only queries IDs and
+  relationships and rewrites the CSVs in `files/links/`.
+- `--index-only` is mutually exclusive with `--estimate-only`.
+
 ---
 
 ## 6. CSV exports
@@ -165,7 +241,7 @@ The index files themselves live under `FILES_DIR` and make it easier to see
 Each CSV export is represented by a `.done` sentinel in `CSV_DIR`, e.g.:
 
 ```text
-./exports/export-2025-11-15/csv/
+C:/Users/kevin/OneDrive - Sondrel Ltd/SF/export-2025-11-15/csv/
   Account.csv
   Account.done
   Opportunity.csv
@@ -182,16 +258,22 @@ $(CSV_DIR)/%.done:
 	@$(SFDUMP) csv --object $* --out "$(EXPORT_ROOT)" && touch "$@"
 ```
 
-So for the target `./exports/export-2025-11-15/csv/Account.done`, the command is:
+So for the target:
+
+```text
+C:/Users/kevin/OneDrive - Sondrel Ltd/SF/export-2025-11-15/csv/Account.done
+```
+
+the command is:
 
 ```bash
-sfdump csv --object Account --out "./exports/export-2025-11-15"
+sfdump csv --object Account --out "C:/Users/kevin/OneDrive - Sondrel Ltd/SF/export-2025-11-15"
 ```
 
 and `sfdump` writes the file:
 
 ```text
-./exports/export-2025-11-15/csv/Account.csv
+C:/Users/kevin/OneDrive - Sondrel Ltd/SF/export-2025-11-15/csv/Account.csv
 ```
 
 ---
@@ -203,7 +285,10 @@ To make it easy to export only one object, we have a helper target:
 ```make
 .PHONY: csv-one
 csv-one:
-	@if [ -z "$(OBJ)" ]; then 	  echo "Usage: make -f Makefile.export csv-one OBJ=Account"; 	  exit 1; 	fi
+	@if [ -z "$(OBJ)" ]; then \
+	  echo "Usage: make -f Makefile.export csv-one OBJ=Account"; \
+	  exit 1; \
+	fi
 	$(MAKE) -f Makefile.export $(CSV_DIR)/$(OBJ).done
 ```
 
@@ -224,9 +309,9 @@ make -f Makefile.export EXPORT_DATE=2025-11-15 csv-one OBJ=SalesforceInvoice
 Because exports are date-stamped, you can have multiple snapshots, e.g.:
 
 ```text
-./exports/export-2025-11-15/
-./exports/export-2025-11-16/
-./exports/export-2025-11-30/
+C:/Users/kevin/OneDrive - Sondrel Ltd/SF/export-2025-11-15/
+C:/Users/kevin/OneDrive - Sondrel Ltd/SF/export-2025-11-16/
+C:/Users/kevin/OneDrive - Sondrel Ltd/SF/export-2025-11-30/
 ```
 
 To re-run or add objects for a particular day (say `2025-11-15`), always pass
@@ -244,7 +329,7 @@ make -f Makefile.export EXPORT_DATE=2025-11-15 export-crm-all
 
 ## 9. Special handling: SalesforceInvoice indexing
 
-The file-indexing feature usually runs a SOQL like:
+The file-indexing feature usually runs SOQL like:
 
 ```sql
 SELECT Id, Name FROM <ParentObject>
@@ -259,11 +344,24 @@ No such column 'Name' on entity 'SalesforceInvoice'.
 ```
 
 To fix this, we special-case `SalesforceInvoice` in the indexing code to use
-`InvoiceNumber` instead:
+`InvoiceNumber` instead, via a mapping:
+
+```python
+INDEX_LABEL_FIELDS: dict[str, str] = {
+    "SalesforceInvoice": "InvoiceNumber",
+    # e.g. you can add more special cases later:
+    # "ffps_po__PurchaseOrder__c": "Name__c",
+}
+```
+
+This results in SOQL of the form:
 
 ```sql
 SELECT Id, InvoiceNumber FROM SalesforceInvoice
 ```
+
+and ensures the `record_name` column in the file index CSVs contains a useful
+identifier, without breaking other objects that still use `Name`.
 
 See the `build_files_index` implementation in `sfdump.command_files` for details.
 
@@ -276,8 +374,9 @@ See the `build_files_index` implementation in `sfdump.command_files` for details
   The current Makefile uses `$*` in the pattern rule to ensure this doesn’t happen.
 
 - **“No such column 'Name' on entity 'SalesforceInvoice'”**
-  Expected if the indexer still assumes every object has `Name`.
-  Fix is to use `InvoiceNumber` for `SalesforceInvoice` as described above.
+  Expected if the indexer still assumes every object has `Name`. Fix is to use
+  `InvoiceNumber` for `SalesforceInvoice` as described above (and keep
+  `INDEX_LABEL_FIELDS` up to date).
 
 - **Accidentally wrong date**
   If you forget to set `EXPORT_DATE`, the Makefile uses “today”.
