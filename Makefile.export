@@ -62,7 +62,7 @@ INDEX_BY_FLAGS := $(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj))
 
 .PHONY: help \
         export-all export-core-crm export-crm-all export-ffa export-hr \
-        export-files export-meta export-archive export-clean export-show-config
+        export-files export-meta export-archive export-clean export-show-config csv-one
 
 help:
 	@echo "Salesforce / FinancialForce export Makefile"
@@ -304,9 +304,13 @@ export-show-config:
 # ------------------------------------------------------------------------------
 
 $(CSV_DIR)/%.done:
-	@obj=$*; \
-	echo "=== Exporting $$obj to $(CSV_DIR) ==="; \
-	mkdir -p "$(CSV_DIR)"; \
-	# ADJUST HERE IF NEEDED: csv syntax for your CLI
-	$(SFDUMP) csv --object "$$obj" --out "$(CSV_DIR)"; \
-	touch "$@"
+	@echo "=== Exporting $* to $(CSV_DIR) ==="
+	@mkdir -p "$(EXPORT_ROOT)" "$(CSV_DIR)"
+	@$(SFDUMP) csv --object $* --out "$(EXPORT_ROOT)" && touch "$@"
+
+csv-one:
+	@if [ -z "$(OBJ)" ]; then \
+	  echo "Usage: make -f Makefile.export csv-one OBJ=Account"; \
+	  exit 1; \
+	fi
+	$(MAKE) -f Makefile.export $(CSV_DIR)/$(OBJ).done
