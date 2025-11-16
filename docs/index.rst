@@ -25,6 +25,7 @@ Contents
 
    Overview <readme>
    User Guide <user_guide>
+   Salesforce Export Guide <export_guide>
    Developer Guide <developer_guide>
    Contributions & Help <contributing>
    License <license>
