@@ -244,26 +244,51 @@ class SalesforceAPI:
                     timeout=timeout,
                 )
             except requests.RequestException as e:
-                _logger.warning("Request error (attempt %d/%d): %s", attempt, retries, e)
+                _logger.warning(
+                    "Request error (attempt %d/%d): %s",
+                    attempt,
+                    retries,
+                    e,
+                )
                 if attempt == retries:
                     raise
                 time.sleep(backoff * attempt)
                 continue
 
+            # Success path
             if r.status_code < 400:
                 return r
 
+            # Retryable HTTP errors
             if r.status_code in (429, 500, 502, 503, 504) and attempt < retries:
-                _logger.warning("HTTP %s -> retrying %d/%d", r.status_code, attempt, retries)
+                _logger.warning(
+                    "HTTP %s -> retrying %d/%d",
+                    r.status_code,
+                    attempt,
+                    retries,
+                )
                 time.sleep(backoff * attempt)
                 continue
 
+            # Non-retryable (or final) HTTP error: keep logs compact at normal verbosity.
             try:
                 detail = r.json()
             except Exception:
                 detail = r.text
-            _logger.error("HTTP %s error for %s: %s", r.status_code, url, detail)
+
+            # Short, high-level message (no giant JSON blob)
+            _logger.error("HTTP %s error for %s", r.status_code, url)
+
+            # Full payload only at DEBUG level (visible with -vv)
+            _logger.debug(
+                "HTTP error payload for %s: %r",
+                url,
+                detail,
+            )
+
             r.raise_for_status()
+
+        # Should not normally reach here
         raise RuntimeError("Exceeded maximum retries.")
 
     # --- Convenience for discovery & paging ---
