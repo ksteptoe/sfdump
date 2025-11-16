@@ -34,6 +34,7 @@ except Exception:
 INDEX_LABEL_FIELDS: dict[str, str] = {
     # key = SObject API name, value = field to use as label in the index
     "SalesforceInvoice": "InvoiceNumber",
+    "SalesforceContract": "BillingCompany",
     # Add more special cases here if needed, e.g.:
     # "ffps_po__PurchaseOrder__c": "Name__c",
 }
