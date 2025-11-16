@@ -14,9 +14,10 @@ def ensure_dir(path: str) -> None:
 def sanitize_filename(name: str, repl: str = "_") -> str:
     """
     Make a portable filename:
-    - replace invalid characters (/:*?"<>| and whitespace) with `_`
+
+    - replace invalid characters ``/:*?"<>|`` and whitespace with ``_``
     - strip leading/trailing separators
-    - fallback to 'file' if empty
+    - fallback to ``file`` if empty
     """
     safe = re.sub(r'[\\/:*?"<>|\s]+', repl, name or "").strip(repl)
     return safe or "file"

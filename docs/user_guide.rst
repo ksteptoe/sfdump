@@ -79,22 +79,23 @@ General syntax::
 Global options
 ~~~~~~~~~~~~~~
 
-+--------------+-----------------------------------------+
-| Option       | Description                             |
-+==============+=========================================+
-| ``-v``       | Enable INFO-level logging               |
-+--------------+-----------------------------------------+
-| ``-vv``      | Enable DEBUG-level logging              |
-+--------------+-----------------------------------------+
-| ``--version``| Show CLI version                        |
-+--------------+-----------------------------------------+
-| ``-h``, ``--help`` | Show help message                 |
-+--------------+-----------------------------------------+
++----------------------+-----------------------------------------+
+| Option               | Description                             |
++======================+=========================================+
+| ``-v``               | Enable INFO-level logging               |
++----------------------+-----------------------------------------+
+| ``-vv``              | Enable DEBUG-level logging              |
++----------------------+-----------------------------------------+
+| ``--version``        | Show CLI version                        |
++----------------------+-----------------------------------------+
+| ``-h``, ``--help``   | Show help message                       |
++----------------------+-----------------------------------------+
 
 Subcommands
 ~~~~~~~~~~~
 
-**1. login**
+login
+^^^^^
 
 Authenticate with Salesforce and print identity + API info::
 
@@ -106,8 +107,8 @@ Example::
 
    sfdump login --show-json
 
-
-**2. objects**
+objects
+^^^^^^^
 
 List all Salesforce objects available in your org::
 
@@ -118,8 +119,8 @@ If credentials are missing, ``sfdump`` displays a friendly message::
    ❌ Missing Salesforce credentials.
    Please ensure SF_CLIENT_ID, SF_CLIENT_SECRET, SF_USERNAME, SF_PASSWORD are set.
 
-
-**3. csv**
+csv
+^^^
 
 Export a Salesforce object as CSV::
 
@@ -135,8 +136,8 @@ Examples::
 
 Creates ``exports/Account.csv`` (or similar).
 
-
-**4. files**
+files
+^^^^^
 
 Export Salesforce attachments and content files::
 
@@ -149,8 +150,10 @@ Example::
 Each file is stored with a sanitized filename and SHA-256 checksum.
 Two metadata CSVs are created: ``attachments.csv`` and ``content_versions.csv``.
 
+.. include:: sfdump_files_cli_section.rst
 
-**5. manifest**
+manifest
+^^^^^^^^
 
 Generate a manifest and bundle all exports into an archive::
 
@@ -166,7 +169,6 @@ Creates::
    ├── manifest.json
    ├── manifest.db
    └── sfdump-export-YYYYMMDD.zip
-
 
 Error Handling
 --------------
