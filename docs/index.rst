@@ -56,3 +56,9 @@ This site is divided into two main parts:
 Both are linked in the **Contents** tree above.
 
 .. _Sphinx: https://www.sphinx-doc.org/en/master/
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Internal – Finance Only
+
+   Finance User Guide <finance_user_guide>
