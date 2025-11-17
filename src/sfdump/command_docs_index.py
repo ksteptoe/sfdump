@@ -13,7 +13,7 @@ try:
     import pandas as pd
 except ImportError as e:  # pragma: no cover - defensive
     raise RuntimeError(
-        "pandas is required for `sfdump docs-index`. " "Install pandas into your environment."
+        "pandas is required for `sfdump docs-index`. Install pandas into your environment."
     ) from e
 
 # Filenames – adjust if your actual CSV names differ
@@ -73,7 +73,7 @@ def _build_master_index(export_root: Path) -> Path:
     index_files: List[Path] = sorted(links_dir.glob("*_files_index.csv"))
     if not index_files:
         raise click.ClickException(
-            f"No *_files_index.csv files found under {links_dir} " "(nothing to index)."
+            f"No *_files_index.csv files found under {links_dir} (nothing to index)."
         )
 
     dfs = []
@@ -120,7 +120,7 @@ def _build_master_index(export_root: Path) -> Path:
             attachments_meta = attachments_meta.rename(columns={path_col: "attachment_path"})
         else:
             _logger.warning(
-                "No path-like column found in %s; attachment rows will have " "empty local_path.",
+                "No path-like column found in %s; attachment rows will have empty local_path.",
                 ATTACHMENTS_META_FILENAME,
             )
             attachments_meta["attachment_path"] = ""
@@ -152,7 +152,7 @@ def _build_master_index(export_root: Path) -> Path:
             content_meta = content_meta.rename(columns={path_col: "content_path"})
         else:
             _logger.warning(
-                "No path-like column found in %s; file rows will have " "empty local_path.",
+                "No path-like column found in %s; file rows will have empty local_path.",
                 CONTENT_META_FILENAME,
             )
             content_meta["content_path"] = ""
