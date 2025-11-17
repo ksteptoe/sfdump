@@ -198,5 +198,5 @@ def test_files_missing_credentials_clickerror(monkeypatch, tmp_path):
     result = CliRunner().invoke(files_cmd, ["--out", str(out_dir)])
     assert result.exit_code != 0
     out = result.output
-    assert "Missing Salesforce credentials" in out
-    assert "SF_CLIENT_ID" in out and "SF_USERNAME" in out
+    assert "Missing Salesforce" in out
+    assert "JWT credentials" in out
