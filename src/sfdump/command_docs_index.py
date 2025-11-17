@@ -261,7 +261,6 @@ def _build_master_index(export_root: Path) -> Path:
             )
 
     # --- Accounts: bring name (and join from opp_account_id if present) --
-    # --- Accounts: bring name (and join from opp_account_id if present) --
     if not accounts.empty:
         acct_cols_map = {
             "Id": "account_id",

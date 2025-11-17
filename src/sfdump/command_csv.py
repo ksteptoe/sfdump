@@ -18,6 +18,15 @@ try:
 except Exception:
     pass
 
+# Certain objects need extra fields for downstream tooling (e.g. docs-index).
+# We force-include these when auto-resolving fields.
+ALWAYS_INCLUDE_FIELDS = {
+    "Opportunity": ["AccountId"],
+    # You can add more later, e.g.:
+    # "Contact": ["AccountId"],
+    # "Case": ["AccountId"],
+}
+
 
 @click.command("csv")
 @click.option("--object", "object_name", required=True, help="sObject name (e.g. Account).")
@@ -57,13 +66,25 @@ def csv_cmd(
 
     ensure_dir(out_dir)
     resolved_fields: Optional[List[str]] = None
+
     if fields:
+        # Explicit field list from CLI – do NOT touch it.
         resolved_fields = [f.strip() for f in fields.split(",") if f.strip()]
     else:
+        # Auto-resolve fields from object description.
         try:
             resolved_fields = fieldnames_for_object(api, object_name)
         except Exception as err:
             raise click.ClickException(f"Failed to describe object '{object_name}'.") from err
+
+        # --- Minimal addition: force-include key fields for some objects ---
+        extra = ALWAYS_INCLUDE_FIELDS.get(object_name, [])
+        if extra:
+            existing = set(resolved_fields or [])
+            for f in extra:
+                if f not in existing:
+                    resolved_fields.append(f)
+        # -------------------------------------------------------------------
 
     try:
         csv_path, n = dump_object_to_csv(
