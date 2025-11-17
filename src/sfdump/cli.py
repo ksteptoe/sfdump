@@ -18,6 +18,7 @@ from .command_docs_index import docs_index_cmd
 from .command_files import files_cmd
 from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
+from .command_viewer import viewer_cmd
 from .logging_config import configure_logging
 
 # Import your API lazily so CLI can exist before API is done.
@@ -95,3 +96,4 @@ cli.add_command(cast(Command, csv_cmd))
 cli.add_command(cast(Command, files_cmd))
 cli.add_command(cast(Command, manifest_cmd))
 cli.add_command(cast(Command, docs_index_cmd))
+cli.add_command(cast(Command, viewer_cmd))

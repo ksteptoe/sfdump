@@ -45,6 +45,35 @@ def _load_csv(path: Path) -> "pd.DataFrame":
         return pd.DataFrame()
 
 
+def _with_files_prefix(rel_path: object) -> str:
+    """Normalise a stored path so it is relative to EXPORT_ROOT.
+
+    attachments.csv / content_versions.csv typically store paths
+    relative to the files/ directory (e.g. 'files_legacy/00/...').
+    For the browser we want paths relative to EXPORT_ROOT, e.g.:
+
+        'files/files_legacy/00/...'
+
+    Handles missing / NaN / non-string values gracefully.
+    """
+    if rel_path is None:
+        return ""
+
+    # Convert to string, but treat 'nan' as empty
+    s = str(rel_path).strip()
+    if not s or s.lower() == "nan":
+        return ""
+
+    # Normalise separators and strip leading slashes
+    p = s.replace("\\", "/").lstrip("/")
+
+    # If it already starts with 'files/', don't double-prefix
+    if p.lower().startswith("files/"):
+        return p
+
+    return f"files/{p}"
+
+
 def _build_master_index(export_root: Path) -> Path:
     """Build meta/master_documents_index.csv for a given export root.
 
@@ -171,7 +200,7 @@ def _build_master_index(export_root: Path) -> Path:
             right_on="attachment_id",
             how="left",
         )
-        df_att["local_path"] = df_att["attachment_path"]
+        df_att["local_path"] = df_att["attachment_path"].map(_with_files_prefix)
     else:
         df_att["local_path"] = ""
 
@@ -183,7 +212,7 @@ def _build_master_index(export_root: Path) -> Path:
             right_on="content_document_id",
             how="left",
         )
-        df_file["local_path"] = df_file["content_path"]
+        df_file["local_path"] = df_file["content_path"].map(_with_files_prefix)
     else:
         df_file["local_path"] = ""
 
