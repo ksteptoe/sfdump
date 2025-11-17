@@ -289,7 +289,6 @@ export-doc-index:
 	@echo "=== Building master documents index for $(EXPORT_ROOT) ==="
 	@$(SFDUMP) docs-index --export-root "$(EXPORT_ROOT)"
 
-
 export-meta: $(META_DIR)/all_objects.txt
 	@echo "=== Object list written to $(META_DIR)/all_objects.txt ==="
 
@@ -329,3 +328,10 @@ csv-one:
 	  exit 1; \
 	fi
 	$(MAKE) -f Makefile.export $(CSV_DIR)/$(OBJ).done
+
+# --------------------------------------------------------------------
+# VIEWER: Open the SFdump Web Viewer for the current exports folder
+# --------------------------------------------------------------------
+view:
+	@echo "Launching SFdump Viewer..."
+	"$(HOME)/OneDrive/py/sfdump/sfdump-view.cmd" "$(BASE_EXPORT_ROOT)/exports"

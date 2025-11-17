@@ -93,7 +93,12 @@ def main() -> None:
     exports_base = Path(exports_base_str).expanduser().resolve()
 
     if not exports_base.exists():
-        st.error(f"Exports base directory does not exist:\n{exports_base}")
+        st.error(
+            f"Exports folder not found:\n\n{exports_base}\n\n"
+            "If this is your first time running the viewer, please run:\n"
+            "`make export-all`\n"
+            "to generate your first export."
+        )
         st.stop()
 
     # Find export-* subdirectories
@@ -102,17 +107,25 @@ def main() -> None:
     )
 
     if not run_dirs:
-        st.error(f"No 'export-YYYY-MM-DD' directories found under:\n{exports_base}")
+        st.error(
+            f"No 'export-YYYY-MM-DD' directories found under:\n{exports_base}\n\n"
+            "Run 'make export-all' first to generate your first export."
+        )
         st.stop()
 
-    # Default to the latest (lexicographically last)
-    default_run = run_dirs[-1].name
+    # Auto-detect the latest export directory
+    latest_run = run_dirs[-1]
 
+    st.sidebar.markdown(f"**Latest export detected:** `{latest_run.name}`")
+
+    # Allow manual override, but default to latest
     selected_run_name = st.sidebar.selectbox(
-        "Export run",
+        "Choose export run",
         options=[p.name for p in run_dirs],
-        index=[p.name for p in run_dirs].index(default_run),
+        index=[p.name for p in run_dirs].index(latest_run.name),
     )
+
+    export_root = exports_base / selected_run_name
 
     export_root = exports_base / selected_run_name
     master_index_path = export_root / "meta" / "master_documents_index.csv"
@@ -166,37 +179,54 @@ def main() -> None:
 
     if query:
         q = query.strip().lower()
-        if "*" in q:
-            q = q.replace("*", "")
+        q = q.replace("*", "")  # allow * for convenience
+
         if q:
-            mask &= df["search_blob"].str.contains(q, na=False)
+            mask &= df["search_blob"].str.contains(q, case=False, na=False)
 
     filtered = df[mask].copy()
     filtered_count = len(filtered)
 
     st.write(f"Showing up to 500 of {filtered_count:,} matching documents:")
 
-    # Columns to show
-    show_cols = [
-        c
-        for c in [
-            "file_source",
-            "file_name",
-            "file_extension",
-            "object_type",
-            "record_name",
-            "account_name",
-            "opp_name",
-            "opp_stage",
-            "opp_amount",
-            "opp_close_date",
-            "local_path",
-        ]
-        if c in filtered.columns
+    # Show summary on how many rows we’re displaying
+    st.info(f"Displaying the first 500 of {filtered_count:,} matching documents.")
+
+    # ----------------------------------------------------------------------
+    # Columns to show (robust and future-proof)
+    # ----------------------------------------------------------------------
+    preferred_cols = [
+        "file_source",
+        "file_name",
+        "file_extension",
+        "object_type",
+        "record_name",
+        "account_name",
+        "opp_name",
+        "opp_stage",
+        "opp_amount",
+        "opp_close_date",
+        "local_path",
     ]
 
+    # Only use columns that actually exist
+    show_cols = [col for col in preferred_cols if col in filtered.columns]
+
+    if not show_cols:
+        st.warning(
+            "None of the expected index columns were found.\n"
+            "This export may be incomplete or the index format has changed."
+        )
+        st.stop()
+
+    # ----------------------------------------------------------------------
+    # Display the table
+    # ----------------------------------------------------------------------
     display = filtered[show_cols].head(500)
-    st.dataframe(display, use_container_width=True)
+    st.dataframe(display, width="stretch")
+
+    # Success banner
+    st.success(f"Viewer loaded successfully — {len(df):,} total documents indexed.")
 
     st.caption(
         "Tip: Narrow down with filters and search, "
@@ -209,8 +239,11 @@ def main() -> None:
     st.subheader("Open a document")
 
     if "local_path" not in filtered.columns:
-        st.info("No local_path column in index; cannot open files directly.")
-        return
+        st.warning(
+            "This export does not include direct file paths.\n"
+            "You can still browse the index, but document opening is unavailable."
+        )
+        st.stop()
 
     if filtered.empty:
         st.info("No matching documents. Adjust your filters/search.")
@@ -239,16 +272,18 @@ def main() -> None:
 
         full_path = resolve_file_path(export_root, local_path)
 
-        if st.button(f"Open: {row.file_name}"):
-            if full_path.exists():
-                try:
-                    # Windows: open with default associated app
-                    os.startfile(str(full_path))  # type: ignore[attr-defined]
-                    st.success(f"Opened: {full_path}")
-                except Exception as e:
-                    st.error(f"Failed to open file: {e}")
+        if st.button(f"Open '{row.file_name}'"):
+            if not full_path.exists():
+                st.error(
+                    f"File not found on disk:\n\n{full_path}\n\n"
+                    "It may not have been downloaded or may have been moved."
+                )
             else:
-                st.error(f"File not found on disk:\n{full_path}")
+                try:
+                    os.startfile(str(full_path))  # Windows
+                    st.success(f"Opened file:\n{full_path}")
+                except Exception as e:
+                    st.error(f"Unable to open this file:\n{e}")
 
 
 if __name__ == "__main__":
