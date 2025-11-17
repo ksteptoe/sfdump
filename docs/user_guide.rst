@@ -114,7 +114,7 @@ List all Salesforce objects available in your org::
 
 If credentials are missing, ``sfdump`` displays a friendly message::
 
-   ❌ Missing Salesforce credentials.
+   Error: Missing Salesforce credentials.
    Please ensure SF_CLIENT_ID, SF_CLIENT_SECRET, SF_USERNAME, SF_PASSWORD are set.
 
 **csv**
