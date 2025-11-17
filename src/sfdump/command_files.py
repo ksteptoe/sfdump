@@ -170,7 +170,7 @@ def build_files_index(
             for batch in _chunk(record_ids, max_batch_size):
                 ids_str = ",".join(f"'{i}'" for i in batch)
                 soql_att = (
-                    "SELECT Id, Name, ParentId " "FROM Attachment " f"WHERE ParentId IN ({ids_str})"
+                    f"SELECT Id, Name, ParentId FROM Attachment WHERE ParentId IN ({ids_str})"
                 )
                 _logger.debug("Indexing Attachments batch: %s", soql_att)
 
@@ -412,9 +412,7 @@ def files_cmd(
     def line(r: dict) -> str:
         bytes_val = int(r.get("bytes") or 0)
         human = _format_bytes(float(bytes_val))
-        return (
-            f"{r['kind']}: {r['count']} files, {human} " f"({bytes_val:,.0f} bytes) → {r['root']}"
-        )
+        return f"{r['kind']}: {r['count']} files, {human} ({bytes_val:,.0f} bytes) → {r['root']}"
 
     total_files = 0
     total_bytes = 0
