@@ -261,6 +261,7 @@ def _build_master_index(export_root: Path) -> Path:
             )
 
     # --- Accounts: bring name (and join from opp_account_id if present) --
+    # --- Accounts: bring name (and join from opp_account_id if present) --
     if not accounts.empty:
         acct_cols_map = {
             "Id": "account_id",
@@ -274,7 +275,7 @@ def _build_master_index(export_root: Path) -> Path:
             acct_subset = accounts[list(present_acct_map.keys())].copy()
             acct_subset = acct_subset.rename(columns=present_acct_map)
 
-            # 1) Direct Account entries
+            # 1) Direct Account entries (files attached to Account)
             is_acct = master["object_type"] == "Account"
             if is_acct.any():
                 master_acct = master[is_acct].merge(
@@ -297,6 +298,38 @@ def _build_master_index(export_root: Path) -> Path:
                     how="left",
                     suffixes=("", "_from_opp"),
                 )
+
+                # Ensure base columns exist
+                if "account_id" not in master.columns:
+                    master["account_id"] = ""
+                if "account_name" not in master.columns:
+                    master["account_name"] = ""
+
+                # Normalise NaNs to empty strings
+                for col in [
+                    "account_id",
+                    "account_name",
+                    "account_id_from_opp",
+                    "account_name_from_opp",
+                ]:
+                    if col in master.columns:
+                        master[col] = master[col].fillna("")
+
+                # Prefer any existing direct Account mapping; otherwise
+                # fill from the Opportunity's Account
+                if "account_id_from_opp" in master.columns:
+                    master["account_id"] = master["account_id"].where(
+                        master["account_id"] != "",
+                        master["account_id_from_opp"],
+                    )
+                    master = master.drop(columns=["account_id_from_opp"])
+
+                if "account_name_from_opp" in master.columns:
+                    master["account_name"] = master["account_name"].where(
+                        master["account_name"] != "",
+                        master["account_name_from_opp"],
+                    )
+                    master = master.drop(columns=["account_name_from_opp"])
         else:
             _logger.warning(
                 "Account.csv has none of the expected columns; "
@@ -315,6 +348,7 @@ def _build_master_index(export_root: Path) -> Path:
         "object_type",
         "record_name",
         "record_id",
+        "account_id",
         "account_name",
         "opp_name",
         "opp_stage",
