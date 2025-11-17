@@ -14,6 +14,7 @@ from . import __version__
 
 # Command Files
 from .command_csv import csv_cmd
+from .command_docs_index import docs_index_cmd
 from .command_files import files_cmd
 from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
@@ -93,3 +94,4 @@ cli.add_command(cast(Command, objects_cmd))
 cli.add_command(cast(Command, csv_cmd))
 cli.add_command(cast(Command, files_cmd))
 cli.add_command(cast(Command, manifest_cmd))
+cli.add_command(cast(Command, docs_index_cmd))

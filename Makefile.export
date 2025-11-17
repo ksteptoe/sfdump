@@ -63,7 +63,7 @@ INDEX_BY_FLAGS := $(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj))
 .PHONY: help \
         export-all export-core-crm export-crm-all export-ffa export-hr \
         export-files export-meta export-archive export-clean \
-        export-show-config csv-one export-files-index-only
+        export-show-config csv-one export-files-index-only export-doc-index
 
 help:
 	@echo "Salesforce / FinancialForce export Makefile"
@@ -253,7 +253,7 @@ ALL_CRM_TARGETS       := $(CRM_CORE_TARGETS) $(CRM_ACTIVITY_TARGETS) $(CRM_SECUR
 # TOP-LEVEL EXPORT TARGETS
 # ------------------------------------------------------------------------------
 
-export-all: export-show-config export-files export-crm-all export-ffa export-hr export-meta
+export-all: export-show-config export-files export-crm-all export-ffa export-hr export-meta export-doc-index
 	@echo "=== ALL EXPORTS COMPLETED → $(EXPORT_ROOT) ==="
 
 export-core-crm: $(CRM_CORE_TARGETS)
@@ -284,6 +284,10 @@ export-files-index-only:
 		$(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj)) \
 		--index-only \
 	  || echo "WARNING: sfdump files --index-only failed (see above)."
+
+export-doc-index:
+	@echo "=== Building master documents index for $(EXPORT_ROOT) ==="
+	@$(SFDUMP) docs-index --export-root "$(EXPORT_ROOT)"
 
 
 export-meta: $(META_DIR)/all_objects.txt
