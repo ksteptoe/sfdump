@@ -1,5 +1,5 @@
 User Guide
-===========
+==========
 
 .. contents::
    :local:
@@ -23,7 +23,7 @@ who need reliable, scriptable Salesforce data exports.
 Features
 --------
 
-* OAuth2 (username–password flow) authentication
+* OAuth2 authentication
 * Graceful handling of missing credentials
 * Modular CLI subcommands (``login``, ``objects``, ``csv``, ``files``, ``manifest``)
 * Automatic ``.env`` loading for credentials
@@ -94,8 +94,7 @@ Global options
 Subcommands
 ~~~~~~~~~~~
 
-login
-^^^^^
+**login**
 
 Authenticate with Salesforce and print identity + API info::
 
@@ -107,8 +106,7 @@ Example::
 
    sfdump login --show-json
 
-objects
-^^^^^^^
+**objects**
 
 List all Salesforce objects available in your org::
 
@@ -119,8 +117,7 @@ If credentials are missing, ``sfdump`` displays a friendly message::
    ❌ Missing Salesforce credentials.
    Please ensure SF_CLIENT_ID, SF_CLIENT_SECRET, SF_USERNAME, SF_PASSWORD are set.
 
-csv
-^^^
+**csv**
 
 Export a Salesforce object as CSV::
 
@@ -136,14 +133,9 @@ Examples::
 
 Creates ``exports/Account.csv`` (or similar).
 
-files
-^^^^^
+**files**
 
 Export Salesforce attachments and content files::
-
-   sfdump files [--out DIR]
-
-Example::
 
    sfdump files --out ./exports/files
 
@@ -152,8 +144,7 @@ Two metadata CSVs are created: ``attachments.csv`` and ``content_versions.csv``.
 
 .. include:: sfdump_files_cli_section.rst
 
-manifest
-^^^^^^^^
+**manifest**
 
 Generate a manifest and bundle all exports into an archive::
 
@@ -231,17 +222,19 @@ Versioning and Releases
 
 ``sfdump`` follows `Semantic Versioning <https://semver.org>`_.
 
-+--------------------+--------------------------------------------+
-| Command                | Description                            |
-+========================+========================================+
-| ``make release-show``  | Show current tag and inferred version  |
-+------------------------+----------------------------------------+
-| ``make release-patch`` | Bump patch version (vX.Y.Z → vX.Y.Z+1) |
-+------------------------+----------------------------------------+
-| ``make release-minor`` | Bump minor version (vX.Y.Z → vX.Y+1.0) |
-+------------------------+----------------------------------------+
-| ``make release-major`` | Bump major version (vX.Y.Z → vX+1.0.0) |
-+------------------------+----------------------------------------+
+Common release Makefile targets:
+
+- ``make release-show``
+  Show current tag and inferred version.
+
+- ``make release-patch``
+  Bump patch version (``vX.Y.Z → vX.Y.Z+1``).
+
+- ``make release-minor``
+  Bump minor version (``vX.Y.Z → vX.Y+1.0``).
+
+- ``make release-major``
+  Bump major version (``vX.Y.Z → vX+1.0.0``).
 
 Each release ensures:
 
@@ -278,7 +271,6 @@ File Structure
    ├── exceptions.py       # Custom exception types
    └── logging_config.py   # Centralized logging setup
 
-
 Offline document search after Salesforce shutdown
 -------------------------------------------------
 
@@ -297,7 +289,6 @@ This single CSV can then be used by a separate document browser (for
 example a small Streamlit app or an Excel / Power BI report) to search
 for documents by name, parent record, Account or Opportunity, and open
 them directly from the exported file system.
-
 
 Summary
 -------
