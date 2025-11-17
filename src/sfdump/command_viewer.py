@@ -36,7 +36,7 @@ def viewer_cmd(exports_base: Path | None, open_browser: bool) -> None:
 
     if not viewer_script.exists():
         raise click.ClickException(
-            f"Viewer script not found:\n{viewer_script}\n" "Ensure scripts/doc_browser.py exists."
+            f"Viewer script not found:\n{viewer_script}\nEnsure scripts/doc_browser.py exists."
         )
 
     # ------------------------------------------------------------
