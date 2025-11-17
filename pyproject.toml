@@ -19,6 +19,7 @@ dependencies = [
     "tqdm>=4.66",
     "python-dotenv>=1.0.1",
     "dotenv",
+    "pandas"
 ]
 
 [project.optional-dependencies]
