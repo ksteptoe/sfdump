@@ -100,7 +100,7 @@ The file-indexing feature typically uses a SOQL query of the form:
 
    SELECT Id, Name FROM <ParentObject>
 
-However, :sobj:`SalesforceInvoice` does not have a ``Name`` field. Instead, we
+However, ''SalesforceInvoice'' does not have a ``Name`` field. Instead, we
 special-case this object in :mod:`sfdump.command_files` and use
 ``InvoiceNumber`` as the label:
 
@@ -186,3 +186,103 @@ together. See the Markdown README for full details and examples.
 
 For more detail, examples and troubleshooting, refer to the full
 :download:`Export README (Markdown) <../README-export.md>`.
+
+Master documents index (for offline document search)
+====================================================
+
+When decommissioning Salesforce it is often essential to retain an
+offline, searchable view of all documents (contracts, POs, invoices,
+SOWs, HR files, etc.) and their relationships to core CRM records.
+
+SFdump supports this via a *master documents index*:
+
+- One CSV per export run::
+
+    meta/master_documents_index.csv
+
+- One row per document (Attachment or File / ContentDocument)
+- Columns include:
+
+  - Technical context:
+
+    - ``file_source`` (``Attachment`` or ``File``)
+    - ``file_name``, ``file_extension``
+    - ``local_path`` (path to the file on disk)
+    - ``object_type`` (e.g. ``Opportunity``, ``Account``,
+      ``fferpcore__BillingDocument__c``)
+    - ``record_id``, ``record_name``
+
+  - Business context (when available):
+
+    - ``account_name``
+    - ``opp_name``, ``opp_stage``, ``opp_amount``, ``opp_close_date``
+
+This index is designed to be consumed by downstream tools (Excel /
+Power Query, Power BI, or a small web UI) so legal and finance can
+search for documents and open them *without* needing a live Salesforce
+instance.
+
+Generating the index
+--------------------
+
+The index is built from:
+
+- Per-object file link CSVs under ``files/links``, created by
+  ``sfdump files`` with ``--index-by`` (for example
+  ``Opportunity_files_index.csv``, ``Account_files_index.csv``, etc.).
+
+- File metadata CSVs under ``files/links``:
+
+  - ``attachments.csv`` (legacy ``Attachment``)
+  - ``content_versions.csv`` (``ContentVersion`` / ``ContentDocument``)
+
+- CRM CSVs under ``csv`` (for enrichment):
+
+  - ``Account.csv``
+  - ``Opportunity.csv``
+
+To build or rebuild the master index for a given export run:
+
+.. code-block:: console
+
+   sfdump docs-index --export-root /path/to/export-YYYY-MM-DD
+
+For example:
+
+.. code-block:: console
+
+   sfdump docs-index --export-root "./exports/export-2025-11-16"
+
+This reads the file link and metadata CSVs under
+``/path/to/export-YYYY-MM-DD`` and writes:
+
+.. code-block:: text
+
+   /path/to/export-YYYY-MM-DD/meta/master_documents_index.csv
+
+Makefile integration
+--------------------
+
+If you are using ``Makefile.export`` the master index can be generated
+as part of the standard ``export-all`` flow.
+
+A typical integration looks like:
+
+.. code-block:: make
+
+   export-doc-index:
+       @echo "=== Building master documents index for $(EXPORT_ROOT) ==="
+       @$(SFDUMP) docs-index --export-root "$(EXPORT_ROOT)"
+
+   export-all: export-show-config export-files export-crm-all export-ffa export-hr export-meta export-doc-index
+       @echo "=== ALL EXPORTS COMPLETED → $(EXPORT_ROOT) ==="
+
+With this in place, every run of:
+
+.. code-block:: console
+
+   make -f Makefile.export export-all BASE_EXPORT_ROOT=... EXPORT_DATE=YYYY-MM-DD
+
+will produce a ready-to-use ``meta/master_documents_index.csv`` that
+downstream tools can load to provide a GUI for document search and
+review.

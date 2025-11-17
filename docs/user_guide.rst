@@ -231,17 +231,17 @@ Versioning and Releases
 
 ``sfdump`` follows `Semantic Versioning <https://semver.org>`_.
 
-+--------------------+----------------------------------------+
-| Command            | Description                            |
-+====================+========================================+
-| ``make release-show``  | Show current tag and inferred version |
-+--------------------+----------------------------------------+
++--------------------+--------------------------------------------+
+| Command                | Description                            |
++========================+========================================+
+| ``make release-show``  | Show current tag and inferred version  |
++------------------------+----------------------------------------+
 | ``make release-patch`` | Bump patch version (vX.Y.Z → vX.Y.Z+1) |
-+--------------------+----------------------------------------+
-| ``make release-minor`` | Bump minor version (vX.Y.Z → vX.Y+1.0)  |
-+--------------------+----------------------------------------+
-| ``make release-major`` | Bump major version (vX.Y.Z → vX+1.0.0)  |
-+--------------------+----------------------------------------+
++------------------------+----------------------------------------+
+| ``make release-minor`` | Bump minor version (vX.Y.Z → vX.Y+1.0) |
++------------------------+----------------------------------------+
+| ``make release-major`` | Bump major version (vX.Y.Z → vX+1.0.0) |
++------------------------+----------------------------------------+
 
 Each release ensures:
 
@@ -277,6 +277,27 @@ File Structure
    ├── utils.py            # Directory, checksum, and file utilities
    ├── exceptions.py       # Custom exception types
    └── logging_config.py   # Centralized logging setup
+
+
+Offline document search after Salesforce shutdown
+-------------------------------------------------
+
+If you are planning to switch off your Salesforce instance, you can
+still give legal and finance a searchable archive of all documents.
+
+After running a full export (see :doc:`export_guide`), SFdump can build
+a *master documents index* for each export run:
+
+- Run the files export with ``--index-by`` for the key sObjects
+  (Opportunity, Account, billing/ERP objects, etc.).
+- Run ``sfdump docs-index --export-root /path/to/export-YYYY-MM-DD`` to
+  create ``meta/master_documents_index.csv``.
+
+This single CSV can then be used by a separate document browser (for
+example a small Streamlit app or an Excel / Power BI report) to search
+for documents by name, parent record, Account or Opportunity, and open
+them directly from the exported file system.
+
 
 Summary
 -------
