@@ -212,7 +212,47 @@ def _build_master_index(export_root: Path) -> Path:
             right_on="content_document_id",
             how="left",
         )
-        df_file["local_path"] = df_file["content_path"].map(_with_files_prefix)
+
+        def _with_files_prefix_for_files(rel_path: object) -> str:
+            """
+            Normalise ContentVersion paths for the actual on-disk layout.
+
+            In the current exports, content_versions.csv paths plus the
+            downloader result in files being stored under:
+
+                EXPORT_ROOT / files / files / <subdir> / <filename>
+
+            `_with_files_prefix` returns a path relative to EXPORT_ROOT, e.g.:
+
+                'files/06/<filename>'
+
+            which resolves to:
+
+                EXPORT_ROOT / files / 06 / <filename>
+
+            and misses the extra 'files/' component. For File rows we add
+            that extra segment so the viewer resolves to:
+
+                EXPORT_ROOT / files / files / 06 / <filename>
+            """
+            base = _with_files_prefix(rel_path)
+            if not base:
+                return ""
+
+            p = base.replace("\\", "/")
+
+            # Already in the desired form
+            if p.lower().startswith("files/files/"):
+                return p
+
+            # If it starts with 'files/', add one more 'files/' in front
+            if p.lower().startswith("files/"):
+                return f"files/{p}"
+
+            # Fallback: just return the normalised path
+            return p
+
+        df_file["local_path"] = df_file["content_path"].map(_with_files_prefix_for_files)
     else:
         df_file["local_path"] = ""
 
