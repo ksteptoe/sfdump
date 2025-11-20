@@ -26,6 +26,8 @@ BASE_EXPORT_ROOT ?= ./exports
 EXPORT_DATE  ?= $(shell date +%Y-%m-%d)
 EXPORT_ROOT  ?= $(BASE_EXPORT_ROOT)/export-$(EXPORT_DATE)
 
+LOG_DIR      := $(EXPORT_ROOT)/logs
+
 CSV_DIR      := $(EXPORT_ROOT)/csv
 FILES_DIR    := $(EXPORT_ROOT)/files
 META_DIR     := $(EXPORT_ROOT)/meta
@@ -48,10 +50,20 @@ FILE_INDEX_OBJECTS = \
   ffps_po__PurchaseOrder__c \
   ffps_po__GoodsReceiptNote__c \
   ffvat__VatReturn__c \
+  c2g__codaInvoice__c \
+  c2g__codaCreditNote__c \
+  c2g__codaPurchaseInvoice__c \
+  c2g__codaPurchaseCreditNote__c \
+  pse__Proj__c \
+  pse__Assignment__c \
+  pse__Timecard__c \
+  pse__Expense_Report__c \
+  pse__Vendor_Invoice__c \
   Engineer__c \
   JobApplication__c \
   HR_Activity__c \
   Salary_History__c
+
 
 # Turn that into: --index-by Obj1 --index-by Obj2 ...
 INDEX_BY_FLAGS := $(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj))
@@ -172,6 +184,50 @@ HR_OBJECTS = \
   Master_Skill__Share \
   ResourceRoleMap__c
 
+  # CODA (c2g__) – core accounting master data
+CODA_MASTER_OBJECTS = \
+  c2g__codaCompany__c \
+  c2g__codaAccountingCurrency__c \
+  c2g__codaGeneralLedgerAccount__c \
+  c2g__codaTaxCode__c \
+  c2g__codaTaxRate__c \
+  c2g__codaYear__c \
+  c2g__codaPeriod__c \
+  c2g__codaBankAccount__c \
+  c2g__codaUserCompany__c
+
+# CODA – main transactional objects (Sales / Payables / Journals / Payments)
+CODA_TX_OBJECTS = \
+  c2g__codaInvoice__c \
+  c2g__codaInvoiceLineItem__c \
+  c2g__codaInvoiceInstallmentLineItem__c \
+  c2g__codaCreditNote__c \
+  c2g__codaCreditNoteLineItem__c \
+  c2g__codaPurchaseInvoice__c \
+  c2g__codaPurchaseInvoiceLineItem__c \
+  c2g__codaPurchaseInvoiceExpenseLineItem__c \
+  c2g__codaPurchaseCreditNote__c \
+  c2g__codaPurchaseCreditNoteLineItem__c \
+  c2g__codaPurchaseCreditNoteExpLineItem__c \
+  c2g__codaCashEntry__c \
+  c2g__codaCashEntryLineItem__c \
+  c2g__codaJournal__c \
+  c2g__codaJournalLineItem__c \
+  c2g__codaPayment__c \
+  c2g__codaPaymentLineItem__c \
+  c2g__codaTransaction__c \
+  c2g__codaTransactionLineItem__c
+
+# CODA – detailed VAT / tax breakdowns
+CODA_TAX_OBJECTS = \
+  c2g__TaxDetailSalesInvoice__c \
+  c2g__TaxDetailSalesCreditNote__c \
+  c2g__TaxDetailPayableInvoice__c \
+  c2g__TaxDetailPayableInvoiceExpense__c \
+  c2g__TaxDetailPayableCreditNote__c \
+  c2g__TaxDetailPayableCreditNoteExpense__c
+
+
 # ------------------------------------------------------------------------------
 # FINANCIALFORCE / CERTINIA (ff… PREFIX)
 # ------------------------------------------------------------------------------
@@ -231,30 +287,83 @@ FF_SETTINGS_OBJECTS = \
   ffvat__VatReturnBatchSettings__c \
   ffvat__VatReturn__c
 
+# ----------------------------------------------------------------------
+# PSA / PSE (Professional Services Automation) – core project data
+# ----------------------------------------------------------------------
+
+PSE_OBJECTS = \
+  pse__Proj__c \
+  pse__Milestone__c \
+  pse__Assignment__c \
+  pse__Resource_Request__c \
+  pse__Issue__c \
+  pse__Risk__c \
+  pse__Schedule__c \
+  pse__Project_Task__c \
+  pse__Project_Actuals__c \
+  pse__Project_Actuals_Converted__c \
+  pse__Resource_Actuals__c \
+  pse__Group_Actuals__c \
+  pse__Regional_Actuals__c \
+  pse__Budget__c \
+  pse__Budget_Header__c \
+  pse__Forecast__c \
+  pse__Forecast_Detail__c \
+  pse__Forecast_Summary__c \
+  pse__Forecast_Enhanced_Detail__c \
+  pse__Forecast_Enhanced_Summary__c \
+  pse__Timecard__c \
+  pse__Timecard_Header__c \
+  pse__Task_Time__c \
+  pse__Expense__c \
+  pse__Expense_Report__c \
+  pse__Vendor_Invoice__c \
+  pse__Vendor_Invoice_Item__c
+
+
 FFA_OBJECTS = \
   $(FF_ERP_CORE_OBJECTS) \
   $(FF_FINANCIAL_TX_OBJECTS) \
   $(FF_MISC_FINANCIAL_OBJECTS) \
-  $(FF_SETTINGS_OBJECTS)
+  $(FF_SETTINGS_OBJECTS) \
+  $(CODA_MASTER_OBJECTS) \
+  $(CODA_TX_OBJECTS) \
+  $(CODA_TAX_OBJECTS)
 
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # SENTINEL TARGETS
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
 CRM_CORE_TARGETS      := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(CRM_CORE_OBJECTS)))
 CRM_ACTIVITY_TARGETS  := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(CRM_ACTIVITY_OBJECTS)))
 CRM_SECURITY_TARGETS  := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(CRM_SECURITY_OBJECTS)))
 HR_TARGETS            := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(HR_OBJECTS)))
 FFA_TARGETS           := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(FFA_OBJECTS)))
+PSE_TARGETS           := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(PSE_OBJECTS)))
 
 ALL_CRM_TARGETS       := $(CRM_CORE_TARGETS) $(CRM_ACTIVITY_TARGETS) $(CRM_SECURITY_TARGETS)
 
-# ------------------------------------------------------------------------------
+# All sObjects (dynamic list from sfdump)
+ALL_SOBJECTS        := $(shell $(SFDUMP) objects)
+ALL_SOBJECT_TARGETS := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(ALL_SOBJECTS)))
+
+# ----------------------------------------------------------------------
 # TOP-LEVEL EXPORT TARGETS
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
 export-all: export-show-config export-files export-crm-all export-ffa export-hr export-meta export-doc-index
 	@echo "=== ALL EXPORTS COMPLETED → $(EXPORT_ROOT) ==="
+
+# Full export of all queryable sObjects, with log capture
+export-all-objects-log:
+	@mkdir -p "$(LOG_DIR)"
+	@echo "=== Running export-all-objects with logging → $(LOG_DIR)/export-all-objects.log ==="
+	@$(MAKE) -f Makefile.export export-all-objects 2>&1 | tee "$(LOG_DIR)/export-all-objects.log"
+
+
+export-all-objects: export-show-config $(ALL_SOBJECT_TARGETS)
+	@echo "=== ALL QUERYABLE OBJECTS EXPORTED → $(CSV_DIR) ==="
+
 
 export-core-crm: $(CRM_CORE_TARGETS)
 	@echo "=== Core CRM export done → $(CSV_DIR) ==="
@@ -264,6 +373,9 @@ export-crm-all: $(ALL_CRM_TARGETS)
 
 export-ffa: $(FFA_TARGETS)
 	@echo "=== FinancialForce/ERP export done → $(CSV_DIR) ==="
+
+export-psa: $(PSE_TARGETS)
+	@echo "=== PSA / PSE export done → $(CSV_DIR) ==="
 
 export-hr: $(HR_TARGETS)
 	@echo "=== HR / employment export done → $(CSV_DIR) ==="
@@ -324,10 +436,10 @@ $(CSV_DIR)/%.done:
 
 csv-one:
 	@if [ -z "$(OBJ)" ]; then \
-	  echo "Usage: make -f Makefile.export csv-one OBJ=Account"; \
+	  echo "Usage: make csv-one OBJ=Account"; \
 	  exit 1; \
 	fi
-	$(MAKE) -f Makefile.export $(CSV_DIR)/$(OBJ).done
+	$(MAKE) $(CSV_DIR)/$(OBJ).done
 
 # --------------------------------------------------------------------
 # VIEWER: Open the SFdump Web Viewer for the current exports folder
