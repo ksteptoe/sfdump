@@ -126,8 +126,6 @@ def main() -> None:
     )
 
     export_root = exports_base / selected_run_name
-
-    export_root = exports_base / selected_run_name
     master_index_path = export_root / "meta" / "master_documents_index.csv"
 
     st.sidebar.write(f"Using export root: `{export_root}`")
@@ -160,11 +158,25 @@ def main() -> None:
         default=extensions,
     )
 
-    # Search box
+    # Global search
     query = st.text_input(
         "Search (supports * wildcard; searches file, record, account, opp):",
         "",
     )
+
+    # --- NEW: column-specific filters ---------------------------------
+    col_filters: dict[str, str] = {}
+
+    with st.sidebar.expander("More column filters", expanded=False):
+        if "record_name" in df.columns:
+            col_filters["record_name"] = st.text_input("Record name contains", "")
+        if "account_name" in df.columns:
+            col_filters["account_name"] = st.text_input("Account name contains", "")
+        if "opp_name" in df.columns:
+            col_filters["opp_name"] = st.text_input("Opportunity name contains", "")
+        if "opp_stage" in df.columns:
+            col_filters["opp_stage"] = st.text_input("Stage contains", "")
+    # ------------------------------------------------------------------
 
     # ------------------------------------------------------------------
     # Apply filters
@@ -184,12 +196,15 @@ def main() -> None:
         if q:
             mask &= df["search_blob"].str.contains(q, case=False, na=False)
 
+    # Apply column-specific filters
+    for col, value in col_filters.items():
+        if value:
+            mask &= df[col].str.contains(value, case=False, na=False)
+
     filtered = df[mask].copy()
     filtered_count = len(filtered)
 
     st.write(f"Showing up to 500 of {filtered_count:,} matching documents:")
-
-    # Show summary on how many rows we’re displaying
     st.info(f"Displaying the first 500 of {filtered_count:,} matching documents.")
 
     # ----------------------------------------------------------------------
@@ -210,14 +225,25 @@ def main() -> None:
     ]
 
     # Only use columns that actually exist
-    show_cols = [col for col in preferred_cols if col in filtered.columns]
+    available_cols = [col for col in preferred_cols if col in filtered.columns]
 
-    if not show_cols:
+    if not available_cols:
         st.warning(
             "None of the expected index columns were found.\n"
             "This export may be incomplete or the index format has changed."
         )
         st.stop()
+
+    # --- NEW: allow user to choose which columns to display ------------
+    with st.sidebar.expander("Columns to display", expanded=False):
+        show_cols = st.multiselect(
+            "Select columns",
+            options=available_cols,
+            default=available_cols,
+        )
+    if not show_cols:
+        show_cols = available_cols
+    # ----------------------------------------------------------------------
 
     # ----------------------------------------------------------------------
     # Display the table
