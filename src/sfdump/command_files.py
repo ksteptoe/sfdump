@@ -144,7 +144,7 @@ def build_files_index(
         raise
 
     if not records:
-        _logger.warning("No %s records found; index will be empty.", object_name)
+        _logger.info("No %s records found; index will be empty.", object_name)
         return
 
     record_ids = list(records.keys())
@@ -370,6 +370,8 @@ def files_cmd(
             raise click.Abort() from exc
 
     # Optional: build index CSVs mapping <index_by> records to Attachments/Files
+    empty_indexes: list[str] = []
+
     if index_by:
         for obj in index_by:
             try:
@@ -382,14 +384,15 @@ def files_cmd(
                 )
             except click.ClickException as exc:
                 # build_files_index has already crafted a clear, user-facing message
-                # (e.g. missing label field). Let it pass through unchanged so we
-                # don't wrap it in another "Failed to build files index..." layer.
                 raise exc
             except Exception as exc:  # pragma: no cover - defensive
                 _logger.exception(
                     "Unexpected error while building files index for %s: %s", obj, exc
                 )
                 raise click.ClickException(f"Failed to build files index for {obj}: {exc}") from exc
+
+    if empty_indexes:
+        click.echo("Note: no records found for index objects: " + ", ".join(sorted(empty_indexes)))
 
     if not results and not index_by:
         # We didn't estimate, download, or index anything – bail out.
@@ -417,16 +420,11 @@ def files_cmd(
     total_files = 0
     total_bytes = 0
 
-    for r in results:
-        click.echo(line(r))
-        total_files += int(r.get("count") or 0)
-        total_bytes += int(r.get("bytes") or 0)
-
-    # overall total
     if results:
         total_human = _format_bytes(float(total_bytes))
-        click.echo(f"Total: {total_files} files, {total_human} ({total_bytes:,.0f} bytes)")
-
-    # Metadata (including the new index) location hint
-    if not estimate_only or index_by or index_only:
-        click.echo(f"Metadata CSVs are under: {os.path.join(out_dir, 'links')}")
+        click.echo("")
+        click.echo("=== File export summary ===")
+        for r in results:
+            click.echo("  " + line(r))
+        click.echo(f"  Total: {total_files} files, {total_human} ({total_bytes:,.0f} bytes)")
+        click.echo(f"  Index CSVs: {os.path.join(out_dir, 'links')}")
