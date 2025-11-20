@@ -11,11 +11,19 @@ def configure_logging(level: Optional[int]) -> None:
     """Configure root logging once; safe to call multiple times."""
     lvl = level if level is not None else logging.WARNING
     root = logging.getLogger()
+
     if root.handlers:
+        # Logging already configured elsewhere – just adjust the level.
         root.setLevel(lvl)
-        return
-    logging.basicConfig(
-        level=lvl,
-        format=_DEFAULT_FMT,
-        datefmt=_DEFAULT_DATEFMT,
-    )
+    else:
+        # First-time configuration.
+        logging.basicConfig(
+            level=lvl,
+            format=_DEFAULT_FMT,
+            datefmt=_DEFAULT_DATEFMT,
+        )
+
+    # Always tone down noisy urllib3 header parsing warnings
+    urllib3_conn_logger = logging.getLogger("urllib3.connection")
+    if urllib3_conn_logger.level == logging.NOTSET or urllib3_conn_logger.level < logging.ERROR:
+        urllib3_conn_logger.setLevel(logging.ERROR)
