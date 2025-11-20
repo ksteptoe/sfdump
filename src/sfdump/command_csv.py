@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from typing import List, Optional
 
 import click
@@ -17,6 +18,12 @@ try:
     load_dotenv()
 except Exception:
     pass
+
+
+def _supports_unicode_emoji() -> bool:
+    enc = getattr(sys.stdout, "encoding", "") or ""
+    return "UTF-8" in enc.upper()
+
 
 # Certain objects need extra fields for downstream tooling (e.g. docs-index).
 # We force-include these when auto-resolving fields.
@@ -98,4 +105,11 @@ def csv_cmd(
     except Exception as err:
         raise click.ClickException(f"Failed to dump {object_name} to CSV.") from err
 
-    click.echo(f"✅ Wrote {n} rows → {csv_path}")
+    if _supports_unicode_emoji():
+        tick = "✅"
+        arrow = "→"
+    else:
+        tick = "[OK]"
+        arrow = "->"
+
+    click.echo(f"{tick} Wrote {n} rows {arrow} {csv_path}")
