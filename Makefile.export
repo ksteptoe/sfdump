@@ -6,7 +6,7 @@
 #   make -f Makefile.export export-all
 #
 # Variables you can override:
-#   BASE_EXPORT_ROOT="C:/Users/kevin/OneDrive - Sondrel Ltd/SF"
+#   BASE_EXPORT_ROOT="./exports"
 #   EXPORT_DATE=2025-11-30
 #
 # NOTE: This assumes:
@@ -17,9 +17,9 @@
 # Default target: show help
 .DEFAULT_GOAL := help
 
-SFDUMP ?= sfdump
+SFDUMP ?= sfdump -v
 
-# Base directory for all exports (Kevin's default)
+# Base directory for all exports (repo-local by default)
 BASE_EXPORT_ROOT ?= ./exports
 
 # Date and root directory for this run
@@ -64,7 +64,6 @@ FILE_INDEX_OBJECTS = \
   HR_Activity__c \
   Salary_History__c
 
-
 # Turn that into: --index-by Obj1 --index-by Obj2 ...
 INDEX_BY_FLAGS := $(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj))
 
@@ -75,7 +74,7 @@ INDEX_BY_FLAGS := $(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj))
 .PHONY: help \
         export-all export-core-crm export-crm-all export-ffa export-hr \
         export-files export-meta export-archive export-clean \
-        export-show-config csv-one export-files-index-only export-doc-index
+        export-show-config csv-one export-files-index-only export-doc-index view
 
 help:
 	@echo "Salesforce / FinancialForce export Makefile"
@@ -91,7 +90,7 @@ help:
 	@echo "  help                       Show this help."
 	@echo "  export-all                 Files + all CRM + FFA + HR + object list."
 	@echo "  export-files               Export Files & Attachments + build indexes (--index-by ...)."
-	@echo "  export-files-index-only    Assumes export-files has been run this incrementally build indexes"
+	@echo "  export-files-index-only    Rebuild file indexes only (no download)."
 	@echo "  export-crm-all             Export core CRM (Accounts, Contacts, Opps, Quotes, etc.)."
 	@echo "  export-core-crm            Export just the core CRM subset."
 	@echo "  export-ffa                 Export FinancialForce/ERP objects (ff*)."
@@ -101,8 +100,8 @@ help:
 	@echo "  export-clean               Remove CSV/files/meta under EXPORT_ROOT (not the zip)."
 	@echo ""
 	@echo "Variables:"
-	@echo "  SFDUMP              sfdump executable (default: sfdump)"
-	@echo "  BASE_EXPORT_ROOT    Base dir for all exports (default as above)."
+	@echo "  SFDUMP              sfdump executable (default: sfdump -v)"
+	@echo "  BASE_EXPORT_ROOT    Base dir for all exports (default: ./exports)."
 	@echo "  EXPORT_DATE         Date suffix (default: today from 'date +%Y-%m-%d')."
 	@echo "  EXPORT_ROOT         Full export dir; override to change entire location."
 
@@ -184,7 +183,7 @@ HR_OBJECTS = \
   Master_Skill__Share \
   ResourceRoleMap__c
 
-  # CODA (c2g__) – core accounting master data
+# CODA (c2g__) – core accounting master data
 CODA_MASTER_OBJECTS = \
   c2g__codaCompany__c \
   c2g__codaAccountingCurrency__c \
@@ -226,7 +225,6 @@ CODA_TAX_OBJECTS = \
   c2g__TaxDetailPayableInvoiceExpense__c \
   c2g__TaxDetailPayableCreditNote__c \
   c2g__TaxDetailPayableCreditNoteExpense__c
-
 
 # ------------------------------------------------------------------------------
 # FINANCIALFORCE / CERTINIA (ff… PREFIX)
@@ -287,9 +285,9 @@ FF_SETTINGS_OBJECTS = \
   ffvat__VatReturnBatchSettings__c \
   ffvat__VatReturn__c
 
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # PSA / PSE (Professional Services Automation) – core project data
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 PSE_OBJECTS = \
   pse__Proj__c \
@@ -320,7 +318,6 @@ PSE_OBJECTS = \
   pse__Vendor_Invoice__c \
   pse__Vendor_Invoice_Item__c
 
-
 FFA_OBJECTS = \
   $(FF_ERP_CORE_OBJECTS) \
   $(FF_FINANCIAL_TX_OBJECTS) \
@@ -330,9 +327,9 @@ FFA_OBJECTS = \
   $(CODA_TX_OBJECTS) \
   $(CODA_TAX_OBJECTS)
 
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # SENTINEL TARGETS
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 CRM_CORE_TARGETS      := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(CRM_CORE_OBJECTS)))
 CRM_ACTIVITY_TARGETS  := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(CRM_ACTIVITY_OBJECTS)))
@@ -347,13 +344,12 @@ ALL_CRM_TARGETS       := $(CRM_CORE_TARGETS) $(CRM_ACTIVITY_TARGETS) $(CRM_SECUR
 ALL_SOBJECTS        := $(shell $(SFDUMP) objects)
 ALL_SOBJECT_TARGETS := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(ALL_SOBJECTS)))
 
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # TOP-LEVEL EXPORT TARGETS
-# ----------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 export-all: export-show-config export-files export-crm-all export-ffa export-hr export-meta export-doc-index
 	@echo "=== ALL EXPORTS COMPLETED → $(EXPORT_ROOT) ==="
-
 
 export-all-objects: export-show-config $(ALL_SOBJECT_TARGETS)
 	@echo "=== ALL QUERYABLE OBJECTS EXPORTED → $(CSV_DIR) ==="
@@ -363,7 +359,6 @@ export-all-objects: export-show-config $(ALL_SOBJECT_TARGETS)
 	    echo "  $(CSV_DIR)/_export_failures.txt"; \
 	    echo "and *.failed sentinels in $(CSV_DIR)."; \
 	fi
-
 
 export-core-crm: $(CRM_CORE_TARGETS)
 	@echo "=== Core CRM export done → $(CSV_DIR) ==="
@@ -447,9 +442,10 @@ csv-one:
 	fi
 	$(MAKE) $(CSV_DIR)/$(OBJ).done
 
-# --------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # VIEWER: Open the SFdump Web Viewer for the current exports folder
-# --------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 view:
 	@echo "Launching SFdump Viewer..."
-	"$(HOME)/OneDrive/py/sfdump/sfdump-view.cmd" "$(BASE_EXPORT_ROOT)/exports"
+	"$(HOME)/OneDrive/py/sfdump/sfdump-view.cmd" "$(BASE_EXPORT_ROOT)"
