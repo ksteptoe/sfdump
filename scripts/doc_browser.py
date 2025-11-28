@@ -293,7 +293,12 @@ def main() -> None:
         local_path = row.get("local_path", "")
 
         if not local_path:
-            st.error("This row has an empty local_path.")
+            st.warning(
+                "No local file is available for this row.\n\n"
+                "The master index knows a document was associated with this record, "
+                "but no Attachment/File binary was exported (for example, because it "
+                "doesn't exist anymore or is stored in a package-specific object)."
+            )
             return
 
         full_path = resolve_file_path(export_root, local_path)
