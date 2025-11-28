@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
@@ -7,6 +8,8 @@ from typing import Dict, List, Optional
 from tqdm import tqdm
 
 from .utils import ensure_dir, sanitize_filename, sha256_of_file, write_csv
+
+_logger = logging.getLogger(__name__)
 
 
 def _safe_target(files_root: str, suggested_name: str) -> str:
@@ -38,6 +41,18 @@ def dump_content_versions(
     rows = list(api.query_all_iter(soql))
     meta_rows: List[dict] = []
     total_bytes = 0
+
+    # --- NEW: logging counters ------------------------------------------------
+    discovered_count = len(rows)
+    _logger.info(
+        "dump_content_versions: discovered %d ContentVersion rows (where=%r)",
+        discovered_count,
+        where,
+    )
+
+    downloaded_count = 0
+    error_count = 0
+    # --------------------------------------------------------------------------
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {}
@@ -102,6 +117,23 @@ def dump_content_versions(
     else:
         open(cdl_csv, "w").close()
 
+    # --- NEW: summary logging / tripwire info ---------------------------------
+    _logger.info(
+        "dump_content_versions: discovered=%d, downloaded=%d, errors=%d, bytes=%d, meta_csv=%s",
+        discovered_count,
+        downloaded_count,
+        error_count,
+        total_bytes,
+        meta_csv,
+    )
+    if downloaded_count + error_count != discovered_count:
+        _logger.warning(
+            "dump_content_versions: mismatch in counts (discovered=%d, downloaded+errors=%d)",
+            discovered_count,
+            downloaded_count + error_count,
+        )
+    # --------------------------------------------------------------------------
+
     return {
         "kind": "content_version",
         "meta_csv": meta_csv,
@@ -131,6 +163,17 @@ def dump_attachments(
     meta_rows: List[dict] = []
     total_bytes = 0
 
+    # NEW: basic discovery logging
+    discovered_count = len(rows)  # NEW
+    _logger.info(  # NEW
+        "dump_attachments: discovered %d Attachment rows (where=%r)",
+        discovered_count,
+        where,
+    )
+
+    downloaded_count = 0  # NEW
+    error_count = 0  # NEW
+
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {}
         for r in rows:
@@ -147,10 +190,18 @@ def dump_attachments(
                 r["path"] = os.path.relpath(target, out_dir)
                 r["sha256"] = sha256_of_file(target)
                 total_bytes += size
+                downloaded_count += 1  # NEW
             except Exception as e:
                 r["path"] = ""
                 r["sha256"] = ""
                 r["download_error"] = str(e)
+                error_count += 1  # NEW
+                _logger.warning(  # NEW
+                    "dump_attachments: failed to download Attachment %s (%s): %s",
+                    r.get("Id"),
+                    r.get("Name"),
+                    e,
+                )
             meta_rows.append(r)
 
     links_dir = os.path.join(out_dir, "links")
@@ -161,6 +212,22 @@ def dump_attachments(
         write_csv(meta_csv, meta_rows, fieldnames)
     else:
         open(meta_csv, "w").close()
+
+    # NEW: summary logging / tripwire info (no hard fail yet)
+    _logger.info(
+        "dump_attachments: discovered=%d, downloaded=%d, errors=%d, bytes=%d, meta_csv=%s",
+        discovered_count,
+        downloaded_count,
+        error_count,
+        total_bytes,
+        meta_csv,
+    )
+    if downloaded_count + error_count != discovered_count:
+        _logger.warning(
+            "dump_attachments: mismatch in counts (discovered=%d, downloaded+errors=%d)",
+            discovered_count,
+            downloaded_count + error_count,
+        )
 
     return {
         "kind": "attachment",
