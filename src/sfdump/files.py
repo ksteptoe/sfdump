@@ -42,17 +42,13 @@ def dump_content_versions(
     meta_rows: List[dict] = []
     total_bytes = 0
 
-    # --- NEW: logging counters ------------------------------------------------
-    discovered_count = len(rows)
+    # Log how many ContentVersions we discovered up-front
+    discovered_initial = len(rows)
     _logger.info(
         "dump_content_versions: discovered %d ContentVersion rows (where=%r)",
-        discovered_count,
+        discovered_initial,
         where,
     )
-
-    downloaded_count = 0
-    error_count = 0
-    # --------------------------------------------------------------------------
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {}
@@ -75,6 +71,12 @@ def dump_content_versions(
                 r["path"] = ""
                 r["sha256"] = ""
                 r["download_error"] = str(e)
+                _logger.warning(
+                    "dump_content_versions: failed to download File %s (%s): %s",
+                    r.get("Id") or r.get("ContentDocumentId"),
+                    r.get("Title") or r.get("file_name") or r.get("Name"),
+                    e,
+                )
             meta_rows.append(r)
 
     # Links (which record a file is attached to)
@@ -117,7 +119,11 @@ def dump_content_versions(
     else:
         open(cdl_csv, "w").close()
 
-    # --- NEW: summary logging / tripwire info ---------------------------------
+    # Derive final counts from what we actually wrote
+    discovered_count = len(meta_rows)
+    downloaded_count = sum(1 for r in meta_rows if r.get("path"))
+    error_count = sum(1 for r in meta_rows if r.get("download_error"))
+
     _logger.info(
         "dump_content_versions: discovered=%d, downloaded=%d, errors=%d, bytes=%d, meta_csv=%s",
         discovered_count,
@@ -132,7 +138,6 @@ def dump_content_versions(
             discovered_count,
             downloaded_count + error_count,
         )
-    # --------------------------------------------------------------------------
 
     return {
         "kind": "content_version",
@@ -163,16 +168,13 @@ def dump_attachments(
     meta_rows: List[dict] = []
     total_bytes = 0
 
-    # NEW: basic discovery logging
-    discovered_count = len(rows)  # NEW
-    _logger.info(  # NEW
+    # Discovery logging
+    discovered_initial = len(rows)
+    _logger.info(
         "dump_attachments: discovered %d Attachment rows (where=%r)",
-        discovered_count,
+        discovered_initial,
         where,
     )
-
-    downloaded_count = 0  # NEW
-    error_count = 0  # NEW
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {}
@@ -190,13 +192,11 @@ def dump_attachments(
                 r["path"] = os.path.relpath(target, out_dir)
                 r["sha256"] = sha256_of_file(target)
                 total_bytes += size
-                downloaded_count += 1  # NEW
             except Exception as e:
                 r["path"] = ""
                 r["sha256"] = ""
                 r["download_error"] = str(e)
-                error_count += 1  # NEW
-                _logger.warning(  # NEW
+                _logger.warning(
                     "dump_attachments: failed to download Attachment %s (%s): %s",
                     r.get("Id"),
                     r.get("Name"),
@@ -213,7 +213,11 @@ def dump_attachments(
     else:
         open(meta_csv, "w").close()
 
-    # NEW: summary logging / tripwire info (no hard fail yet)
+    # Derive final counts from meta_rows
+    discovered_count = len(meta_rows)
+    downloaded_count = sum(1 for r in meta_rows if r.get("path"))
+    error_count = sum(1 for r in meta_rows if r.get("download_error"))
+
     _logger.info(
         "dump_attachments: discovered=%d, downloaded=%d, errors=%d, bytes=%d, meta_csv=%s",
         discovered_count,
