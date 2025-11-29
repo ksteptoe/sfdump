@@ -65,13 +65,8 @@ html_static_path = ["_static"]
 latex_engine = "xelatex"
 
 latex_elements = {
-    # Use A4 paper size
     "papersize": "a4paper",
-    # Readable default font size
     "pointsize": "11pt",
-    # --------------------------------------------------------
-    # Enhanced Title Page + Watermark + Styles
-    # --------------------------------------------------------
     "preamble": r"""
 \usepackage{fontspec}
 \setmainfont{Times New Roman}
@@ -84,6 +79,9 @@ latex_elements = {
     top=20mm,
     bottom=20mm,
 }
+
+% Fix fancyhdr headheight warning
+\setlength{\headheight}{14pt}
 
 \usepackage{fancyhdr}
 \pagestyle{fancy}
@@ -105,67 +103,42 @@ latex_elements = {
 \usepackage{graphicx}
 \usepackage{float}
 
-% --------------------------------------------------------
-% Watermark (Option 1 – smaller & lighter)
-% --------------------------------------------------------
 \usepackage{draftwatermark}
 \SetWatermarkText{CONFIDENTIAL — EXAMPLE CORP}
-\SetWatermarkScale{0.25}        % Much smaller – fits page
-\SetWatermarkColor[gray]{0.92}  % Lighter – subtle effect
-\SetWatermarkAngle{45}          % Gentle diagonal
+\SetWatermarkScale{0.25}
+\SetWatermarkColor[gray]{0.92}
+\SetWatermarkAngle{45}
 
-% --------------------------------------------------------
-% Custom Title Page (Logo, Title, Subtitle, Version, Author)
-% --------------------------------------------------------
 \makeatletter
+\newcommand{\repoLogo}{"""
+    + (html_logo or "")
+    + r"""}
+
 \def\maketitle{
   \begin{titlepage}
     \centering
-
-    % =============================
-    % Main Title
-    % =============================
     {\Huge\bfseries\sffamily sfdump Documentation\par}
     \vspace{0.5cm}
 
-    % =============================
-    % Subtitle (edit as desired)
-    % =============================
     {\Large\itshape Salesforce Offboarding Extraction Manual\par}
     \vspace{1.5cm}
 
-    % =============================
-    % Logo (if provided)
-    % =============================
-    \ifdefined\logo
-      \includegraphics[width=0.45\textwidth]{"""
-    + (html_logo or "")
-    + r"""}
+    \ifx\repoLogo\empty
+    \else
+      \includegraphics[width=0.45\textwidth]{\repoLogo}
       \vspace{1.5cm}
     \fi
 
-    % =============================
-    % Author
-    % =============================
     {\Large\bfseries Author:\par}
     {\Large \@author\par}
     \vspace{0.8cm}
 
-    % =============================
-    % Version (auto inserted)
-    % =============================
     {\large\bfseries Version:\ }{\large\@release\par}
     \vspace{0.5cm}
 
-    % =============================
-    % Date
-    % =============================
     {\large \@date \par}
     \vfill
 
-    % =============================
-    % Footer Note
-    % =============================
     {\large Generated using Sphinx + Furo Theme\par}
   \end{titlepage}
 }
@@ -173,7 +146,8 @@ latex_elements = {
 """,
 }
 
-# Add logo to the title page (if exists)
+
+# Add logo to PDF build
 if html_logo:
     latex_logo = html_logo
 
