@@ -12,6 +12,93 @@ from .utils import ensure_dir, sanitize_filename, sha256_of_file, write_csv
 _logger = logging.getLogger(__name__)
 
 
+def _order_and_chunk_rows(rows: List[dict], *, kind: str) -> List[dict]:
+    """Optionally reorder and slice rows based on env vars.
+
+    Env vars:
+      SFDUMP_FILES_ORDER         = 'asc' | 'desc' (by Id, default = no reordering)
+      SFDUMP_FILES_CHUNK_TOTAL   = integer > 0 (number of chunks)
+      SFDUMP_FILES_CHUNK_INDEX   = 1-based index of the chunk to process
+
+    When no env vars are set, rows are returned unchanged.
+    """
+    order = os.getenv("SFDUMP_FILES_ORDER", "").strip().lower()
+    if order in {"asc", "desc"}:
+        reverse = order == "desc"
+        try:
+            rows = sorted(rows, key=lambda r: r.get("Id"), reverse=reverse)
+            _logger.info(
+                "Applying %s ordering to %s rows for %s",
+                order,
+                len(rows),
+                kind,
+            )
+        except Exception as e:  # pragma: no cover
+            _logger.warning("Failed to apply %s ordering for %s: %s", order, kind, e)
+
+    chunk_total_raw = os.getenv("SFDUMP_FILES_CHUNK_TOTAL", "").strip()
+    chunk_index_raw = os.getenv("SFDUMP_FILES_CHUNK_INDEX", "").strip()
+
+    if not chunk_total_raw:
+        return rows  # no chunking requested
+
+    try:
+        chunk_total = int(chunk_total_raw)
+        chunk_index = int(chunk_index_raw or "1")
+    except ValueError:
+        _logger.warning(
+            "Invalid chunk env values: SFDUMP_FILES_CHUNK_TOTAL=%r "
+            "SFDUMP_FILES_CHUNK_INDEX=%r; ignoring chunking",
+            chunk_total_raw,
+            chunk_index_raw,
+        )
+        return rows
+
+    if chunk_total <= 0:
+        return rows
+
+    if not (1 <= chunk_index <= chunk_total):
+        _logger.warning(
+            "Chunk index %d out of range 1..%d for %s; ignoring chunking",
+            chunk_index,
+            chunk_total,
+            kind,
+        )
+        return rows
+
+    n = len(rows)
+    if n == 0:
+        return rows
+
+    # ceil division
+    chunk_size = (n + chunk_total - 1) // chunk_total
+    start = (chunk_index - 1) * chunk_size
+    end = min(start + chunk_size, n)
+
+    if start >= n:
+        _logger.warning(
+            "Chunk %d/%d for %s is empty (start=%d >= total_rows=%d); " "no rows will be processed",
+            chunk_index,
+            chunk_total,
+            kind,
+            start,
+            n,
+        )
+        return []
+
+    _logger.info(
+        "Applying chunking for %s: chunk %d/%d, total_rows=%d, " "chunk_size=%d, start=%d, end=%d",
+        kind,
+        chunk_index,
+        chunk_total,
+        n,
+        chunk_size,
+        start,
+        end,
+    )
+    return rows[start:end]
+
+
 def _safe_target(files_root: str, suggested_name: str) -> str:
     safe = sanitize_filename(suggested_name) or "file"
     # shard into subdirs to avoid huge single directories
@@ -45,6 +132,7 @@ def dump_content_versions(
     _logger.info("dump_content_versions SOQL: %s", soql)
 
     rows = list(api.query_all_iter(soql))
+    rows = _order_and_chunk_rows(rows, kind="content_version")
     meta_rows: List[dict] = []
     total_bytes = 0
 
@@ -210,6 +298,7 @@ def dump_attachments(
         soql += f" WHERE {where}"
 
     rows = list(api.query_all_iter(soql))
+    rows = _order_and_chunk_rows(rows, kind="attachment")
     meta_rows: List[dict] = []
     total_bytes = 0
 
