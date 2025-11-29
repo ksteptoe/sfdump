@@ -11,6 +11,7 @@ from click import Command
 from sfdump.sf_auth import get_salesforce_token, run_salesforce_query
 
 from . import __version__
+from .command_analyse_missing import analyse_missing_cmd
 from .command_audit_missing_files import audit_missing_files_cmd
 
 # Command Files
@@ -19,6 +20,9 @@ from .command_docs_index import docs_index_cmd
 from .command_files import files_cmd
 from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
+from .command_report_missing import report_missing_cmd
+from .command_retry_missing import retry_missing_cmd
+from .command_verify import verify_files_cmd
 from .command_viewer import viewer_cmd
 from .logging_config import configure_logging
 
@@ -99,3 +103,7 @@ cli.add_command(cast(Command, manifest_cmd))
 cli.add_command(cast(Command, docs_index_cmd))
 cli.add_command(cast(Command, viewer_cmd))
 cli.add_command(cast(Command, audit_missing_files_cmd))
+cli.add_command(cast(Command, verify_files_cmd))
+cli.add_command(cast(Command, retry_missing_cmd))
+cli.add_command(cast(Command, analyse_missing_cmd))
+cli.add_command(cast(Command, report_missing_cmd))

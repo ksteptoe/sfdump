@@ -62,3 +62,8 @@ Both are linked in the **Contents** tree above.
    :caption: Internal – Finance Only
 
    Finance User Guide <finance_user_guide>
+
+.. toctree::
+   :maxdepth: 2
+
+   sfdump_missing_report
