@@ -22,11 +22,17 @@ _logger = logging.getLogger(__name__)
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
     help="Path to the export directory produced by 'sfdump files'.",
 )
-def verify_files_cmd(export_dir: str) -> None:
+@click.option("-v", "--verbose", count=True, help="Increase verbosity (-v, -vv).")
+def verify_files_cmd(export_dir: str, verbose: int) -> None:
     """
     Verify that all exported Attachment and ContentVersion files exist,
     are non-zero, and match their SHA256 checksums.
     """
+    if verbose >= 2:
+        logging.getLogger().setLevel(logging.DEBUG)
+    elif verbose == 1:
+        logging.getLogger().setLevel(logging.INFO)
+
     click.echo(f"Verifying export under: {export_dir}")
 
     links_dir = os.path.join(export_dir, "links")
