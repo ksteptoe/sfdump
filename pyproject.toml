@@ -35,7 +35,12 @@ dev = [
     "build>=1.2",
     "twine>=5",
     "setuptools_scm>=8.0",
-    "myst-parser",
+
+    # Documentation stack
+    "sphinx>=8",
+    "myst-parser>=2",
+    "furo>=2024.1.29",
+    "linkify-it-py>=2.0",
 ]
 
 [project.urls]
