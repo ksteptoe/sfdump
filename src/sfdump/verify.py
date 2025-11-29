@@ -1,0 +1,135 @@
+"""
+Verification helpers for exported files.
+"""
+
+import csv
+import hashlib
+import logging
+import os
+from typing import Dict, List, Tuple
+
+_logger = logging.getLogger(__name__)
+
+
+def _sha256_of_file(path: str) -> str:
+    """Compute SHA256 of a file with buffered reading."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _load_csv(path: str) -> List[Dict[str, str]]:
+    """Load CSV into a list of dicts."""
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
+
+
+def _write_csv(path: str, rows: List[dict], fieldnames: List[str]) -> None:
+    """Write rows to CSV."""
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in rows:
+            writer.writerow(r)
+
+
+def _verify_rows(rows: List[dict], export_root: str) -> Tuple[List[dict], List[dict]]:
+    """
+    Given metadata rows (each with 'path' and 'sha256'), check for:
+      - Missing files
+      - Corrupt files (SHA mismatch)
+    Returns (missing_rows, corrupt_rows)
+    """
+    missing = []
+    corrupt = []
+
+    for r in rows:
+        rel = r.get("path") or ""
+        sha_expected = (r.get("sha256") or "").strip().lower()
+
+        if not rel:
+            r["verify_error"] = "missing-path-field"
+            missing.append(r)
+            continue
+
+        abs_path = os.path.join(export_root, rel)
+        if not os.path.exists(abs_path):
+            r["verify_error"] = "file-not-found"
+            missing.append(r)
+            continue
+
+        if os.path.getsize(abs_path) == 0:
+            r["verify_error"] = "zero-size-file"
+            missing.append(r)
+            continue
+
+        # SHA256 check if present
+        if sha_expected:
+            try:
+                sha_actual = _sha256_of_file(abs_path)
+                if sha_actual.lower() != sha_expected:
+                    r["sha256_actual"] = sha_actual
+                    r["verify_error"] = "sha256-mismatch"
+                    corrupt.append(r)
+            except Exception as e:
+                r["verify_error"] = f"sha256-error: {e}"
+                corrupt.append(r)
+        else:
+            # No sha256 in metadata → treat as missing integrity data
+            r["verify_error"] = "sha256-missing"
+            corrupt.append(r)
+
+    return missing, corrupt
+
+
+def verify_attachments(meta_csv: str, export_root: str) -> None:
+    """Verify exported legacy Attachment binaries."""
+    rows = _load_csv(meta_csv)
+    missing, corrupt = _verify_rows(rows, export_root)
+
+    links_dir = os.path.dirname(meta_csv)
+
+    missing_csv = os.path.join(links_dir, "attachments_missing.csv")
+    corrupt_csv = os.path.join(links_dir, "attachments_corrupt.csv")
+
+    if missing:
+        _write_csv(missing_csv, missing, sorted(missing[0].keys()))
+        _logger.warning("Attachment verification: %d missing files → %s", len(missing), missing_csv)
+    else:
+        _logger.info("Attachment verification: no missing files.")
+
+    if corrupt:
+        _write_csv(corrupt_csv, corrupt, sorted(corrupt[0].keys()))
+        _logger.warning("Attachment verification: %d corrupt files → %s", len(corrupt), corrupt_csv)
+    else:
+        _logger.info("Attachment verification: no corrupt files.")
+
+
+def verify_content_versions(meta_csv: str, export_root: str) -> None:
+    """Verify exported ContentVersion binaries."""
+    rows = _load_csv(meta_csv)
+    missing, corrupt = _verify_rows(rows, export_root)
+
+    links_dir = os.path.dirname(meta_csv)
+
+    missing_csv = os.path.join(links_dir, "content_versions_missing.csv")
+    corrupt_csv = os.path.join(links_dir, "content_versions_corrupt.csv")
+
+    if missing:
+        _write_csv(missing_csv, missing, sorted(missing[0].keys()))
+        _logger.warning(
+            "ContentVersion verification: %d missing files → %s", len(missing), missing_csv
+        )
+    else:
+        _logger.info("ContentVersion verification: no missing files.")
+
+    if corrupt:
+        _write_csv(corrupt_csv, corrupt, sorted(corrupt[0].keys()))
+        _logger.warning(
+            "ContentVersion verification: %d corrupt files → %s", len(corrupt), corrupt_csv
+        )
+    else:
+        _logger.info("ContentVersion verification: no corrupt files.")
