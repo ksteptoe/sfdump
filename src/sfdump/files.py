@@ -30,13 +30,14 @@ def dump_content_versions(
     files_root = os.path.join(out_dir, "files")
     ensure_dir(files_root)
 
-    # Only latest by default; allow extra filtering
     soql = (
         "SELECT Id, ContentDocumentId, Title, FileType, ContentSize, VersionNumber "
-        "FROM ContentVersion WHERE IsLatest = true"
+        "FROM ContentVersion"
     )
     if where:
-        soql += f" AND ({where})"
+        soql += f" WHERE ({where})"
+
+    _logger.info("dump_content_versions SOQL: %s", soql)
 
     rows = list(api.query_all_iter(soql))
     meta_rows: List[dict] = []
