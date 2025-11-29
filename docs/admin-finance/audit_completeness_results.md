@@ -4,10 +4,10 @@
 
 ## Summary Statistics
 
-```{include} ../../_generated/audit/summary_stats.md
+```{include} ../_generated/audit/summary_stats.md
 ```
 
 ## Missing File Analysis
 
-```{include} ../../_generated/audit/missing_file_analysis.md
+```{include} ../_generated/audit/missing_file_analysis.md
 ```
