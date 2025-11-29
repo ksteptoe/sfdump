@@ -230,6 +230,22 @@ def dump_content_versions(
     else:
         open(meta_csv, "w").close()
 
+    # --- New: Write dedicated errors CSV for failed downloads ---
+    errors_rows = [r for r in meta_rows if r.get("download_error")]
+    errors_csv = None
+
+    if errors_rows:
+        errors_csv = os.path.join(links_dir, "content_versions_errors.csv")
+        error_fieldnames = sorted({k for r in errors_rows for k in r.keys()})
+        write_csv(errors_csv, errors_rows, error_fieldnames)
+        _logger.info(
+            "dump_content_versions: wrote %d error rows to %s",
+            len(errors_rows),
+            errors_csv,
+        )
+    else:
+        _logger.info("dump_content_versions: no download errors recorded")
+
     cdl_csv = os.path.join(links_dir, "content_document_links.csv")
     if cdl_rows:
         write_csv(
@@ -268,6 +284,7 @@ def dump_content_versions(
         "kind": "content_version",
         "meta_csv": meta_csv,
         "links_csv": cdl_csv,
+        "errors_csv": errors_csv,  # <-- added
         "count": discovered_count,
         "bytes": total_bytes,
         "root": files_root,
@@ -369,6 +386,22 @@ def dump_attachments(
     else:
         open(meta_csv, "w").close()
 
+    # --- New: Write dedicated errors CSV for failed downloads ---
+    errors_rows = [r for r in meta_rows if r.get("download_error")]
+    errors_csv = None
+
+    if errors_rows:
+        errors_csv = os.path.join(links_dir, "attachments_errors.csv")
+        error_fieldnames = sorted({k for r in errors_rows for k in r.keys()})
+        write_csv(errors_csv, errors_rows, error_fieldnames)
+        _logger.info(
+            "dump_attachments: wrote %d error rows to %s",
+            len(errors_rows),
+            errors_csv,
+        )
+    else:
+        _logger.info("dump_attachments: no download errors recorded")
+
     discovered_count = len(meta_rows)
     attempted_downloads = len(futs)
     if discovered_count != discovered_initial:
@@ -396,6 +429,7 @@ def dump_attachments(
         "kind": "attachment",
         "meta_csv": meta_csv,
         "links_csv": None,
+        "errors_csv": errors_csv,  # <-- added
         "count": discovered_count,
         "bytes": total_bytes,
         "root": files_root,
