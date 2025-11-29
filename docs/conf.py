@@ -69,7 +69,6 @@ latex_elements = {
     "papersize": "a4paper",
     # Readable default font size
     "pointsize": "11pt",
-    "output_mode": "pdf",
     # --------------------------------------------------------
     # Enhanced Title Page + Watermark + Styles
     # --------------------------------------------------------
@@ -177,6 +176,19 @@ latex_elements = {
 # Add logo to the title page (if exists)
 if html_logo:
     latex_logo = html_logo
+
+# ------------------------------------------------------------
+# Required for LaTeX PDF generation (Sphinx)
+# ------------------------------------------------------------
+latex_documents = [
+    (
+        "index",  # root document
+        "sfdump.tex",  # output .tex filename
+        "sfdump Documentation",  # title
+        author,  # author
+        "manual",  # documentclass
+    )
+]
 
 # ------------------------------------------------------------
 # End of Configuration
