@@ -12,7 +12,7 @@ finance_user_guide
 audit_completeness
 internal_vs_redacted_reports
 retention_recommendations
-
 audit_results_template
 audit_completeness_results
+cfo_report
 ```
