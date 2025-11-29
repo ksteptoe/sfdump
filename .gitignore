@@ -68,5 +68,6 @@ src/sfdump/_version.py
 /server.key
 export-*/*
 
-./exports/
-./exports
+/exports/*
+
+/content_versions_debug.csv
