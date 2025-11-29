@@ -26,7 +26,12 @@ def dump_content_versions(
     where: Optional[str] = None,
     max_workers: int = 8,
 ) -> Dict[str, int | str | None]:
-    """Download latest ContentVersion binaries + write metadata and links CSVs."""
+    """Download latest ContentVersion binaries + write metadata and links CSVs.
+
+    Now resume-aware:
+    - If a target file already exists and is non-zero length, we skip the API call
+      and just record its path + sha256.
+    """
     files_root = os.path.join(out_dir, "files")
     ensure_dir(files_root)
 
@@ -43,13 +48,16 @@ def dump_content_versions(
     meta_rows: List[dict] = []
     total_bytes = 0
 
-    # Log how many ContentVersions we discovered up-front
     discovered_initial = len(rows)
     _logger.info(
         "dump_content_versions: discovered %d ContentVersion rows (where=%r)",
         discovered_initial,
         where,
     )
+
+    skipped_existing = 0
+    downloaded_count = 0
+    error_count = 0
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {}
@@ -58,27 +66,52 @@ def dump_content_versions(
             ext = f".{(r.get('FileType') or '').lower()}" if r.get("FileType") else ""
             fname = f"{r['ContentDocumentId']}_{sanitize_filename(r.get('Title') or 'file')}{ext}"
             target = _safe_target(files_root, fname)
-            rel = f"/services/data/{api.api_version}/sobjects/ContentVersion/{r['Id']}/VersionData"
-            futs[ex.submit(api.download_path_to_file, rel, target)] = (r, target)
 
-        for fut in tqdm(as_completed(futs), total=len(futs), desc="Files (ContentVersion)"):
-            r, target = futs[fut]
-            try:
-                size = fut.result()
+            # Resume-awareness: skip files that already exist and are non-empty
+            if os.path.exists(target) and os.path.getsize(target) > 0:
                 r["path"] = os.path.relpath(target, out_dir)
                 r["sha256"] = sha256_of_file(target)
-                total_bytes += size
-            except Exception as e:  # keep going; record failure
-                r["path"] = ""
-                r["sha256"] = ""
-                r["download_error"] = str(e)
-                _logger.warning(
-                    "dump_content_versions: failed to download File %s (%s): %s",
-                    r.get("Id") or r.get("ContentDocumentId"),
-                    r.get("Title") or r.get("file_name") or r.get("Name"),
-                    e,
+                skipped_existing += 1
+                meta_rows.append(r)
+                _logger.debug(
+                    "dump_content_versions: skipping existing file for ContentDocumentId=%s at %s",
+                    r.get("ContentDocumentId") or r.get("Id"),
+                    target,
                 )
-            meta_rows.append(r)
+                continue
+
+            rel = (
+                f"/services/data/{api.api_version}/sobjects/"
+                f"ContentVersion/{r['Id']}/VersionData"
+            )
+            futs[ex.submit(api.download_path_to_file, rel, target)] = (r, target)
+
+        # Only iterate futures for files that actually need downloading
+        if futs:
+            for fut in tqdm(
+                as_completed(futs),
+                total=len(futs),
+                desc="Files (ContentVersion)",
+            ):
+                r, target = futs[fut]
+                try:
+                    size = fut.result()
+                    r["path"] = os.path.relpath(target, out_dir)
+                    r["sha256"] = sha256_of_file(target)
+                    total_bytes += size
+                    downloaded_count += 1
+                except Exception as e:  # keep going; record failure
+                    r["path"] = ""
+                    r["sha256"] = ""
+                    r["download_error"] = str(e)
+                    error_count += 1
+                    _logger.warning(
+                        "dump_content_versions: failed to download File %s (%s): %s",
+                        r.get("Id") or r.get("ContentDocumentId"),
+                        r.get("Title") or r.get("file_name") or r.get("Name"),
+                        e,
+                    )
+                meta_rows.append(r)
 
     # Links (which record a file is attached to)
     doc_ids = {r.get("ContentDocumentId") for r in meta_rows if r.get("ContentDocumentId")}
@@ -115,36 +148,42 @@ def dump_content_versions(
     cdl_csv = os.path.join(links_dir, "content_document_links.csv")
     if cdl_rows:
         write_csv(
-            cdl_csv, cdl_rows, ["ContentDocumentId", "LinkedEntityId", "ShareType", "Visibility"]
+            cdl_csv,
+            cdl_rows,
+            ["ContentDocumentId", "LinkedEntityId", "ShareType", "Visibility"],
         )
     else:
         open(cdl_csv, "w").close()
 
-    # Derive final counts from what we actually wrote
     discovered_count = len(meta_rows)
-    downloaded_count = sum(1 for r in meta_rows if r.get("path"))
-    error_count = sum(1 for r in meta_rows if r.get("download_error"))
+    # Futures represent files where an API call was attempted this run
+    attempted_downloads = len(futs)
+    if discovered_count != discovered_initial:
+        _logger.warning(
+            "dump_content_versions: meta_rows count (%d) differs from discovered_initial (%d)",
+            discovered_count,
+            discovered_initial,
+        )
 
     _logger.info(
-        "dump_content_versions: discovered=%d, downloaded=%d, errors=%d, bytes=%d, meta_csv=%s",
+        (
+            "dump_content_versions: discovered=%d, attempted_downloads=%d, "
+            "skipped_existing=%d, downloaded=%d, errors=%d, bytes=%d, meta_csv=%s"
+        ),
         discovered_count,
+        attempted_downloads,
+        skipped_existing,
         downloaded_count,
         error_count,
         total_bytes,
         meta_csv,
     )
-    if downloaded_count + error_count != discovered_count:
-        _logger.warning(
-            "dump_content_versions: mismatch in counts (discovered=%d, downloaded+errors=%d)",
-            discovered_count,
-            downloaded_count + error_count,
-        )
 
     return {
         "kind": "content_version",
         "meta_csv": meta_csv,
         "links_csv": cdl_csv,
-        "count": len(meta_rows),
+        "count": discovered_count,
         "bytes": total_bytes,
         "root": files_root,
     }
@@ -157,7 +196,12 @@ def dump_attachments(
     where: Optional[str] = None,
     max_workers: int = 8,
 ) -> Dict[str, int | str | None]:
-    """Download legacy Attachment binaries + write metadata CSV."""
+    """Download legacy Attachment binaries + write metadata CSV.
+
+    Now resume-aware:
+    - If a target file already exists and is non-zero length, we skip the API call
+      and just record its path + sha256.
+    """
     files_root = os.path.join(out_dir, "files_legacy")
     ensure_dir(files_root)
 
@@ -169,7 +213,6 @@ def dump_attachments(
     meta_rows: List[dict] = []
     total_bytes = 0
 
-    # Discovery logging
     discovered_initial = len(rows)
     _logger.info(
         "dump_attachments: discovered %d Attachment rows (where=%r)",
@@ -177,33 +220,59 @@ def dump_attachments(
         where,
     )
 
+    skipped_existing = 0
+    downloaded_count = 0
+    error_count = 0
+
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {}
         for r in rows:
             r.pop("attributes", None)
             fname = f"{r['Id']}_{sanitize_filename(r.get('Name') or 'attachment')}"
             target = _safe_target(files_root, fname)
+
+            # Resume-awareness: skip files that already exist and are non-empty
+            if os.path.exists(target) and os.path.getsize(target) > 0:
+                r["path"] = os.path.relpath(target, out_dir)
+                r["sha256"] = sha256_of_file(target)
+                skipped_existing += 1
+                meta_rows.append(r)
+                _logger.debug(
+                    "dump_attachments: skipping existing Attachment %s at %s",
+                    r.get("Id"),
+                    target,
+                )
+                continue
+
             rel = f"/services/data/{api.api_version}/sobjects/Attachment/{r['Id']}/Body"
             futs[ex.submit(api.download_path_to_file, rel, target)] = (r, target)
 
-        for fut in tqdm(as_completed(futs), total=len(futs), desc="Files (Attachment)"):
-            r, target = futs[fut]
-            try:
-                size = fut.result()
-                r["path"] = os.path.relpath(target, out_dir)
-                r["sha256"] = sha256_of_file(target)
-                total_bytes += size
-            except Exception as e:
-                r["path"] = ""
-                r["sha256"] = ""
-                r["download_error"] = str(e)
-                _logger.warning(
-                    "dump_attachments: failed to download Attachment %s (%s): %s",
-                    r.get("Id"),
-                    r.get("Name"),
-                    e,
-                )
-            meta_rows.append(r)
+        # Only iterate futures for files that actually need downloading
+        if futs:
+            for fut in tqdm(
+                as_completed(futs),
+                total=len(futs),
+                desc="Files (Attachment)",
+            ):
+                r, target = futs[fut]
+                try:
+                    size = fut.result()
+                    r["path"] = os.path.relpath(target, out_dir)
+                    r["sha256"] = sha256_of_file(target)
+                    total_bytes += size
+                    downloaded_count += 1
+                except Exception as e:
+                    r["path"] = ""
+                    r["sha256"] = ""
+                    r["download_error"] = str(e)
+                    error_count += 1
+                    _logger.warning(
+                        "dump_attachments: failed to download Attachment %s (%s): %s",
+                        r.get("Id"),
+                        r.get("Name"),
+                        e,
+                    )
+                meta_rows.append(r)
 
     links_dir = os.path.join(out_dir, "links")
     ensure_dir(links_dir)
@@ -214,31 +283,34 @@ def dump_attachments(
     else:
         open(meta_csv, "w").close()
 
-    # Derive final counts from meta_rows
     discovered_count = len(meta_rows)
-    downloaded_count = sum(1 for r in meta_rows if r.get("path"))
-    error_count = sum(1 for r in meta_rows if r.get("download_error"))
+    attempted_downloads = len(futs)
+    if discovered_count != discovered_initial:
+        _logger.warning(
+            "dump_attachments: meta_rows count (%d) differs from discovered_initial (%d)",
+            discovered_count,
+            discovered_initial,
+        )
 
     _logger.info(
-        "dump_attachments: discovered=%d, downloaded=%d, errors=%d, bytes=%d, meta_csv=%s",
+        (
+            "dump_attachments: discovered=%d, attempted_downloads=%d, "
+            "skipped_existing=%d, downloaded=%d, errors=%d, bytes=%d, meta_csv=%s"
+        ),
         discovered_count,
+        attempted_downloads,
+        skipped_existing,
         downloaded_count,
         error_count,
         total_bytes,
         meta_csv,
     )
-    if downloaded_count + error_count != discovered_count:
-        _logger.warning(
-            "dump_attachments: mismatch in counts (discovered=%d, downloaded+errors=%d)",
-            discovered_count,
-            downloaded_count + error_count,
-        )
 
     return {
         "kind": "attachment",
         "meta_csv": meta_csv,
         "links_csv": None,
-        "count": len(meta_rows),
+        "count": discovered_count,
         "bytes": total_bytes,
         "root": files_root,
     }
