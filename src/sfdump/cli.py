@@ -20,6 +20,7 @@ from .command_docs_index import docs_index_cmd
 from .command_files import files_cmd
 from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
+from .command_report_missing import report_missing_cmd
 from .command_retry_missing import retry_missing_cmd
 from .command_verify import verify_files_cmd
 from .command_viewer import viewer_cmd
@@ -105,3 +106,4 @@ cli.add_command(cast(Command, audit_missing_files_cmd))
 cli.add_command(cast(Command, verify_files_cmd))
 cli.add_command(cast(Command, retry_missing_cmd))
 cli.add_command(cast(Command, analyse_missing_cmd))
+cli.add_command(cast(Command, report_missing_cmd))
