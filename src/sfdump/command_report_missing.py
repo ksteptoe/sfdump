@@ -8,7 +8,7 @@ import os
 
 import click
 
-from .command_analyze_missing import analyze_missing_cmd as _analyze_cmd
+from .command_analyse_missing import analyse_missing_cmd as _analyse_cmd
 from .command_retry_missing import retry_missing_cmd as _retry_cmd
 from .command_verify import verify_files_cmd as _verify_cmd
 from .report import generate_missing_report
@@ -24,9 +24,21 @@ _logger = logging.getLogger(__name__)
     help="Export directory produced by `sfdump files`.",
 )
 @click.option("--pdf", is_flag=True, help="Also generate PDF output.")
-@click.option("--out", type=str, default=None, help="Override output file basename.")
+@click.option(
+    "--out",
+    type=str,
+    default=None,
+    help="Base path (with or without extension) for report files. "
+    "If omitted, reports are written under links/ with a timestamped name.",
+)
+@click.option(
+    "--logo",
+    type=str,
+    default=None,
+    help="Optional logo image path to embed in the report.",
+)
 @click.option("-v", "--verbose", count=True, help="Increase verbosity (-v, -vv).")
-def report_missing_cmd(export_dir: str, pdf: bool, out: str, verbose: int) -> None:
+def report_missing_cmd(export_dir: str, pdf: bool, out: str, logo: str, verbose: int) -> None:
     """
     Generate a unified missing-file report in Markdown, and optionally PDF.
     """
@@ -58,9 +70,9 @@ def report_missing_cmd(export_dir: str, pdf: bool, out: str, verbose: int) -> No
     else:
         click.echo("No missing CSVs detected; skipping retry-missing.")
 
-    # Step 3: analyze-missing
-    click.echo("Running analyze-missing...")
-    ctx.invoke(_analyze_cmd, export_dir=export_dir, verbose=verbose)
+    # Step 3: analyse-missing
+    click.echo("Running analyse-missing...")
+    ctx.invoke(_analyse_cmd, export_dir=export_dir, verbose=verbose)
 
     # Step 4: Build report
     click.echo("Building Markdown report...")
@@ -68,8 +80,15 @@ def report_missing_cmd(export_dir: str, pdf: bool, out: str, verbose: int) -> No
         export_dir=export_dir,
         pdf=pdf,
         out_basename=out,
+        logo_path=logo,
     )
 
     click.echo(f"Markdown report written to: {md_path}")
-    if pdf_path:
-        click.echo(f"PDF report written to: {pdf_path}")
+    if pdf:
+        if pdf_path:
+            click.echo(f"PDF report written to: {pdf_path}")
+        else:
+            click.echo(
+                "PDF generation was requested but failed. "
+                "Ensure pandoc (and a LaTeX engine) are installed and on your PATH."
+            )

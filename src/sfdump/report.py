@@ -43,7 +43,12 @@ def _load_csv(path: str):
 # -------------------------
 
 
-def generate_missing_report(export_dir: str, pdf: bool, out_basename: str = None):
+def generate_missing_report(
+    export_dir: str,
+    pdf: bool,
+    out_basename: str = None,
+    logo_path: str = None,
+):
     """
     Build Markdown report and optionally PDF.
     Returns: (md_path, pdf_path or None)
@@ -51,37 +56,105 @@ def generate_missing_report(export_dir: str, pdf: bool, out_basename: str = None
 
     links = os.path.join(export_dir, "links")
 
-    # Input CSVs
+    # Core CSVs
+    attachments_meta = _load_csv(os.path.join(links, "attachments.csv"))
+    content_meta = _load_csv(os.path.join(links, "content_versions.csv"))
     attach_missing = _load_csv(os.path.join(links, "attachments_missing.csv"))
+    cv_missing = _load_csv(os.path.join(links, "content_versions_missing.csv"))
     retry_rows = _load_csv(os.path.join(links, "attachments_missing_retry.csv"))
     analysis = _load_csv(os.path.join(links, "missing_file_analysis.csv"))
-    cv_missing = _load_csv(os.path.join(links, "content_versions_missing.csv"))
 
-    # PDF path
+    total_attachments = len(attachments_meta)
+    total_cv = len(content_meta)
+    missing_attachments = len(attach_missing)
+    missing_cv = len(cv_missing)
+
+    recovered = sum(1 for r in retry_rows if r.get("retry_success") == "true")
+    permanent = sum(1 for r in retry_rows if r.get("retry_success") == "false")
+
+    exported_attachments = total_attachments - missing_attachments if total_attachments else 0
+    exported_cv = total_cv - missing_cv if total_cv else 0
+
+    def _pct(part, whole) -> str:
+        if not whole:
+            return "n/a"
+        return f"{(part / whole) * 100:.2f}%"
+
+    # Determine base path for outputs
     ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    basename = out_basename or f"missing_file_report-{ts}"
-    md_path = os.path.join(links, basename + ".md")
-    pdf_path = os.path.join(links, basename + ".pdf") if pdf else None
+    if out_basename:
+        base_path = out_basename
+        # If it's just a name (no directory), write under links/
+        if not os.path.isabs(base_path) and os.sep not in base_path and "/" not in base_path:
+            base_path = os.path.join(links, base_path)
+        # Strip any extension (so --out ./report.pdf works)
+        base_root, _ = os.path.splitext(base_path)
+    else:
+        base_root = os.path.join(links, f"missing_file_report-{ts}")
+
+    md_path = base_root + ".md"
+    pdf_path = base_root + ".pdf" if pdf else None
+
+    # -------------------------
+    # Auto-select default logo if none provided
+    # -------------------------
+    if not logo_path:
+        default_logo_dir = os.path.join(os.getcwd(), "src", "logos")
+        if os.path.isdir(default_logo_dir):
+            for fname in sorted(os.listdir(default_logo_dir)):
+                if fname.lower().endswith((".png", ".jpg", ".jpeg", ".svg")):
+                    logo_path = os.path.join(default_logo_dir, fname)
+                    _logger.info("Using default logo at %s", logo_path)
+                    break
+
+    # Try to infer Salesforce instance URL from analysis ParentRecordUrl
+    instance_url = "unknown"
+    if analysis:
+        url = (analysis[0].get("ParentRecordUrl") or "").strip()
+        if url.startswith("http"):
+            parts = url.split("/")
+            if len(parts) >= 3:
+                instance_url = "/".join(parts[:3])
+
+    # Try to get sfdump version if available
+    try:
+        from . import __version__ as sfdump_version  # type: ignore[attr-defined]
+    except Exception:
+        sfdump_version = "unknown"
 
     # -----------
-    # Build Markdown sections
+    # Build Markdown
     # -----------
 
     md = ""
+
+    # Optional logo
+    if logo_path:
+        md += f"![Logo]({logo_path})\n\n"
 
     md += _markdown_header("Salesforce File Export Integrity Report")
     md += f"Report generated: **{datetime.utcnow().isoformat()} UTC**\n\n"
 
     # Executive Summary
     md += _markdown_section("Executive Summary")
+    md += "- **Attachments**\n"
+    md += f"  - Total discovered: **{total_attachments}**\n"
+    md += f"  - Successfully exported: **{exported_attachments}** ({_pct(exported_attachments, total_attachments)})\n"
+    md += f"  - Missing or unrecoverable: **{missing_attachments}** ({_pct(missing_attachments, total_attachments)})\n\n"
+
+    md += "- **Content Versions**\n"
+    md += f"  - Total discovered: **{total_cv}**\n"
+    md += f"  - Successfully exported: **{exported_cv}** ({_pct(exported_cv, total_cv)})\n"
+    md += f"  - Missing or unrecoverable: **{missing_cv}** ({_pct(missing_cv, total_cv)})\n\n"
+
+    md += f"- Files recovered on retry: **{recovered}**\n"
+    md += f"- Files still failing after retry: **{permanent}**\n\n"
+
     md += (
-        f"- Total missing attachments: **{len(attach_missing)}**\n"
-        f"- Missing content versions: **{len(cv_missing)}**\n"
-        f"- Retry recovered files: **{sum(1 for r in retry_rows if r.get('retry_success') == 'true')}**\n"
-        f"- Permanent failures: **{sum(1 for r in retry_rows if r.get('retry_success') == 'false')}**\n"
-        "\n**Conclusion:** These files contain valid metadata but Salesforce returns "
-        "zero-byte bodies, indicating missing binary content in Salesforce's internal storage. "
-        "These cannot be recovered via API.\n\n"
+        "**Conclusion:** The vast majority of files were exported successfully. "
+        "The remaining missing files are cases where Salesforce returns a zero-byte body "
+        "despite valid metadata, which indicates that the binary content no longer exists "
+        "inside Salesforce and cannot be recovered via API or permissions changes.\n\n"
     )
 
     # Diagnostic Evidence
@@ -95,7 +168,7 @@ def generate_missing_report(export_dir: str, pdf: bool, out_basename: str = None
                     r.get("ParentId", ""),
                     r.get("Name", ""),
                     r.get("retry_status", ""),
-                    r.get("retry_error", "").replace("|", "/"),
+                    (r.get("retry_error", "") or "").replace("|", "/"),
                 ]
             )
         md += _markdown_table(
@@ -103,11 +176,28 @@ def generate_missing_report(export_dir: str, pdf: bool, out_basename: str = None
             table_rows,
         )
     else:
-        md += "No retry evidence available.\n"
+        md += "No retry evidence available (no missing attachments to retry).\n"
 
-    # Impact Analysis
+    # Impact on Parent Records
     md += _markdown_section("Impact on Parent Records")
-    if analysis and not (len(analysis) == 1 and "Message" in analysis[0]):
+    has_analysis = analysis and not (len(analysis) == 1 and "Message" in analysis[0])
+
+    if has_analysis:
+        # Summary by ParentObject
+        summary_by_obj = {}
+        for r in analysis:
+            obj = r.get("ParentObject", "") or "Unknown"
+            try:
+                cnt = int(r.get("MissingCount") or "0")
+            except ValueError:
+                cnt = 0
+            summary_by_obj[obj] = summary_by_obj.get(obj, 0) + cnt
+
+        md += "### Summary by Parent Object Type\n\n"
+        sum_rows = [[obj, str(cnt)] for obj, cnt in sorted(summary_by_obj.items())]
+        md += _markdown_table(["ParentObject", "TotalMissing"], sum_rows)
+
+        md += "### Detailed Impact by Parent Record\n\n"
         table_rows = []
         for r in analysis:
             table_rows.append(
@@ -124,19 +214,29 @@ def generate_missing_report(export_dir: str, pdf: bool, out_basename: str = None
             table_rows,
         )
     else:
-        md += "No impacted parent records.\n"
+        md += "No impacted parent records (no missing files detected).\n"
 
     # Recommended message
     md += _markdown_section("Recommended Message to Salesforce Support")
     md += (
-        "We have completed a full audit of all Salesforce attachments.\n"
-        "Salesforce returns 200 OK responses for several Attachment Body requests but the payload is zero bytes.\n"
-        "This indicates binary content has been lost on Salesforce servers. Metadata remains intact.\n"
-        "Please advise whether Salesforce can restore these from platform backups.\n\n"
+        "We have completed a full audit of all Salesforce attachments and content files.\n\n"
+        "Salesforce is returning HTTP 200 (OK) responses for some Attachment Body requests but the "
+        "payload is zero bytes. This indicates that the binary content for these attachments has "
+        "been lost on Salesforce servers while the metadata remains intact.\n\n"
+        "These files cannot be recovered via API, user permissions, or client-side tooling. "
+        "Please advise whether Salesforce can restore these Attachment binaries from platform backups.\n\n"
         "Affected Attachment Ids:\n\n"
     )
-    ids_inline = ", ".join(r.get("Id", "") for r in retry_rows)
+    ids_inline = ", ".join(r.get("Id", "") for r in retry_rows) or "None"
     md += ids_inline + "\n\n"
+
+    # About / configuration section
+    md += _markdown_section("Export Context and Tool Information")
+    md += f"- Export directory: `{export_dir}`\n"
+    md += f"- Links directory: `{links}`\n"
+    md += f"- Salesforce instance: `{instance_url}`\n"
+    md += f"- sfdump version: `{sfdump_version}`\n"
+    md += f"- Report timestamp (UTC): `{datetime.utcnow().isoformat()}`\n\n"
 
     # Write Markdown
     with open(md_path, "w", encoding="utf-8") as f:

@@ -71,3 +71,6 @@ export-*/*
 /exports/*
 
 /content_versions_debug.csv
+src/logos/*
+/logs/*
+/docs/sfdump_missing*.md
