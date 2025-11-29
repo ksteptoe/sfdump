@@ -427,4 +427,4 @@ def files_cmd(
         for r in results:
             click.echo("  " + line(r))
         click.echo(f"  Total: {total_files} files, {total_human} ({total_bytes:,.0f} bytes)")
-        click.echo(f"  Index CSVs: {os.path.join(out_dir, 'links')}")
+        click.echo(f"  Metadata CSVs are under: {os.path.join(out_dir, 'links')}")
