@@ -1,8 +1,3 @@
-"""
-CLI command to generate a unified Markdown (and optional PDF) report
-summarising missing, corrupted, or irretrievable Salesforce attachments.
-"""
-
 import logging
 import os
 
@@ -37,8 +32,15 @@ _logger = logging.getLogger(__name__)
     default=None,
     help="Optional logo image path to embed in the report.",
 )
+@click.option(
+    "--redact",
+    is_flag=True,
+    help="Redact record IDs, names and URLs to make the report safe for sharing/commit.",
+)
 @click.option("-v", "--verbose", count=True, help="Increase verbosity (-v, -vv).")
-def report_missing_cmd(export_dir: str, pdf: bool, out: str, logo: str, verbose: int) -> None:
+def report_missing_cmd(
+    export_dir: str, pdf: bool, out: str, logo: str, redact: bool, verbose: int
+) -> None:
     """
     Generate a unified missing-file report in Markdown, and optionally PDF.
     """
@@ -81,6 +83,7 @@ def report_missing_cmd(export_dir: str, pdf: bool, out: str, logo: str, verbose:
         pdf=pdf,
         out_basename=out,
         logo_path=logo,
+        redact=redact,
     )
 
     click.echo(f"Markdown report written to: {md_path}")
