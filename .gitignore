@@ -85,3 +85,5 @@ private_reports
 *.docx
 sfdump_missing_report*.md
 sfdump_missing_report*.pdf
+
+docs/_generated/
