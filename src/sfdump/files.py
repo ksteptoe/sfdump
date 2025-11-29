@@ -77,7 +77,7 @@ def _order_and_chunk_rows(rows: List[dict], *, kind: str) -> List[dict]:
 
     if start >= n:
         _logger.warning(
-            "Chunk %d/%d for %s is empty (start=%d >= total_rows=%d); " "no rows will be processed",
+            "Chunk %d/%d for %s is empty (start=%d >= total_rows=%d); no rows will be processed",
             chunk_index,
             chunk_total,
             kind,
@@ -87,7 +87,7 @@ def _order_and_chunk_rows(rows: List[dict], *, kind: str) -> List[dict]:
         return []
 
     _logger.info(
-        "Applying chunking for %s: chunk %d/%d, total_rows=%d, " "chunk_size=%d, start=%d, end=%d",
+        "Applying chunking for %s: chunk %d/%d, total_rows=%d, chunk_size=%d, start=%d, end=%d",
         kind,
         chunk_index,
         chunk_total,
@@ -168,10 +168,7 @@ def dump_content_versions(
                 )
                 continue
 
-            rel = (
-                f"/services/data/{api.api_version}/sobjects/"
-                f"ContentVersion/{r['Id']}/VersionData"
-            )
+            rel = f"/services/data/{api.api_version}/sobjects/ContentVersion/{r['Id']}/VersionData"
             futs[ex.submit(api.download_path_to_file, rel, target)] = (r, target)
 
         # Only iterate futures for files that actually need downloading
