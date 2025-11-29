@@ -11,6 +11,7 @@ from click import Command
 from sfdump.sf_auth import get_salesforce_token, run_salesforce_query
 
 from . import __version__
+from .command_audit_missing_files import audit_missing_files_cmd
 
 # Command Files
 from .command_csv import csv_cmd
@@ -97,3 +98,4 @@ cli.add_command(cast(Command, files_cmd))
 cli.add_command(cast(Command, manifest_cmd))
 cli.add_command(cast(Command, docs_index_cmd))
 cli.add_command(cast(Command, viewer_cmd))
+cli.add_command(cast(Command, audit_missing_files_cmd))
