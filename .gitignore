@@ -9,6 +9,7 @@
 *.log
 *.pot
 __pycache__/*
+tests/unit/__pycache__/*
 .cache/*
 .*.swp
 */.ipynb_checkpoints/*
