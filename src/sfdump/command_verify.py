@@ -38,8 +38,7 @@ def verify_files_cmd(export_dir: str, verbose: int) -> None:
     links_dir = os.path.join(export_dir, "links")
     if not os.path.isdir(links_dir):
         raise click.ClickException(
-            f"links/ directory not found under {export_dir}. "
-            "Did you pass the correct --export-dir?"
+            f"links/ directory not found under {export_dir}. Did you pass the correct --export-dir?"
         )
 
     attach_meta = os.path.join(links_dir, "attachments.csv")

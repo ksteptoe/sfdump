@@ -39,8 +39,7 @@ def analyse_missing_cmd(export_dir: str, verbose: int) -> None:
     links_dir = os.path.join(export_dir, "links")
     if not os.path.isdir(links_dir):
         raise click.ClickException(
-            f"links/ directory not found in {export_dir}. "
-            "Did you provide the correct export root?"
+            f"links/ directory not found in {export_dir}. Did you provide the correct export root?"
         )
 
     # Prepare Salesforce API for optional parent lookups
