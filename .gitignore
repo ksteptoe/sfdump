@@ -73,4 +73,14 @@ export-*/*
 /content_versions_debug.csv
 src/logos/*
 /logs/*
-/docs/sfdump_missing*.md
+
+docs/sfdump_missing_report*.md
+docs/sfdump_missing_report*.pdf
+docs/*audit-*.md
+docs/*audit-*.pdf
+
+private_reports
+*.pdf
+*.docx
+sfdump_missing_report*.md
+sfdump_missing_report*.pdf

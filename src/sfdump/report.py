@@ -9,7 +9,6 @@ from datetime import datetime
 
 _logger = logging.getLogger(__name__)
 
-
 # -------------------------
 # Markdown template builder
 # -------------------------
@@ -38,6 +37,28 @@ def _load_csv(path: str):
         return list(csv.DictReader(f))
 
 
+def _make_redaction_maps(retry_rows, analysis):
+    """Build stable pseudonym maps for attachments and parents."""
+    att_map: dict[str, str] = {}
+    parent_map: dict[str, str] = {}
+
+    # Attachments: ATTACHMENT_1, ATTACHMENT_2, ...
+    for idx, r in enumerate(retry_rows, start=1):
+        real_id = r.get("Id") or f"ATT-{idx}"
+        if real_id not in att_map:
+            att_map[real_id] = f"ATTACHMENT_{idx}"
+
+    # Parents: PARENT_1, PARENT_2, ...
+    i = 1
+    for r in analysis:
+        pid = r.get("ParentId") or ""
+        if pid and pid not in parent_map:
+            parent_map[pid] = f"PARENT_{i}"
+            i += 1
+
+    return att_map, parent_map
+
+
 # -------------------------
 # Main report builder
 # -------------------------
@@ -48,6 +69,7 @@ def generate_missing_report(
     pdf: bool,
     out_basename: str = None,
     logo_path: str = None,
+    redact: bool = False,
 ):
     """
     Build Markdown report and optionally PDF.
@@ -122,15 +144,19 @@ def generate_missing_report(
     except Exception:
         sfdump_version = "unknown"
 
+    # Redaction maps
+    att_map, parent_map = _make_redaction_maps(retry_rows, analysis) if redact else ({}, {})
+
     # -----------
     # Build Markdown
     # -----------
 
     md = ""
 
-    # Optional logo
+    # Optional logo (use relative path from md file location if we have a logo)
     if logo_path:
-        md += f"![Logo]({logo_path})\n\n"
+        rel_logo = os.path.relpath(logo_path, os.path.dirname(md_path))
+        md += f"![Logo]({rel_logo})\n\n"
 
     md += _markdown_header("Salesforce File Export Integrity Report")
     md += f"Report generated: **{datetime.utcnow().isoformat()} UTC**\n\n"
@@ -157,34 +183,53 @@ def generate_missing_report(
         "inside Salesforce and cannot be recovered via API or permissions changes.\n\n"
     )
 
-    # Diagnostic Evidence
+    # -----------------------------
+    # Diagnostic Evidence (with redaction)
+    # -----------------------------
     md += _markdown_section("Diagnostic Evidence")
     if retry_rows:
         table_rows = []
         for r in retry_rows:
+            att_id = r.get("Id", "")
+            parent_id = r.get("ParentId", "")
+            name = r.get("Name", "")
+
+            if redact:
+                att_label = att_map.get(att_id, "ATTACHMENT")
+                parent_label = parent_map.get(parent_id, "PARENT")
+                display_att = att_label
+                display_parent = parent_label
+                display_name = "[REDACTED]"
+            else:
+                display_att = att_id
+                display_parent = parent_id
+                display_name = name
+
             table_rows.append(
                 [
-                    r.get("Id", ""),
-                    r.get("ParentId", ""),
-                    r.get("Name", ""),
+                    display_att,
+                    display_parent,
+                    display_name,
                     r.get("retry_status", ""),
                     (r.get("retry_error", "") or "").replace("|", "/"),
                 ]
             )
         md += _markdown_table(
-            ["Attachment Id", "ParentId", "Name", "Retry Status", "Error"],
+            ["Attachment", "Parent", "Name", "Retry Status", "Error"],
             table_rows,
         )
     else:
         md += "No retry evidence available (no missing attachments to retry).\n"
 
-    # Impact on Parent Records
+    # -----------------------------
+    # Impact on Parent Records (with redaction)
+    # -----------------------------
     md += _markdown_section("Impact on Parent Records")
     has_analysis = analysis and not (len(analysis) == 1 and "Message" in analysis[0])
 
     if has_analysis:
         # Summary by ParentObject
-        summary_by_obj = {}
+        summary_by_obj: dict[str, int] = {}
         for r in analysis:
             obj = r.get("ParentObject", "") or "Unknown"
             try:
@@ -200,13 +245,27 @@ def generate_missing_report(
         md += "### Detailed Impact by Parent Record\n\n"
         table_rows = []
         for r in analysis:
+            parent_id = r.get("ParentId", "")
+            parent_name = r.get("ParentName", "")
+            parent_url = r.get("ParentRecordUrl", "")
+
+            if redact:
+                parent_label = parent_map.get(parent_id, "PARENT")
+                display_id = parent_label
+                display_name = "[REDACTED]"
+                display_url = "[REDACTED]"
+            else:
+                display_id = parent_id
+                display_name = parent_name
+                display_url = parent_url
+
             table_rows.append(
                 [
                     r.get("ParentObject", ""),
-                    r.get("ParentId", ""),
-                    r.get("ParentName", ""),
+                    display_id,
+                    display_name,
                     r.get("MissingCount", ""),
-                    r.get("ParentRecordUrl", ""),
+                    display_url,
                 ]
             )
         md += _markdown_table(
@@ -227,7 +286,12 @@ def generate_missing_report(
         "Please advise whether Salesforce can restore these Attachment binaries from platform backups.\n\n"
         "Affected Attachment Ids:\n\n"
     )
-    ids_inline = ", ".join(r.get("Id", "") for r in retry_rows) or "None"
+    if redact:
+        ids_inline = (
+            ", ".join(att_map.get(r.get("Id", ""), "ATTACHMENT") for r in retry_rows) or "None"
+        )
+    else:
+        ids_inline = ", ".join(r.get("Id", "") for r in retry_rows) or "None"
     md += ids_inline + "\n\n"
 
     # About / configuration section
