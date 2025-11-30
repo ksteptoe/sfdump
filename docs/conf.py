@@ -14,9 +14,10 @@ sys.path.insert(0, os.path.abspath(".."))
 # ------------------------------------------------------------
 project = "sfdump"
 author = "Kevin Steptoe"
-release = pkg_version("sfdump")  # full version
-version_short = release.split("+")[0]  # short version
-
+# Clean version: strip everything after "+"
+raw_version = pkg_version("sfdump")
+release = raw_version.split("+")[0]  # Used by Sphinx (PDF title, metadata)
+version = release  # Short version
 # ------------------------------------------------------------
 # General Sphinx Extensions
 # ------------------------------------------------------------
@@ -109,6 +110,25 @@ latex_elements = {
 \SetWatermarkScale{0.25}
 \SetWatermarkColor[gray]{0.92}
 \SetWatermarkAngle{45}
+
+% Reduce excessive page breaks
+\usepackage{etoolbox}
+
+% Chapter titles normally cause a page break: remove it
+\patchcmd{\chapter}{\cleardoublepage}{}{}{}
+
+% Remove forced page breaks before chapters
+\patchcmd{\chapter}{\clearpage}{}{}{}
+
+% Do NOT insert blank page between chapters (book/report behaviour)
+\let\cleardoublepage\clearpage
+
+\usepackage{titlesec}
+\titlespacing*{\chapter}{0pt}{-10pt}{20pt}
+\titlespacing*{\section}{0pt}{5pt}{5pt}
+\titlespacing*{\subsection}{0pt}{3pt}{3pt}
+
+
 
 \makeatletter
 \newcommand{\repoLogo}{"""

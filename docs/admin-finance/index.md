@@ -15,4 +15,5 @@ retention_recommendations
 audit_results_template
 audit_completeness_results
 cfo_detailed_report
+cfo_report_dynamic
 ```

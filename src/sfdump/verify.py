@@ -6,6 +6,7 @@ import csv
 import hashlib
 import logging
 import os
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 _logger = logging.getLogger(__name__)
@@ -133,3 +134,66 @@ def verify_content_versions(meta_csv: str, export_root: str) -> None:
         )
     else:
         _logger.info("ContentVersion verification: no corrupt files.")
+
+
+def load_missing_csv(path: Path) -> list[dict]:
+    """
+    Load missing-attachments or retry CSV into a list of dicts.
+    Returns an empty list if the file doesn't exist.
+    """
+    if not path.exists():
+        return []
+    with path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return [row for row in reader]
+
+
+def build_cfo_report(export_dir: Path, redact: bool = False) -> str:
+    """
+    Build CFO audit report markdown string summarising missing and retry files.
+    The report can later be included into Sphinx documentation or converted to PDF.
+    """
+    export_dir = Path(export_dir)
+    links = export_dir / "links"
+
+    missing_csv = links / "attachments_missing.csv"
+    retry_csv = links / "attachments_missing_retry.csv"
+
+    missing_rows = load_missing_csv(missing_csv)
+    retry_rows = load_missing_csv(retry_csv)
+
+    md = []
+    md.append("# CFO Forensic Audit Report\n")
+    md.append("## Summary\n")
+
+    md.append(f"- Missing attachments found: **{len(missing_rows)}**")
+    md.append(f"- Retry attempts recorded: **{len(retry_rows)}**")
+
+    recovered = [r for r in retry_rows if r.get("retry_status") == "recovered"]
+    unrecovered = [r for r in retry_rows if r.get("retry_status") != "recovered"]
+    md.append(f"- Files recovered on retry: **{len(recovered)}**")
+    md.append(f"- Still missing after retry: **{len(unrecovered)}**\n")
+
+    # Detailed Missing Files
+    md.append("## Missing Attachments\n")
+    if missing_rows:
+        md.append("| Id | ParentId | Name |")
+        md.append("| --- | --- | --- |")
+        for row in missing_rows:
+            name = "[REDACTED]" if redact else row.get("Name", "")
+            md.append(f"| {row.get('Id','')} | {row.get('ParentId','')} | {name} |")
+    else:
+        md.append("No missing attachments detected.\n")
+
+    # Retry Results
+    md.append("\n## Retry Results\n")
+    if retry_rows:
+        md.append("| Id | Status | Error |")
+        md.append("| --- | --- | --- |")
+        for row in retry_rows:
+            error = (row.get("retry_error") or "").replace("|", "/")
+            md.append(f"| {row.get('Id','')} | {row.get('retry_status','')} | {error} |")
+    else:
+        md.append("No retry data available.\n")
+
+    return "\n".join(md) + "\n"

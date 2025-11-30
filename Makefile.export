@@ -74,7 +74,8 @@ INDEX_BY_FLAGS := $(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj))
 .PHONY: help \
         export-all export-core-crm export-crm-all export-ffa export-hr \
         export-files export-meta export-archive export-clean \
-        export-show-config csv-one export-files-index-only export-doc-index view
+        export-show-config csv-one export-files-index-only export-doc-index view \
+        changelog fix-orphans cfo
 
 help:
 	@echo "Salesforce / FinancialForce export Makefile"
@@ -449,3 +450,52 @@ csv-one:
 view:
 	@echo "Launching SFdump Viewer..."
 	"$(HOME)/OneDrive/py/sfdump/sfdump-view.cmd" "$(BASE_EXPORT_ROOT)"
+
+# --------------------------------------------------------------------
+# CFO REPORT PIPELINE
+# --------------------------------------------------------------------
+
+# The generated markdown file path
+CFO_MD := docs/admin-finance/cfo_report_dynamic.md
+
+# Directory where Sphinx builds the PDF
+CFO_PDF := docs/_build/latex/sfdump.pdf
+
+
+cfo:  ## Generate CFO dynamic report and PDF
+	@echo ">>> Running CFO dynamic report generator..."
+	@echo ">>> Using export dir: $(FILES_DIR)"
+	sfdump cfo-generate-docs --export-dir "$(FILES_DIR)" --redact
+	@echo ">>> CFO markdown generated."
+
+	@echo ">>> Building CFO PDF with Sphinx..."
+	$(MAKE) -C docs pdf
+
+	@echo ">>> CFO PDF ready at: docs/_build/latex/sfdump.pdf"
+
+# --------------------------------------------------------------------
+# CHANGELOG AUTO-GENERATION
+# --------------------------------------------------------------------
+
+changelog:  ## Generate CHANGELOG.md from git log
+	@echo ">>> Generating CHANGELOG.md"
+	@echo "# Changelog" > docs/CHANGELOG.md
+	@echo "" >> docs/CHANGELOG.md
+	git log --pretty=format:"### %ad%n- %s%n" --date=short >> docs/CHANGELOG.md
+	@echo ">>> CHANGELOG.md updated."
+
+# --------------------------------------------------------------------
+# FIX ORPHANED FILES
+# --------------------------------------------------------------------
+
+fix-orphans:  ## Add :orphan: to any file not referenced in a toctree
+	@echo ">>> Scanning for orphaned .md/.rst documentation files..."
+	@for f in `find docs -name "*.md" -o -name "*.rst"`; do \
+		if ! grep -q ":orphan:" $$f; then \
+			if ! grep -R "$${f#docs/}" docs | grep -q toctree; then \
+				echo ">>> Adding :orphan: to $$f"; \
+				sed -i '1s/^/:orphan:\n\n/' $$f; \
+			fi \
+		fi \
+	done
+	@echo ">>> Orphan cleanup complete."
