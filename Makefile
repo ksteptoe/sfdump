@@ -20,6 +20,9 @@ CONF_FILES  := pyproject.toml pytest.ini
 STAMPS_DIR  := .stamps
 NO_CACHE   ?= 0
 
+# Default release kind for `make release` (patch|minor|major)
+KIND ?= patch
+
 # Pytest flags
 PYTEST         := $(PYTHON) -m pytest
 PYTEST_Q       := -q
@@ -36,16 +39,17 @@ UNIT_DIR    := tests/unit
 INTEG_DIR   := tests/integration
 SYSTEM_DIR  := tests/system  # live/system tests (opt-in, uncached)
 
-.PHONY: help bootstrap precommit lint format \
+.PHONY: help bootstrap precommit docs lint format \
         test test-all test-live clean-tests \
-        build upload version fetch-tags release-show \
-        release-patch release-minor release-major \
-        clean run-cli sf-exportcheck-clean
+        build upload version fetch-tags changelog changelog-md \
+        release-show release release-patch release-minor release-major \
+        clean run-cli sf-export sf-exportcheck-clean
 
 help:
 	@echo "Common targets:"
 	@echo "  make bootstrap           - install .[dev]"
 	@echo "  make precommit           - install pre-commit hook"
+	@echo "  make docs                - build Sphinx/MyST docs to docs/_build/html"
 	@echo "  make lint                - run Ruff checks"
 	@echo "  make format              - auto-fix via Ruff"
 	@echo "  make test                - run cached unit+integration tests (not live)"
@@ -54,13 +58,16 @@ help:
 	@echo "  make build               - build wheel+sdist"
 	@echo "  make upload              - upload to PyPI (via Twine)"
 	@echo "  make version             - print setuptools_scm inferred version"
+	@echo "  make changelog           - show changes since last Git tag"
+	@echo "  make changelog-md        - write docs/CHANGELOG.md from Git history"
 	@echo "  make release-show        - show scm ver, installed ver, last Git tag"
+	@echo "  make release             - run tests, show changelog and tag (KIND=patch|minor|major)"
 	@echo "  make release-patch       - tag vX.Y.(Z+1)"
 	@echo "  make release-minor       - tag vX.(Y+1).0"
 	@echo "  make release-major       - tag v(X+1).0.0"
 	@echo "  make clean               - remove build artifacts"
 	@echo "  make run-cli             - run CLI entry point (pass CLI_ARGS=...)"
-	@echo "  make export-sf           - run make -f Makefile.export"
+	@echo "  make sf-export           - run make -f Makefile.export export-all"
 
 bootstrap:
 	$(PYTHON) -m pip install -U pip setuptools wheel
@@ -186,6 +193,21 @@ PATCH    := $(shell echo "$(LAST_TAG)" | sed -E 's/^v[0-9]+\.[0-9]+\.([0-9]+)/\1
 version:
 	@$(PYTHON) -m setuptools_scm || true
 
+# Generate release notes since last tag
+define CHANGELOG
+$(shell git log $(LAST_TAG)..HEAD --pretty=format:"- %s (%h)" --no-merges)
+endef
+
+changelog:
+	@echo "Changes since $(LAST_TAG):"
+	@echo "$(CHANGELOG)"
+
+changelog-md:
+	@mkdir -p docs
+	@echo "Writing docs/CHANGELOG.md ..."
+	@printf "# Changelog\n\n## Since %s\n\n%s\n" "$(LAST_TAG)" "$(CHANGELOG)" > docs/CHANGELOG.md
+	@echo "✅ docs/CHANGELOG.md updated"
+
 release-show: fetch-tags
 	@echo "python exe:"; $(PYTHON) -c "import sys; print(sys.executable)"
 	@echo "setuptools_scm version:"; $(PYTHON) -m setuptools_scm || echo "(unavailable)"
@@ -204,23 +226,44 @@ check-clean:
 		exit 1; \
 	fi
 
+# Allow newline in tag messages
+NL := $(shell printf "\n")
+
 release-patch: fetch-tags check-clean
 	NEW=v$(MAJOR).$(MINOR).$$(($$(printf '%d' $(PATCH)) + 1))
-	git tag -a "$$NEW" -m "release: $$NEW"
+	git tag -a "$$NEW" -m "release: $$NEW$(NL)$(NL)$(CHANGELOG)"
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
 
 release-minor: fetch-tags check-clean
 	NEW=v$(MAJOR).$$(($$(printf '%d' $(MINOR)) + 1)).0
-	git tag -a "$$NEW" -m "release: $$NEW"
+	git tag -a "$$NEW" -m "release: $$NEW$(NL)$(NL)$(CHANGELOG)"
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
 
 release-major: fetch-tags check-clean
 	NEW=v$$(($$(printf '%d' $(MAJOR)) + 1)).0.0
-	git tag -a "$$NEW" -m "release: $$NEW"
+	git tag -a "$$NEW" -m "release: $$NEW$(NL)$(NL)$(CHANGELOG)"
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
+
+# Meta-release: run tests, show changelog, then dispatch to patch/minor/major
+release:
+	@echo "=== Running full test suite before release ==="
+	$(MAKE) test-all
+	@echo "=== Changelog (from $(LAST_TAG) to HEAD) ==="
+	$(MAKE) changelog
+	@echo "=== Performing $(KIND) release ==="
+	@if [ "$(KIND)" = "patch" ]; then \
+	  $(MAKE) release-patch; \
+	elif [ "$(KIND)" = "minor" ]; then \
+	  $(MAKE) release-minor; \
+	elif [ "$(KIND)" = "major" ]; then \
+	  $(MAKE) release-major; \
+	else \
+	  echo "Unknown KIND=$(KIND). Use: patch | minor | major"; \
+	  exit 1; \
+	fi
 
 # -----------------------------------------------------------------------------#
 # CLI convenience
