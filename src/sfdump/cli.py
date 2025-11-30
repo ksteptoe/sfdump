@@ -14,7 +14,7 @@ from . import __version__
 from .command_analyse_missing import analyse_missing_cmd
 from .command_audit import audit_docs_cmd
 from .command_audit_missing_files import audit_missing_files_cmd
-from .command_cfo import cfo_report
+from .command_cfo import cfo_generate_docs, cfo_report
 
 # Command Files
 from .command_csv import csv_cmd
@@ -111,3 +111,4 @@ cli.add_command(cast(Command, analyse_missing_cmd))
 cli.add_command(cast(Command, report_missing_cmd))
 cli.add_command(cast(Command, audit_docs_cmd))
 cli.add_command(cast(Command, cfo_report))
+cli.add_command(cast(Command, cfo_generate_docs))
