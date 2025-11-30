@@ -42,6 +42,7 @@ exclude_patterns = [
     "Thumbs.db",
     ".DS_Store",
     "internal_reports/**",
+    "_generated/**",
 ]
 
 # ------------------------------------------------------------
