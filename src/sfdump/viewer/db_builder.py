@@ -116,7 +116,7 @@ def build_sqlite_from_export(
     conn = sqlite3.connect(str(db_path))
     try:
         cur = conn.cursor()
-
+        created_tables: set[str] = set()
         # Load each object's CSV into its own table
         for obj in objects:
             table_cfg = table_configs.get(obj.api_name)
@@ -149,6 +149,7 @@ def build_sqlite_from_export(
                 columns_sql = ", ".join(columns_sql_parts)
                 create_sql = f'CREATE TABLE "{table_cfg.table_name}" ({columns_sql})'
                 cur.execute(create_sql)
+                created_tables.add(table_cfg.table_name)
 
                 # Prepare INSERT statement
                 col_list_sql = ", ".join(f'"{c}"' for c in header)
@@ -166,7 +167,16 @@ def build_sqlite_from_export(
                     cur.execute(insert_sql, row)
 
         # Create indexes based on relationships
+        # Create indexes based on relationships
         for idx in index_configs:
+            if idx.table not in created_tables:
+                log.info(
+                    "Skipping index %s because table %s does not exist",
+                    idx.name,
+                    idx.table,
+                )
+                continue
+
             cols_sql = ", ".join(f'"{c}"' for c in idx.columns)
             unique_sql = "UNIQUE " if idx.unique else ""
             create_idx_sql = (
