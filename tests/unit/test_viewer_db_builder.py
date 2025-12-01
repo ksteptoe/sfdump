@@ -19,13 +19,15 @@ def _write_csv(path: Path, header: list[str], rows: list[list[str]]) -> None:
 
 
 def test_build_sqlite_from_export_creates_tables_and_rows(tmp_path: Path) -> None:
-    # Arrange: create a tiny fake export directory with a couple of objects.
+    # Arrange: create a tiny fake export directory with a csv/ subdirectory.
     export_dir = tmp_path / "export"
     export_dir.mkdir()
+    csv_dir = export_dir / "csv"
+    csv_dir.mkdir()
 
     # Account.csv
     _write_csv(
-        export_dir / "Account.csv",
+        csv_dir / "Account.csv",
         header=["Id", "Name"],
         rows=[
             ["001A", "Acme Corp"],
@@ -35,7 +37,7 @@ def test_build_sqlite_from_export_creates_tables_and_rows(tmp_path: Path) -> Non
 
     # ContentDocument.csv (to exercise file-related objects)
     _write_csv(
-        export_dir / "ContentDocument.csv",
+        csv_dir / "ContentDocument.csv",
         header=["Id", "Title"],
         rows=[
             ["069X", "Spec.pdf"],
