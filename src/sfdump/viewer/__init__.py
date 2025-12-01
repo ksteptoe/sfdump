@@ -1,5 +1,6 @@
 """Viewer and data-mart tooling (SQLite, object/relationship browsing)."""
 
+from .db_builder import build_sqlite_from_export
 from .sqlite_schema import (
     SqliteIndexConfig,
     SqliteTableConfig,
@@ -12,4 +13,5 @@ __all__ = [
     "SqliteIndexConfig",
     "default_table_configs",
     "default_index_configs",
+    "build_sqlite_from_export",
 ]
