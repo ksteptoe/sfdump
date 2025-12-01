@@ -5,8 +5,8 @@ using the object and relationship metadata defined in ``sfdump.indexing`` and
 the SQLite-oriented schema helpers in ``sfdump.viewer.sqlite_schema``.
 
 It does *not* define any CLI; callers are expected to invoke
-``build_sqlite_from_export`` directly. A future Click command can wrap this
-without changing the core logic.
+``build_sqlite_from_export`` directly. A Click command wraps this in
+``sfdump.command_build_db``.
 """
 
 from __future__ import annotations
@@ -30,13 +30,13 @@ LOG = logging.getLogger(__name__)
 
 
 def _find_csv_for_object(
-    export_dir: Path, obj: SFObject, table_cfg: SqliteTableConfig
+    export_root: Path, obj: SFObject, table_cfg: SqliteTableConfig
 ) -> Optional[Path]:
     """Best-effort resolution of the CSV file for a given object.
 
-    We try a small set of conventional filenames. If none exist, return None.
-    This keeps the builder robust to differences in export naming without
-    hard-wiring a single convention.
+    We try a small set of conventional filenames relative to ``export_root``.
+    If none exist, return None. This keeps the builder robust to differences
+    in export naming without hard-wiring a single convention.
 
     Candidates (in order):
     - <table_name>.csv              e.g. content_version.csv
@@ -45,15 +45,59 @@ def _find_csv_for_object(
     - <api_name_lower>.csv          e.g. contentversion.csv
     """
     candidates = [
-        export_dir / f"{table_cfg.table_name}.csv",
-        export_dir / f"{table_cfg.table_name}s.csv",
-        export_dir / f"{obj.api_name}.csv",
-        export_dir / f"{obj.api_name.lower()}.csv",
+        export_root / f"{table_cfg.table_name}.csv",
+        export_root / f"{table_cfg.table_name}s.csv",
+        export_root / f"{obj.api_name}.csv",
+        export_root / f"{obj.api_name.lower()}.csv",
     ]
     for path in candidates:
         if path.exists():
             return path
     return None
+
+
+def _detect_csv_root(export_dir: Path, log: logging.Logger) -> Path:
+    """Detect the root directory that contains object CSV files.
+
+    We expect an sfdump export to look like one of:
+
+    - <export_dir>/csv                 (preferred layout)
+    - <export_dir>/files/objects       (legacy full export layout)
+    - <export_dir>/objects             (object-only export)
+
+    If none of these directories exist, or they exist but contain no *.csv
+    files, we raise a ValueError with a helpful message instead of silently
+    creating an empty SQLite database.
+    """
+    candidates = [
+        export_dir / "csv",
+        export_dir / "files" / "objects",
+        export_dir / "objects",
+    ]
+
+    csv_root: Optional[Path] = None
+    for root in candidates:
+        if root.is_dir():
+            csv_root = root
+            break
+
+    if csv_root is None:
+        raise ValueError(
+            f"Could not find a CSV root under {export_dir}. "
+            "Looked for 'csv', 'files/objects', or 'objects' directories. "
+            "This export may not include object CSVs."
+        )
+
+    # Ensure there is at least one CSV file
+    if not any(csv_root.glob("*.csv")):
+        raise ValueError(
+            f"No CSV files found in {csv_root}. "
+            "This export appears to contain no object CSVs; "
+            "run 'sfdump csv' or choose an export that includes object data."
+        )
+
+    log.info("Using %s as CSV root for SQLite build", csv_root)
+    return csv_root
 
 
 def build_sqlite_from_export(
@@ -70,7 +114,9 @@ def build_sqlite_from_export(
     Parameters
     ----------
     export_dir:
-        Directory containing CSV files for exported Salesforce objects.
+        Root export directory (e.g. ``exports/export-2025-11-30``). Object
+        CSVs are expected to live under a subdirectory such as ``csv``,
+        ``files/objects``, or ``objects``.
     db_path:
         Path to the SQLite database file to create.
     overwrite:
@@ -98,6 +144,14 @@ def build_sqlite_from_export(
     if not export_dir.is_dir():
         raise ValueError(f"export_dir {export_dir} is not a directory")
 
+    # Decide where to look for object CSVs and make sure it has data.
+    csv_root = _detect_csv_root(export_dir, log)
+
+    # Ensure the parent directory for the SQLite file exists
+    if db_path.parent and not db_path.parent.exists():
+        log.info("Creating parent directory for SQLite database at %s", db_path.parent)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
     if db_path.exists():
         if overwrite:
             log.info("Removing existing SQLite database at %s", db_path)
@@ -117,13 +171,14 @@ def build_sqlite_from_export(
     try:
         cur = conn.cursor()
         created_tables: set[str] = set()
+
         # Load each object's CSV into its own table
         for obj in objects:
             table_cfg = table_configs.get(obj.api_name)
             if table_cfg is None:
                 continue
 
-            csv_path = _find_csv_for_object(export_dir, obj, table_cfg)
+            csv_path = _find_csv_for_object(csv_root, obj, table_cfg)
             if csv_path is None:
                 log.info("No CSV found for %s (%s); skipping", obj.api_name, table_cfg.table_name)
                 continue
@@ -166,8 +221,7 @@ def build_sqlite_from_export(
                         row = row[: len(header)]
                     cur.execute(insert_sql, row)
 
-        # Create indexes based on relationships
-        # Create indexes based on relationships
+        # Create indexes based on relationships, but only for tables we actually created
         for idx in index_configs:
             if idx.table not in created_tables:
                 log.info(
