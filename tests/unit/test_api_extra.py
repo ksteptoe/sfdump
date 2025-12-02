@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from sfdump.api import SalesforceAPI
+from sfdump.core import SalesforceAPI
 
 
 def test_query_all_iter_handles_paging(monkeypatch) -> None:
