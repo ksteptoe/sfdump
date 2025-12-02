@@ -87,23 +87,20 @@ def list_records_command(
         click.echo("No records found.")
         return
 
-    # Print a simple table: Id, Name, and a couple of extra fields if present
     click.echo(f"Object:   {result.sf_object.api_name}")
     click.echo(f"DB:       {db_path}")
     click.echo(f"Returned: {len(rows)} record(s)")
     click.echo("")
 
-    # Determine which columns to show
+    # Decide which columns to show
     first = rows[0]
     columns = []
     for col in ("Id", "Name"):
         if col in first:
             columns.append(col)
-    # Add a couple more interesting columns if present
     for extra in ("Email", "Title", "StageName", "Amount"):
         if extra in first and extra not in columns:
             columns.append(extra)
-    # If still very small, pad with first few keys
     if len(columns) < 2:
         for k in first.keys():
             if k not in columns:
