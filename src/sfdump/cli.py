@@ -22,6 +22,7 @@ from .command_csv import csv_cmd
 from .command_db_info import db_info_command
 from .command_docs_index import docs_index_cmd
 from .command_files import files_cmd
+from .command_list_records import list_records_command
 from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
 from .command_report_missing import report_missing_cmd
@@ -117,6 +118,7 @@ cli.add_command(cast(Command, cfo_generate_docs))
 cli.add_command(cast(Command, build_db_command))
 cli.add_command(cast(Command, db_info_command))
 cli.add_command(cast(Command, view_record_command))
+cli.add_command(cast(Command, list_records_command))
 
 # Keep the original name (probably "cfo-generate-docs")
 cli.add_command(cast(Command, cfo_report))
