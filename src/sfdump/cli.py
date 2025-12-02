@@ -27,6 +27,7 @@ from .command_objects import objects_cmd
 from .command_report_missing import report_missing_cmd
 from .command_retry_missing import retry_missing_cmd
 from .command_verify import verify_files_cmd
+from .command_view_record import view_record_command
 from .command_viewer import viewer_cmd
 from .logging_config import configure_logging
 
@@ -115,6 +116,7 @@ cli.add_command(cast(Command, audit_docs_cmd))
 cli.add_command(cast(Command, cfo_generate_docs))
 cli.add_command(cast(Command, build_db_command))
 cli.add_command(cast(Command, db_info_command))
+cli.add_command(cast(Command, view_record_command))
 
 # Keep the original name (probably "cfo-generate-docs")
 cli.add_command(cast(Command, cfo_report))
