@@ -119,6 +119,7 @@ cli.add_command(cast(Command, build_db_command))
 cli.add_command(cast(Command, db_info_command))
 cli.add_command(cast(Command, view_record_command))
 cli.add_command(cast(Command, list_records_command))
+cli.add_command(cast(Command, list_records_command))
 
 # Keep the original name (probably "cfo-generate-docs")
 cli.add_command(cast(Command, cfo_report))
