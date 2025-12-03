@@ -105,6 +105,27 @@ OBJECTS: Dict[str, SFObject] = {
         label="Legacy Attachment",
         table_name="attachment",
     ),
+    # Finance objects
+    "Invoice": SFObject(
+        api_name="Invoice",
+        label="Invoice",
+        table_name="invoice",
+    ),
+    "InvoiceLine": SFObject(
+        api_name="InvoiceLine",
+        label="Invoice Line",
+        table_name="invoice_line",
+    ),
+    "CreditNote": SFObject(
+        api_name="CreditNote",
+        label="Credit Note",
+        table_name="credit_note",
+    ),
+    "CreditNoteLine": SFObject(
+        api_name="CreditNoteLine",
+        label="Credit Note Line",
+        table_name="credit_note_line",
+    ),
     # Add further exported objects here as we need them
 }
 
@@ -152,6 +173,31 @@ RELATIONSHIPS: List[SFRelationship] = [
         parent="*",
         child="Attachment",
         child_field="ParentId",
+    ),
+    # Finance relationships
+    SFRelationship(
+        name="Account_Invoice",
+        parent="Account",
+        child="Invoice",
+        child_field="AccountId",
+    ),
+    SFRelationship(
+        name="Invoice_InvoiceLine",
+        parent="Invoice",
+        child="InvoiceLine",
+        child_field="InvoiceId",
+    ),
+    SFRelationship(
+        name="Account_CreditNote",
+        parent="Account",
+        child="CreditNote",
+        child_field="AccountId",
+    ),
+    SFRelationship(
+        name="CreditNote_CreditNoteLine",
+        parent="CreditNote",
+        child="CreditNoteLine",
+        child_field="CreditNoteId",
     ),
 ]
 
