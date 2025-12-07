@@ -1,5 +1,4 @@
 """Central description of Salesforce objects and their relationships.
-
 This module is deliberately *data-only* (no I/O) so it can be used by:
 - index builders
 - SQL/SQLite schema generators
