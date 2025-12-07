@@ -32,7 +32,7 @@ def viewer_cmd(exports_base: Path | None, open_browser: bool) -> None:
     # 1. Locate the viewer script
     # ------------------------------------------------------------
     project_root = Path(__file__).resolve().parents[1]
-    viewer_script = project_root / "src" / "sfdump" / "viewer" / "files_app.py"
+    viewer_script = project_root / "sfdump" / "viewer" / "files_app.py"
 
     if not viewer_script.exists():
         raise click.ClickException(
