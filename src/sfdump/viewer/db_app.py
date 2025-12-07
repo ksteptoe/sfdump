@@ -9,6 +9,61 @@ import streamlit as st
 from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children, inspect_sqlite_db, list_records
 
+IMPORTANT_FIELDS = {
+    "Account": ["Id", "Name", "AccountNumber", "Type", "Industry"],
+    "Opportunity": ["Id", "Name", "StageName", "CloseDate", "Amount"],
+    "Contact": ["Id", "Name", "Email", "Phone", "Title"],
+    # ...
+}
+
+IMPORTANT_FIELDS = {
+    "Account": ["Id", "Name", "AccountNumber", "Type", "Industry"],
+    "Opportunity": ["Id", "Name", "StageName", "CloseDate", "Amount"],
+    "Contact": ["Id", "Name", "Email", "Phone", "Title"],
+    "ContentDocument": ["Id", "Title", "LatestPublishedVersionId"],
+    "ContentVersion": ["Id", "Title", "VersionNumber", "CreatedDate"],
+    "ContentDocumentLink": ["Id", "LinkedEntityId", "ContentDocumentId", "ShareType", "Visibility"],
+    "Attachment": ["Id", "ParentId", "Name", "ContentType", "BodyLength"],
+    # 🧾 Finance objects – adjust field names once you see the actual CSV headers
+    "Invoice": [
+        "Id",
+        "Name",  # if present
+        "InvoiceNumber",  # common pattern
+        "InvoiceDate",
+        "Status",  # or "Status__c"
+        "TotalAmount",  # or "Total__c" / "Amount__c"
+        "Balance",  # or "Balance__c"
+    ],
+    "InvoiceLine": [
+        "Id",
+        "InvoiceId",
+        "LineNumber",  # often exists
+        "ProductName",  # or "Name" / "Product__c"
+        "Description",
+        "Quantity",
+        "UnitPrice",
+        "Amount",  # or "Amount__c"
+    ],
+    "CreditNote": [
+        "Id",
+        "Name",
+        "CreditNoteNumber",  # or "Credit_Number__c"
+        "CreditNoteDate",
+        "Status",
+        "TotalAmount",
+        "Balance",
+    ],
+    "CreditNoteLine": [
+        "Id",
+        "CreditNoteId",
+        "LineNumber",
+        "Description",
+        "Quantity",
+        "UnitPrice",
+        "Amount",
+    ],
+}
+
 
 def _initial_db_path_from_argv() -> Optional[Path]:
     # When launched via: streamlit run db_viewer_app.py -- <db-path>
