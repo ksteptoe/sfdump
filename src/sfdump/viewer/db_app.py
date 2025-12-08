@@ -13,13 +13,6 @@ IMPORTANT_FIELDS = {
     "Account": ["Id", "Name", "AccountNumber", "Type", "Industry"],
     "Opportunity": ["Id", "Name", "StageName", "CloseDate", "Amount"],
     "Contact": ["Id", "Name", "Email", "Phone", "Title"],
-    # ...
-}
-
-IMPORTANT_FIELDS = {
-    "Account": ["Id", "Name", "AccountNumber", "Type", "Industry"],
-    "Opportunity": ["Id", "Name", "StageName", "CloseDate", "Amount"],
-    "Contact": ["Id", "Name", "Email", "Phone", "Title"],
     "ContentDocument": ["Id", "Title", "LatestPublishedVersionId"],
     "ContentVersion": ["Id", "Title", "VersionNumber", "CreatedDate"],
     "ContentDocumentLink": ["Id", "LinkedEntityId", "ContentDocumentId", "ShareType", "Visibility"],
@@ -62,7 +55,69 @@ IMPORTANT_FIELDS = {
         "UnitPrice",
         "Amount",
     ],
+    "c2g__codaInvoiceLineItem__c": [
+        "Id",
+        "Name",
+        "c2g__LineNumber__c",
+        "c2g__LineDescription__c",
+        "c2g__Quantity__c",
+        "c2g__UnitPrice__c",
+        "c2g__NetValue__c",
+        "c2g__TaxRateTotal__c",
+        "c2g__TaxValueTotal__c",
+        "c2g__ProductCode__c",
+        "c2g__ProductReference__c",
+    ],
+    "OpportunityLineItem": [
+        "Id",
+        "OpportunityId",
+        "PricebookEntryId",
+        "Product2Id",  # often present
+        "Quantity",
+        "UnitPrice",
+        "TotalPrice",
+        "Description",
+    ],
 }
+
+
+def _get_important_fields(api_name: str) -> list[str]:
+    """Return the configured 'important' fields for this object, if any."""
+    return IMPORTANT_FIELDS.get(api_name, [])
+
+
+def _select_display_columns(api_name: str, df, show_all: bool) -> list[str]:
+    """
+    Decide which columns to show for a given object + DataFrame.
+
+    - If show_all: return all columns.
+    - Else: use IMPORTANT_FIELDS if present.
+    - Else: fall back to a simple Id/Name/... heuristic.
+    """
+    cols = list(df.columns)
+
+    if show_all:
+        return cols
+
+    # 1) Try configured IMPORTANT_FIELDS
+    important = _get_important_fields(api_name)
+    display_cols: list[str] = [c for c in important if c in cols]
+
+    # 2) If no configured fields (or none matched), use generic heuristic
+    if not display_cols:
+        for col in ("Id", "Name"):
+            if col in cols and col not in display_cols:
+                display_cols.append(col)
+
+        for extra in ("Email", "Title", "StageName", "Amount"):
+            if extra in cols and extra not in display_cols:
+                display_cols.append(extra)
+
+    # 3) Fallback: if still empty, just take the first few columns
+    if not display_cols:
+        display_cols = cols[:5]
+
+    return display_cols
 
 
 def _initial_db_path_from_argv() -> Optional[Path]:
@@ -137,12 +192,29 @@ def main() -> None:
         step=10,
     )
 
-    # Build WHERE clause for Name LIKE '%term%'
+    regex_search = st.sidebar.checkbox(
+        "Use regex (Name REGEXP)",
+        value=False,
+        help="When enabled, interpret the search string as a regular expression applied to the Name field.",
+    )
+
+    show_all_fields = st.sidebar.checkbox(
+        "Show all fields",
+        value=False,
+        help="When checked, show all columns for this object. When unchecked, only show key fields.",
+    )
+
+    # Build WHERE clause for Name search
     where_clause: Optional[str] = None
     if search_term:
         # simple SQL escaping for single quotes
         safe_term = search_term.replace("'", "''")
-        where_clause = f"Name LIKE '%{safe_term}%'"
+        if regex_search:
+            # Use our SQLite REGEXP function defined in record_list.py
+            where_clause = f"Name REGEXP '{safe_term}'"
+        else:
+            # Default behaviour: substring match
+            where_clause = f"Name LIKE '%{safe_term}%'"
 
     try:
         listing = list_records(
@@ -171,18 +243,7 @@ def main() -> None:
             import pandas as pd  # type: ignore[import-not-found]
 
             df = pd.DataFrame(rows)
-            # If Id/Name exist, show them first
-            display_cols = []
-            for col in ("Id", "Name"):
-                if col in df.columns:
-                    display_cols.append(col)
-            # Add a few more columns if available
-            for extra in ("Email", "Title", "StageName", "Amount"):
-                if extra in df.columns and extra not in display_cols:
-                    display_cols.append(extra)
-            if not display_cols:
-                display_cols = list(df.columns[:5])
-
+            display_cols = _select_display_columns(api_name, df, show_all_fields)
             st.dataframe(df[display_cols])
 
             # Selection widget
@@ -229,12 +290,24 @@ def main() -> None:
         )
 
         # Parent fields
+        # Parent fields
         with st.expander("Parent fields", expanded=True):
             import pandas as pd  # type: ignore[import-not-found]
 
-            parent_df = pd.DataFrame(
-                [{"Field": k, "Value": v} for k, v in sorted(parent.data.items())]
-            )
+            # Turn the parent dict into a DataFrame
+            all_items = sorted(parent.data.items())
+            all_df = pd.DataFrame([{"Field": k, "Value": v} for k, v in all_items])
+
+            if show_all_fields:
+                parent_df = all_df
+            else:
+                important = _get_important_fields(parent.sf_object.api_name)
+                if important:
+                    parent_df = all_df[all_df["Field"].isin(important)]
+                else:
+                    # fallback: just show everything if we don't know what's important
+                    parent_df = all_df
+
             st.table(parent_df)
 
         # Children
@@ -253,7 +326,10 @@ def main() -> None:
                 import pandas as pd  # type: ignore[import-not-found]
 
                 child_df = pd.DataFrame(coll.records)
-                st.dataframe(child_df)
+                display_cols = _select_display_columns(
+                    child_obj.api_name, child_df, show_all_fields
+                )
+                st.dataframe(child_df[display_cols])
 
 
 if __name__ == "__main__":
