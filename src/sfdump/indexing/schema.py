@@ -125,6 +125,21 @@ OBJECTS: Dict[str, SFObject] = {
         label="Credit Note Line",
         table_name="credit_note_line",
     ),
+    "c2g__codaInvoice__c": SFObject(
+        api_name="c2g__codaInvoice__c",
+        label="Coda Sales Invoice",
+        table_name="c2g__codaInvoice__c",
+    ),
+    "c2g__codaInvoiceLineItem__c": SFObject(
+        api_name="c2g__codaInvoiceLineItem__c",
+        label="Coda Invoice Line Item",
+        table_name="c2g__codaInvoiceLineItem__c",
+    ),
+    "OpportunityLineItem": SFObject(
+        api_name="OpportunityLineItem",
+        label="Opportunity Line Item",
+        table_name="OpportunityLineItem",
+    ),
     # Add further exported objects here as we need them
 }
 
@@ -146,6 +161,12 @@ RELATIONSHIPS: List[SFRelationship] = [
         parent="Account",
         child="Contact",
         child_field="AccountId",
+    ),
+    SFRelationship(
+        name="Opportunity_OpportunityLineItem",
+        parent="Opportunity",
+        child="OpportunityLineItem",
+        child_field="OpportunityId",
     ),
     # Files / attachments relationships
     SFRelationship(
