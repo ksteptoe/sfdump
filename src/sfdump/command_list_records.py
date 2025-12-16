@@ -41,7 +41,7 @@ from sfdump.viewer import list_records
     "--where",
     "where_clause",
     required=False,
-    help=("Optional SQL WHERE clause fragment (without 'WHERE'), " "e.g. \"Name LIKE '%Acme%'\"."),
+    help=("Optional SQL WHERE clause fragment (without 'WHERE'), e.g. \"Name LIKE '%Acme%'\"."),
 )
 @click.option(
     "--order-by",
