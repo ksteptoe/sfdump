@@ -181,7 +181,7 @@ def build_cfo_report(export_dir: Path, redact: bool = False) -> str:
         md.append("| --- | --- | --- |")
         for row in missing_rows:
             name = "[REDACTED]" if redact else row.get("Name", "")
-            md.append(f"| {row.get('Id','')} | {row.get('ParentId','')} | {name} |")
+            md.append(f"| {row.get('Id', '')} | {row.get('ParentId', '')} | {name} |")
     else:
         md.append("No missing attachments detected.\n")
 
@@ -192,7 +192,7 @@ def build_cfo_report(export_dir: Path, redact: bool = False) -> str:
         md.append("| --- | --- | --- |")
         for row in retry_rows:
             error = (row.get("retry_error") or "").replace("|", "/")
-            md.append(f"| {row.get('Id','')} | {row.get('retry_status','')} | {error} |")
+            md.append(f"| {row.get('Id', '')} | {row.get('retry_status', '')} | {error} |")
     else:
         md.append("No retry data available.\n")
 

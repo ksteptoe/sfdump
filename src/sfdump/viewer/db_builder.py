@@ -234,8 +234,7 @@ def build_sqlite_from_export(
             cols_sql = ", ".join(f'"{c}"' for c in idx.columns)
             unique_sql = "UNIQUE " if idx.unique else ""
             create_idx_sql = (
-                f'CREATE {unique_sql}INDEX IF NOT EXISTS "{idx.name}" '
-                f'ON "{idx.table}" ({cols_sql})'
+                f'CREATE {unique_sql}INDEX IF NOT EXISTS "{idx.name}" ON "{idx.table}" ({cols_sql})'
             )
             log.info("Ensuring index %s on %s(%s)", idx.name, idx.table, cols_sql)
             cur.execute(create_idx_sql)
