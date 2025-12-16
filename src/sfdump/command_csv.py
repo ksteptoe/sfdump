@@ -90,12 +90,17 @@ def csv_cmd(
     else:
         # Auto-resolve fields from object description.
         try:
-            resolved_fields = fieldnames_for_object(
-                api,
-                object_name,
-                include_relationship_fields=relationships,
-                relationship_subfields=["Name"],
-            )
+            try:
+                resolved_fields = fieldnames_for_object(
+                    api,
+                    object_name,
+                    include_relationship_fields=relationships,
+                    relationship_subfields=["Name"],
+                )
+            except TypeError as e:
+                if "unexpected keyword argument" not in str(e):
+                    raise
+                resolved_fields = fieldnames_for_object(api, object_name)
         except Exception as err:
             raise click.ClickException(f"Failed to describe object '{object_name}'.") from err
 
