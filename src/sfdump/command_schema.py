@@ -8,6 +8,55 @@ from typing import Dict, Iterable, List
 import click
 
 
+def _auto_exports_dir(user_dir: Path | None) -> Path:
+    """
+    Determine the exports directory.
+
+    Rules:
+    - If user_dir is provided, use it.
+    - Else, if current directory has CSV files, use current directory.
+    - Else, look under ./exports for subdirs named 'export-*' that contain
+      a 'csv' subdir with CSV files, and pick the latest by name.
+    """
+    if user_dir is not None:
+        return user_dir
+
+    cwd = Path.cwd()
+
+    # 1) If running inside a CSV directory (current dir has *.csv), use that.
+    if any(cwd.glob("*.csv")):
+        return cwd
+
+    exports_root = cwd / "exports"
+    if exports_root.is_dir():
+        # Look for exports/export-YYYY.../csv that actually contain CSVs
+        candidates: list[Path] = []
+        for child in exports_root.iterdir():
+            if not child.is_dir() or not child.name.startswith("export-"):
+                continue
+            csv_dir = child / "csv"
+            if csv_dir.is_dir() and any(csv_dir.glob("*.csv")):
+                candidates.append(csv_dir)
+
+        if candidates:
+            candidates.sort(key=lambda p: p.parent.name)
+            chosen = candidates[-1]
+            click.secho(
+                "WARNING: No --exports-dir provided and no CSV files in the "
+                "current directory.\n"
+                f"         Auto-selected latest export directory: {chosen}",
+                fg="yellow",
+                err=True,
+            )
+            return chosen
+
+    raise click.ClickException(
+        "Could not determine exports directory.\n"
+        "Either run this command from a directory containing CSV files, or "
+        "explicitly provide --exports-dir."
+    )
+
+
 def _resolve_csv_path(csv_or_object: str, exports_dir: Path) -> Path:
     """
     Resolve a CSV file from either:
@@ -27,6 +76,36 @@ def _resolve_csv_path(csv_or_object: str, exports_dir: Path) -> Path:
         f"Tried '{as_path}' and '{candidate}'. "
         "Specify a full path or a known object name."
     )
+
+
+def _sample_ids(csv_path: Path, max_samples: int) -> list[str]:
+    """Sample up to max_samples non-empty Id values from a CSV."""
+    header = _read_header(csv_path)
+    try:
+        id_index = header.index("Id")
+    except ValueError as exc:
+        raise click.ClickException(f"CSV {csv_path} has no 'Id' column") from exc
+
+    samples: list[str] = []
+
+    with csv_path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        # skip header
+        next(reader, None)
+        for row in reader:
+            if id_index >= len(row):
+                continue
+            value = row[id_index].strip()
+            if not value:
+                continue
+            samples.append(value)
+            if len(samples) >= max_samples:
+                break
+
+    if not samples:
+        raise click.ClickException(f"No non-empty Id values found in {csv_path}")
+
+    return samples
 
 
 def _read_header(csv_path: Path) -> list[str]:
@@ -81,11 +160,15 @@ def schema_cmd() -> None:
     "-d",
     "--exports-dir",
     type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
-    default=Path("exports"),
-    show_default=True,
-    help="Directory where object CSV files are stored.",
+    default=None,
+    show_default=False,
+    help=(
+        "Directory where object CSV files are stored. "
+        "If omitted, uses the current directory if it contains CSV files, "
+        "otherwise auto-detects the latest export under ./exports/export-*/csv."
+    ),
 )
-def columns_cmd(csv_or_object: str, exports_dir: Path) -> None:
+def columns_cmd(csv_or_object: str, exports_dir: Path | None) -> None:
     """
     List the column headings of a CSV.
 
@@ -93,34 +176,38 @@ def columns_cmd(csv_or_object: str, exports_dir: Path) -> None:
     - a path to a CSV file (e.g. exports/Account.csv), or
     - a Salesforce object name (e.g. Account -> <exports-dir>/Account.csv).
     """
-    csv_path = _resolve_csv_path(csv_or_object, exports_dir)
+    resolved_dir = _auto_exports_dir(exports_dir)
+    csv_path = _resolve_csv_path(csv_or_object, resolved_dir)
     _list_columns(csv_path)
 
 
 # ---------------------------------------------------------------------------
 # 2) list: list all CSVs + column counts
 # ---------------------------------------------------------------------------
-
-
 @schema_cmd.command("list")
 @click.option(
     "-d",
     "--exports-dir",
     type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
-    default=Path("exports"),
-    show_default=True,
-    help="Directory where object CSV files are stored.",
+    default=None,
+    show_default=False,
+    help=(
+        "Directory where object CSV files are stored. "
+        "If omitted, uses the current directory if it contains CSV files, "
+        "otherwise auto-detects the latest export under ./exports/export-*/csv."
+    ),
 )
-def list_cmd(exports_dir: Path) -> None:
+def list_cmd(exports_dir: Path | None) -> None:
     """
     List all exported CSV files and their column counts.
     """
-    csv_files = list(_iter_csv_files(exports_dir))
+    resolved_dir = _auto_exports_dir(exports_dir)
+    csv_files = list(_iter_csv_files(resolved_dir))
     if not csv_files:
-        click.echo(f"No CSV files found in {exports_dir}")
+        click.echo(f"No CSV files found in {resolved_dir}")
         return
 
-    click.echo(f"Found {len(csv_files)} CSV files in {exports_dir}")
+    click.echo(f"Found {len(csv_files)} CSV files in {resolved_dir}")
     click.echo()
 
     for path in csv_files:
@@ -146,17 +233,22 @@ def list_cmd(exports_dir: Path) -> None:
     "-d",
     "--exports-dir",
     type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
-    default=Path("exports"),
-    show_default=True,
-    help="Directory where object CSV files are stored.",
+    default=None,
+    show_default=False,
+    help=(
+        "Directory where object CSV files are stored. "
+        "If omitted, uses the current directory if it contains CSV files, "
+        "otherwise auto-detects the latest export under ./exports/export-*/csv."
+    ),
 )
-def inspect_cmd(csv_or_object: str, exports_dir: Path) -> None:
+def inspect_cmd(csv_or_object: str, exports_dir: Path | None) -> None:
     """
     Inspect an object/CSV and highlight Id / lookup-like columns.
 
     CSV_OR_OBJECT can be a CSV path or object name.
     """
-    csv_path = _resolve_csv_path(csv_or_object, exports_dir)
+    resolved_dir = _auto_exports_dir(exports_dir)
+    csv_path = _resolve_csv_path(csv_or_object, resolved_dir)
     header = _read_header(csv_path)
 
     pk_cols: List[str] = []
@@ -210,25 +302,30 @@ def inspect_cmd(csv_or_object: str, exports_dir: Path) -> None:
     "-d",
     "--exports-dir",
     type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
-    default=Path("exports"),
-    show_default=True,
-    help="Directory where object CSV files are stored.",
+    default=None,
+    show_default=False,
+    help=(
+        "Directory where object CSV files are stored. "
+        "If omitted, uses the current directory if it contains CSV files, "
+        "otherwise auto-detects the latest export under ./exports/export-*/csv."
+    ),
 )
-def refs_cmd(target: str, exports_dir: Path) -> None:
+def refs_cmd(target: str, exports_dir: Path | None) -> None:
     """
     Show which CSVs appear to reference a given object via *Id columns.
 
     TARGET can be a CSV path or an object name. We infer the object name from
     the CSV filename (e.g. 'Account.csv' -> 'Account') and then look for
-    columns like '<ObjectName>Id' or ending in '<ObjectName>Id'.
+    columns like '<ObjectName>Id' or ending with '<ObjectName>Id'.
     """
-    target_csv = _resolve_csv_path(target, exports_dir)
+    resolved_dir = _auto_exports_dir(exports_dir)
+    target_csv = _resolve_csv_path(target, resolved_dir)
     target_object = target_csv.stem  # e.g. 'Account' from 'Account.csv'
     suffix = f"{target_object}Id"
 
-    csv_files = list(_iter_csv_files(exports_dir))
+    csv_files = list(_iter_csv_files(resolved_dir))
     if not csv_files:
-        click.echo(f"No CSV files found in {exports_dir}")
+        click.echo(f"No CSV files found in {resolved_dir}")
         return
 
     references: Dict[Path, List[str]] = {}
@@ -241,7 +338,7 @@ def refs_cmd(target: str, exports_dir: Path) -> None:
 
     click.echo(
         f"Searching for references to '{target_object}' "
-        f"(columns matching '*{suffix}') in {exports_dir}"
+        f"(columns matching '*{suffix}') in {resolved_dir}"
     )
     click.echo()
 
@@ -254,3 +351,219 @@ def refs_cmd(target: str, exports_dir: Path) -> None:
         for col in cols:
             click.echo(f"  - {col}")
         click.echo()
+
+
+# ---------------------------------------------------------------------------
+# 5) find-id: search for a specific Id value across CSVs
+# ---------------------------------------------------------------------------
+
+
+@schema_cmd.command("find-id")
+@click.argument("csv_or_object", metavar="OBJECT_OR_CSV")
+@click.argument("object_id", metavar="OBJECT_ID", required=False)
+@click.option(
+    "-d",
+    "--exports-dir",
+    type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
+    default=None,
+    show_default=False,
+    help=(
+        "Directory where object CSV files are stored. "
+        "If omitted, uses the current directory if it contains CSV files, "
+        "otherwise auto-detects the latest export under ./exports/export-*/csv."
+    ),
+)
+@click.option(
+    "--all-columns",
+    is_flag=True,
+    help="Search all columns (not just Id/*Id columns).",
+)
+@click.option(
+    "--include-self",
+    is_flag=True,
+    help="Also search the OBJECT's own CSV file (not just other objects).",
+)
+@click.option(
+    "--sample-size",
+    type=int,
+    default=100,
+    show_default=True,
+    help="When OBJECT_ID is omitted, sample this many Ids from the object CSV.",
+)
+@click.option(
+    "--min-matches",
+    type=int,
+    default=3,
+    show_default=True,
+    help=(
+        "When OBJECT_ID is omitted, require at least this many distinct Ids in "
+        "a column to treat it as a likely foreign key."
+    ),
+)
+def find_id_cmd(
+    csv_or_object: str,
+    object_id: str | None,
+    exports_dir: Path | None,
+    all_columns: bool,
+    include_self: bool,
+    sample_size: int,
+    min_matches: int,
+) -> None:
+    """
+    Search for OBJECT_ID across CSVs or infer FK columns for an object.
+
+    Modes:
+
+      1) OBJECT_OR_CSV + OBJECT_ID:
+         Search for that specific Id value across CSVs and show all matches.
+
+         Example:
+           sfdump schema find-id Opportunity 0065g00000ABC123
+
+      2) OBJECT_OR_CSV only (OBJECT_ID omitted):
+         Sample Ids from the object CSV and infer likely foreign key columns
+         in other CSVs based on where those Ids appear.
+
+         Example:
+           sfdump schema find-id Opportunity
+    """
+    # Resolve exports dir (this is where your None was coming from before)
+    resolved_dir = _auto_exports_dir(exports_dir)
+
+    # Resolve the main object CSV
+    target_csv = _resolve_csv_path(csv_or_object, resolved_dir)
+
+    # Collect CSVs to search
+    csv_files = list(_iter_csv_files(resolved_dir))
+    if not include_self:
+        # Exclude the target CSV from the search unless explicitly included
+        try:
+            target_resolved = target_csv.resolve()
+            csv_files = [p for p in csv_files if p.resolve() != target_resolved]
+        except OSError:
+            csv_files = [p for p in csv_files if p != target_csv]
+
+    if not csv_files:
+        click.echo(f"No CSV files found in {resolved_dir}")
+        return
+
+    # ------------------------------------------------------------------
+    # Mode 1: explicit OBJECT_ID -> row-level search (old behaviour)
+    # ------------------------------------------------------------------
+    if object_id is not None:
+        mode_desc = "all columns" if all_columns else "Id/*Id columns only"
+        click.echo(
+            f"Searching for OBJECT_ID='{object_id}' in {len(csv_files)} CSV files "
+            f"under {resolved_dir} ({mode_desc})"
+        )
+        click.echo()
+
+        matches: dict[Path, list[tuple[int, int, str]]] = {}
+
+        for path in csv_files:
+            header = _read_header(path)
+
+            if all_columns:
+                search_cols = list(range(len(header)))
+            else:
+                search_cols = [
+                    idx for idx, name in enumerate(header) if name == "Id" or name.endswith("Id")
+                ]
+                if not search_cols:
+                    continue
+
+            with path.open("r", newline="", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                next(reader, None)
+                for row_idx, row in enumerate(reader, start=2):
+                    for col_idx in search_cols:
+                        if col_idx >= len(row):
+                            continue
+                        if row[col_idx] == object_id:
+                            matches.setdefault(path, []).append((row_idx, col_idx, header[col_idx]))
+
+        if not matches:
+            click.echo("No matches found.")
+            return
+
+        click.echo("Matches:")
+        click.echo()
+
+        for path in sorted(matches.keys(), key=lambda p: p.name.lower()):
+            click.echo(f"{path.name}:")
+            for row_idx, col_idx, col_name in matches[path]:
+                click.echo(f"  row {row_idx:6d}, col {col_idx:3d} ({col_name})")
+            click.echo()
+        return
+
+    # ------------------------------------------------------------------
+    # Mode 2: OBJECT_ID omitted -> infer FK columns via sampling
+    # ------------------------------------------------------------------
+    click.echo(
+        f"No OBJECT_ID provided – inferring likely foreign key columns for "
+        f"{target_csv.name} by sampling up to {sample_size} Ids."
+    )
+
+    sample_ids = _sample_ids(target_csv, sample_size)
+    id_set = set(sample_ids)
+
+    click.echo(
+        f"Sampled {len(sample_ids)} distinct Ids from {target_csv.name}. "
+        f"Scanning {len(csv_files)} CSV files..."
+    )
+    click.echo()
+
+    # Path -> column name -> set of matched Ids
+    fk_matches: dict[Path, dict[str, set[str]]] = {}
+
+    for path in csv_files:
+        header = _read_header(path)
+
+        if all_columns:
+            search_cols = list(range(len(header)))
+        else:
+            search_cols = [
+                idx for idx, name in enumerate(header) if name == "Id" or name.endswith("Id")
+            ]
+            if not search_cols:
+                continue
+
+        with path.open("r", newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            next(reader, None)
+            for row in reader:
+                for col_idx in search_cols:
+                    if col_idx >= len(row):
+                        continue
+                    val = row[col_idx]
+                    if val in id_set:
+                        col_name = header[col_idx]
+                        fk_matches.setdefault(path, {}).setdefault(col_name, set()).add(val)
+
+    # Summarise FK candidates: require >= min_matches distinct Ids
+    any_found = False
+    click.echo(
+        f"Columns with at least {min_matches} distinct matching Ids "
+        f"are treated as likely foreign keys."
+    )
+    click.echo()
+
+    for path in sorted(fk_matches.keys(), key=lambda p: p.name.lower()):
+        col_map = fk_matches[path]
+        strong_cols = {
+            col_name: ids for col_name, ids in col_map.items() if len(ids) >= min_matches
+        }
+        if not strong_cols:
+            continue
+
+        any_found = True
+        click.echo(f"{path.name}:")
+        for col_name, ids in sorted(strong_cols.items()):
+            click.echo(f"  - {col_name}: {len(ids)} distinct Ids")
+        click.echo()
+
+    if not any_found:
+        click.echo(
+            "No strong FK candidates found. Try increasing --sample-size or "
+            "lowering --min-matches, or use --all-columns."
+        )
