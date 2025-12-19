@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Optional
@@ -15,32 +16,39 @@ IMPORTANT_FIELDS = {
     "Contact": ["Id", "Name", "Email", "Phone", "Title"],
     "ContentDocument": ["Id", "Title", "LatestPublishedVersionId"],
     "ContentVersion": ["Id", "Title", "VersionNumber", "CreatedDate"],
-    "ContentDocumentLink": ["Id", "LinkedEntityId", "ContentDocumentId", "ShareType", "Visibility"],
+    "ContentDocumentLink": [
+        "Id",
+        "LinkedEntityId",
+        "ContentDocumentId",
+        "DocumentTitle",
+        "ShareType",
+        "Visibility",
+    ],
     "Attachment": ["Id", "ParentId", "Name", "ContentType", "BodyLength"],
-    # 🧾 Finance objects – adjust field names once you see the actual CSV headers
+    # 🧾 Generic finance shapes (kept in case you end up with these names)
     "Invoice": [
         "Id",
         "Name",  # if present
-        "InvoiceNumber",  # common pattern
+        "InvoiceNumber",
         "InvoiceDate",
-        "Status",  # or "Status__c"
-        "TotalAmount",  # or "Total__c" / "Amount__c"
-        "Balance",  # or "Balance__c"
+        "Status",
+        "TotalAmount",
+        "Balance",
     ],
     "InvoiceLine": [
         "Id",
         "InvoiceId",
-        "LineNumber",  # often exists
-        "ProductName",  # or "Name" / "Product__c"
+        "LineNumber",
+        "ProductName",
         "Description",
         "Quantity",
         "UnitPrice",
-        "Amount",  # or "Amount__c"
+        "Amount",
     ],
     "CreditNote": [
         "Id",
         "Name",
-        "CreditNoteNumber",  # or "Credit_Number__c"
+        "CreditNoteNumber",
         "CreditNoteDate",
         "Status",
         "TotalAmount",
@@ -54,6 +62,23 @@ IMPORTANT_FIELDS = {
         "Quantity",
         "UnitPrice",
         "Amount",
+    ],
+    # Concrete Coda / FinancialForce objects from your export
+    "c2g__codaInvoice__c": [
+        "Id",
+        "Name",  # invoice number (SIN001673 etc.)
+        "CurrencyIsoCode",
+        "c2g__InvoiceDate__c",
+        "c2g__DueDate__c",
+        "c2g__InvoiceStatus__c",
+        "c2g__PaymentStatus__c",
+        "c2g__InvoiceTotal__c",
+        "c2g__NetTotal__c",
+        "c2g__OutstandingValue__c",
+        "c2g__TaxTotal__c",
+        "Days_Overdue__c",
+        "c2g__AccountName__c",
+        "c2g__CompanyReference__c",
     ],
     "c2g__codaInvoiceLineItem__c": [
         "Id",
@@ -72,13 +97,127 @@ IMPORTANT_FIELDS = {
         "Id",
         "OpportunityId",
         "PricebookEntryId",
-        "Product2Id",  # often present
+        "Product2Id",
         "Quantity",
         "UnitPrice",
         "TotalPrice",
         "Description",
     ],
 }
+
+
+def _enrich_contentdocument_links_with_title(db_path: Path, df):
+    """
+    For ContentDocumentLink rows, add a 'DocumentTitle' column by looking up
+    ContentDocument.Title from the 'content_document' table in the viewer DB.
+
+    If anything goes wrong (no table, etc.), this falls back silently.
+    """
+    # Defensive: if the column isn't there, nothing to do
+    if "ContentDocumentId" not in df.columns:
+        return df
+
+    # Collect distinct non-empty IDs
+    doc_ids = {str(x) for x in df["ContentDocumentId"] if x}
+    if not doc_ids:
+        return df
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            cur = conn.cursor()
+            placeholders = ", ".join("?" for _ in doc_ids)
+            sql = f'SELECT "Id", "Title" FROM "content_document" WHERE Id IN ({placeholders})'
+            cur.execute(sql, list(doc_ids))
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        # If the table doesn't exist or query fails, just return the original df
+        return df
+
+    # Build a mapping Id -> Title
+    id_to_title = {row[0]: row[1] for row in rows}
+
+    # Add a friendly column
+    df = df.copy()
+    df["DocumentTitle"] = df["ContentDocumentId"].map(id_to_title)
+    return df
+
+
+def _load_files_for_record(db_path: Path, parent_id: str) -> dict[str, list[dict[str, object]]]:
+    """
+    Look up files/attachments for a given Salesforce record Id in the viewer DB.
+
+    We try:
+      - Legacy Attachment records via Attachment.ParentId
+      - ContentDocumentLink -> ContentDocument -> ContentVersion (latest version)
+    If the relevant tables are missing, we just return empty lists.
+    """
+    results: dict[str, list[dict[str, object]]] = {
+        "attachments": [],
+        "content_docs": [],
+    }
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+
+        # --- Legacy Attachments ---------------------------------------------
+        try:
+            cur.execute(
+                """
+                SELECT
+                    Id,
+                    Name,
+                    ContentType,
+                    BodyLength,
+                    ParentId
+                FROM Attachment
+                WHERE ParentId = ?
+                """,
+                (parent_id,),
+            )
+            results["attachments"] = [dict(r) for r in cur.fetchall()]
+        except sqlite3.OperationalError:
+            # Table doesn't exist in this DB – ignore
+            pass
+
+        # --- ContentDocumentLink / ContentDocument / ContentVersion ----------
+        try:
+            cur.execute(
+                """
+                SELECT
+                    l.Id                AS LinkId,
+                    l.ContentDocumentId AS ContentDocumentId,
+                    l.LinkedEntityId    AS LinkedEntityId,
+                    l.ShareType         AS ShareType,
+                    l.Visibility        AS Visibility,
+                    cd.Title            AS DocumentTitle,
+                    cd.FileType         AS DocumentFileType,
+                    cv.VersionNumber    AS VersionNumber,
+                    cv.FileExtension    AS FileExtension,
+                    cv.ContentSize      AS ContentSize
+                FROM ContentDocumentLink AS l
+                LEFT JOIN ContentDocument AS cd
+                    ON cd.Id = l.ContentDocumentId
+                LEFT JOIN ContentVersion AS cv
+                    ON cv.ContentDocumentId = cd.Id
+                   AND (cv.IsLatest = 1 OR cv.IsLatest IS NULL)
+                WHERE l.LinkedEntityId = ?
+                """,
+                (parent_id,),
+            )
+            results["content_docs"] = [dict(r) for r in cur.fetchall()]
+        except sqlite3.OperationalError:
+            # One or more of the tables doesn't exist – ignore
+            pass
+
+    finally:
+        conn.close()
+
+    return results
 
 
 def _get_important_fields(api_name: str) -> list[str]:
@@ -121,8 +260,8 @@ def _select_display_columns(api_name: str, df, show_all: bool) -> list[str]:
 
 
 def _initial_db_path_from_argv() -> Optional[Path]:
-    # When launched via: streamlit run db_viewer_app.py -- <db-path>
-    # sys.argv for this script will look like: ['db_viewer_app.py', '<db-path>']
+    # When launched via: streamlit run db_app.py -- <db-path>
+    # sys.argv for this script will look like: ['db_app.py', '<db-path>']
     args = sys.argv[1:]
     for arg in args:
         if not arg.startswith("-"):
@@ -130,14 +269,25 @@ def _initial_db_path_from_argv() -> Optional[Path]:
     return None
 
 
-def _get_object_choices(tables) -> list[str]:
-    """Return a sorted list of API names for objects that actually exist in the DB."""
+def _get_object_choices(tables) -> list[tuple[str, str]]:
+    """
+    Return sorted (label, api_name) for objects that actually exist in the DB.
+
+    Uses SFObject.label for friendliness, but keeps the API name visible.
+    """
     table_names = {t.name for t in tables}
-    api_names: list[str] = []
+    choices: list[tuple[str, str]] = []
+
     for obj in OBJECTS.values():
         if obj.table_name in table_names:
-            api_names.append(obj.api_name)
-    return sorted(api_names)
+            label = getattr(obj, "label", None) or obj.api_name
+            if label != obj.api_name:
+                ui_label = f"{label} ({obj.api_name})"
+            else:
+                ui_label = label
+            choices.append((ui_label, obj.api_name))
+
+    return sorted(choices, key=lambda x: x[0])
 
 
 def main() -> None:
@@ -177,7 +327,11 @@ def main() -> None:
         )
         return
 
-    api_name = st.sidebar.selectbox("Object", object_choices, index=0)
+    labels = [label for (label, _api) in object_choices]
+    label_to_api = {label: api for (label, api) in object_choices}
+
+    selected_label = st.sidebar.selectbox("Object", labels, index=0)
+    api_name = label_to_api[selected_label]
 
     search_term = st.sidebar.text_input(
         "Search (Name contains)",
@@ -233,7 +387,7 @@ def main() -> None:
     col_left, col_right = st.columns([2, 3])
 
     with col_left:
-        st.subheader(f"{api_name} records")
+        st.subheader(f"{selected_label} records")
 
         if not rows:
             st.info("No records found. Try adjusting the search or increasing the max rows.")
@@ -252,14 +406,14 @@ def main() -> None:
                 rid = r.get("Id")
                 label = r.get("Name") or rid or "(no Id)"
                 options.append(f"{label} [{rid}]")
-            selected_label = st.selectbox(
+            selected_label_value = st.selectbox(
                 "Select record",
                 options,
                 index=0,
             )
             # Extract Id from label
-            if "[" in selected_label and selected_label.endswith("]"):
-                selected_id = selected_label.rsplit("[", 1)[-1].rstrip("]")
+            if "[" in selected_label_value and selected_label_value.endswith("]"):
+                selected_id = selected_label_value.rsplit("[", 1)[-1].rstrip("]")
             else:
                 # Fallback: try to find by Name
                 selected_id = rows[0].get("Id")
@@ -283,18 +437,32 @@ def main() -> None:
             return
 
         parent = record.parent
+        parent_label = getattr(parent.sf_object, "label", None) or parent.sf_object.api_name
+
         st.markdown(
-            f"**{parent.sf_object.api_name}** "
+            f"**{parent_label}** "
             f"`{parent.data.get('Name', '')}` "
             f"(`{parent.data.get(parent.sf_object.id_field, selected_id)}`)"
         )
 
-        # Parent fields
+        # Files & attachments (if any) for this record
+        import pandas as pd  # type: ignore[import-not-found]
+
+        files = _load_files_for_record(db_path, selected_id)
+        if files["attachments"] or files["content_docs"]:
+            with st.expander("Files & attachments", expanded=False):
+                if files["attachments"]:
+                    st.markdown("**Legacy Attachments**")
+                    st.dataframe(pd.DataFrame(files["attachments"]))
+
+                if files["content_docs"]:
+                    st.markdown("**Content Documents (via ContentDocumentLink)**")
+                    st.dataframe(pd.DataFrame(files["content_docs"]))
+
         # Parent fields
         with st.expander("Parent fields", expanded=True):
             import pandas as pd  # type: ignore[import-not-found]
 
-            # Turn the parent dict into a DataFrame
             all_items = sorted(parent.data.items())
             all_df = pd.DataFrame([{"Field": k, "Value": v} for k, v in all_items])
 
@@ -305,7 +473,6 @@ def main() -> None:
                 if important:
                     parent_df = all_df[all_df["Field"].isin(important)]
                 else:
-                    # fallback: just show everything if we don't know what's important
                     parent_df = all_df
 
             st.table(parent_df)
@@ -326,6 +493,11 @@ def main() -> None:
                 import pandas as pd  # type: ignore[import-not-found]
 
                 child_df = pd.DataFrame(coll.records)
+
+                # Special case: for ContentDocumentLink, look up ContentDocument.Title
+                if child_obj.api_name == "ContentDocumentLink":
+                    child_df = _enrich_contentdocument_links_with_title(db_path, child_df)
+
                 display_cols = _select_display_columns(
                     child_obj.api_name, child_df, show_all_fields
                 )
