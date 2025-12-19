@@ -78,6 +78,11 @@ OBJECTS: Dict[str, SFObject] = {
         label="Opportunity",
         table_name="opportunity",
     ),
+    "OpportunityLineItem": SFObject(
+        api_name="OpportunityLineItem",
+        label="Opportunity Line Item",
+        table_name="OpportunityLineItem",
+    ),
     "Contact": SFObject(
         api_name="Contact",
         label="Contact",
@@ -105,40 +110,15 @@ OBJECTS: Dict[str, SFObject] = {
         table_name="attachment",
     ),
     # Finance objects
-    "Invoice": SFObject(
-        api_name="Invoice",
-        label="Invoice",
-        table_name="invoice",
-    ),
-    "InvoiceLine": SFObject(
-        api_name="InvoiceLine",
-        label="Invoice Line",
-        table_name="invoice_line",
-    ),
-    "CreditNote": SFObject(
-        api_name="CreditNote",
-        label="Credit Note",
-        table_name="credit_note",
-    ),
-    "CreditNoteLine": SFObject(
-        api_name="CreditNoteLine",
-        label="Credit Note Line",
-        table_name="credit_note_line",
-    ),
     "c2g__codaInvoice__c": SFObject(
         api_name="c2g__codaInvoice__c",
-        label="Coda Sales Invoice",
+        label="Invoice",
         table_name="c2g__codaInvoice__c",
     ),
     "c2g__codaInvoiceLineItem__c": SFObject(
         api_name="c2g__codaInvoiceLineItem__c",
-        label="Coda Invoice Line Item",
+        label="Invoice Line Item",
         table_name="c2g__codaInvoiceLineItem__c",
-    ),
-    "OpportunityLineItem": SFObject(
-        api_name="OpportunityLineItem",
-        label="Opportunity Line Item",
-        table_name="OpportunityLineItem",
     ),
     # Add further exported objects here as we need them
 }
@@ -195,29 +175,12 @@ RELATIONSHIPS: List[SFRelationship] = [
         child_field="ParentId",
     ),
     # Finance relationships
+    # Invoice Line Item and Invoice
     SFRelationship(
-        name="Account_Invoice",
-        parent="Account",
-        child="Invoice",
-        child_field="AccountId",
-    ),
-    SFRelationship(
-        name="Invoice_InvoiceLine",
-        parent="Invoice",
-        child="InvoiceLine",
-        child_field="InvoiceId",
-    ),
-    SFRelationship(
-        name="Account_CreditNote",
-        parent="Account",
-        child="CreditNote",
-        child_field="AccountId",
-    ),
-    SFRelationship(
-        name="CreditNote_CreditNoteLine",
-        parent="CreditNote",
-        child="CreditNoteLine",
-        child_field="CreditNoteId",
+        name="InvoiceLineItem",
+        parent="c2g__codaInvoice__c",
+        child="c2g__codaInvoiceLineItem__c",
+        child_field="c2g__Invoice__c",
     ),
 ]
 

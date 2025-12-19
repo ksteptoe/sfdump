@@ -34,6 +34,12 @@ ALWAYS_INCLUDE_FIELDS = {
     # "Case": ["AccountId"],
 }
 
+# Some Salesforce objects have "implementation restrictions" and must be
+# queried with an explicit WHERE on Id / ContentDocumentId / LinkedEntityId.
+IMPLEMENTATION_RESTRICTED_OBJECTS = {
+    "ContentDocumentLink",
+}
+
 
 @click.command("csv")
 @click.option("--object", "object_name", required=True, help="sObject name (e.g. Account).")
@@ -51,7 +57,14 @@ ALWAYS_INCLUDE_FIELDS = {
         "Auto mode always includes reference Id fields (e.g. OwnerId, AccountId)."
     ),
 )
-@click.option("--where", help="Optional SOQL WHERE clause (without the 'WHERE').")
+@click.option(
+    "--where",
+    help=(
+        "Optional SOQL WHERE clause (without the 'WHERE'). "
+        "For some objects (e.g. ContentDocumentLink) this is required due to "
+        "Salesforce implementation restrictions."
+    ),
+)
 @click.option("--limit", type=int, help="Optional row limit (client-side stop).")
 @click.option(
     "--relationships/--no-relationships",
@@ -112,13 +125,27 @@ def csv_cmd(
                 if f not in existing:
                     resolved_fields.append(f)
 
+    # Apply WHERE clause
+    effective_where = where
+
+    # For implementation-restricted objects, force the user to provide a WHERE
+    if object_name in IMPLEMENTATION_RESTRICTED_OBJECTS and not effective_where:
+        raise click.ClickException(
+            "ContentDocumentLink has a Salesforce implementation restriction and "
+            "must be queried with an explicit WHERE clause on Id, LinkedEntityId "
+            "or ContentDocumentId.\n\n"
+            "Example:\n"
+            "  sfdump csv --out ./exports/... --object ContentDocumentLink \\\n"
+            "      --where \"LinkedEntityId = '001xxxxxxxxxxxxAAA'\""
+        )
+
     try:
         csv_path, n = dump_object_to_csv(
             api=api,
             object_name=object_name,
             out_dir=os.path.join(out_dir, "csv"),
             fields=resolved_fields,
-            where=where,
+            where=effective_where,
             limit=limit,
         )
     except Exception as err:
