@@ -74,10 +74,19 @@ INDEX_BY_FLAGS := $(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj))
         export-all export-core-crm export-crm-all export-ffa export-hr export-psa \
         export-files export-files-index-only export-doc-index export-meta \
         export-all-objects export-archive export-clean export-show-config \
-        csv-one view changelog fix-orphans cfo
+        csv-one view changelog fix-orphans cfo \
+        export-audit export-audit-lite export-audit-no-pdf
 
 help:
 	@echo "Salesforce / FinancialForce export Makefile"
+	@echo ""
+	@echo "Export layout (under EXPORT_ROOT):"
+	@echo "  csv/          Object CSVs"
+	@echo "  files/        ContentVersion downloads"
+	@echo "  files_legacy/ Attachment downloads"
+	@echo "  links/        File indexes + metadata (from 'sfdump files')"
+	@echo "  meta/         Object list + master_documents_index.csv"
+	@echo "  logs/         Optional logs"
 	@echo ""
 	@echo "Exports go under:"
 	@echo "  BASE_EXPORT_ROOT = $(BASE_EXPORT_ROOT)"
@@ -87,29 +96,34 @@ help:
 	@echo "  make -f Makefile.export <target> [BASE_EXPORT_ROOT=path] [EXPORT_DATE=YYYY-MM-DD]"
 	@echo ""
 	@echo "Main targets:"
-	@echo "  help                       Show this help."
-	@echo "  export-all                 One-command export: files + CRM + FFA + HR + meta + docs index."
-	@echo "  export-files               Download Files & Attachments + build indexes."
-	@echo "  export-files-index-only    Rebuild indexes only (no download)."
-	@echo "  export-crm-all             Export core CRM + activity + security."
-	@echo "  export-core-crm            Export just the core CRM subset."
-	@echo "  export-ffa                 Export FinancialForce/ERP objects (ff* + c2g__)."
-	@echo "  export-hr                  Export HR / employment objects."
-	@echo "  export-meta                Export full sObject list to meta/all_objects.txt."
-	@echo "  export-doc-index           Build meta/master_documents_index.csv for browsing/search."
-	@echo "  export-all-objects         Export every queryable object (slow; runs login)."
-	@echo "  export-archive             Zip the entire EXPORT_ROOT directory."
-	@echo "  export-clean               Remove generated folders under EXPORT_ROOT."
+	@echo "  export-audit               One-command review pack (files + data + docs index + report)"
+	@echo "  export-all                 Files + CRM + FFA + HR + meta + docs index"
+	@echo "  export-files               Download Files & Attachments + build indexes"
+	@echo "  export-files-index-only    Rebuild indexes only (no download)"
+	@echo "  export-core-crm            Core CRM subset"
+	@echo "  export-crm-all             Core CRM + activity + security"
+	@echo "  export-ffa                 Finance data (Certinia/FF + CODA c2g__ objects)"
+	@echo "  export-psa                 PSA/PSE project data"
+	@echo "  export-hr                  HR / employment objects"
+	@echo "  export-meta                Write meta/all_objects.txt"
+	@echo "  export-doc-index           Build meta/master_documents_index.csv"
+	@echo "  export-all-objects         Export *every* queryable object (slow)"
+	@echo "  export-archive             Zip EXPORT_ROOT"
+	@echo "  export-clean               Remove generated folders under EXPORT_ROOT"
+	@echo ""
+	@echo "Finance pipeline (typical):"
+	@echo "  make -f Makefile.export export-files export-ffa export-doc-index cfo"
 	@echo ""
 	@echo "Notes:"
-	@echo "  - Running 'help' does not log in or call Salesforce."
-	@echo "  - 'export-all-objects' will log in (it must discover objects)."
+	@echo "  - 'help' should not log in. If you see OAuth login here, you have a parse-time"
+	@echo "    '\$$(shell \$$(SFDUMP) ...)' in the Makefile (remove/move it into a recipe)."
 	@echo ""
 	@echo "Variables:"
 	@echo "  SFDUMP              sfdump executable (default: sfdump -v)"
-	@echo "  BASE_EXPORT_ROOT    Base dir for all exports (default: ./exports)."
-	@echo "  EXPORT_DATE         Date suffix (default: today from 'date +%Y-%m-%d')."
-	@echo "  EXPORT_ROOT         Full export dir; override to change entire location."
+	@echo "  BASE_EXPORT_ROOT    Base dir for all exports (default: ./exports)"
+	@echo "  EXPORT_DATE         Date suffix (default: today from 'date +%Y-%m-%d')"
+	@echo "  EXPORT_ROOT         Full export dir; override to change entire location"
+
 
 # ----------------------------------------------------------------------
 # CORE SALESFORCE OBJECT LISTS
@@ -345,6 +359,26 @@ ALL_CRM_TARGETS       := $(CRM_CORE_TARGETS) $(CRM_ACTIVITY_TARGETS) $(CRM_SECUR
 # ----------------------------------------------------------------------
 # TOP-LEVEL EXPORT TARGETS
 # ----------------------------------------------------------------------
+
+# A human-review pack: files + key data + document index + (optional) PDF report.
+# Intended to be the “one command” bundle for offline audit/review, not just finance.
+export-audit: export-show-config export-files export-crm-all export-ffa export-hr export-doc-index cfo
+	@echo "=== AUDIT PACK COMPLETED → $(EXPORT_ROOT) ==="
+	@echo "Key outputs:"
+	@echo "  CSVs:   $(CSV_DIR)"
+	@echo "  Files:  $(FILES_DIR) + $(FILES_LEGACY_DIR)"
+	@echo "  Links:  $(LINKS_DIR)"
+	@echo "  Index:  $(META_DIR)/master_documents_index.csv"
+	@echo "  CFO:    $(CFO_PDF)"
+
+# Faster variant when you don’t need the PDF build.
+export-audit-no-pdf: export-show-config export-files export-crm-all export-ffa export-hr export-doc-index
+	@echo "=== AUDIT PACK (NO PDF) COMPLETED → $(EXPORT_ROOT) ==="
+
+# Minimal variant for quick iteration on document browsing/search.
+export-audit-lite: export-show-config export-files export-doc-index
+	@echo "=== AUDIT LITE COMPLETED → $(EXPORT_ROOT) ==="
+
 
 export-all: export-show-config export-files export-crm-all export-ffa export-hr export-meta export-doc-index
 	@echo "=== ALL EXPORTS COMPLETED → $(EXPORT_ROOT) ==="
