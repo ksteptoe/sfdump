@@ -377,7 +377,7 @@ def dump_attachments(
                     )
                 meta_rows.append(r)
 
-    links_dir = os.path.join(out_dir, "links")
+    links_dir = os.path.join(out_dir, "files", "links")
     ensure_dir(links_dir)
     meta_csv = os.path.join(links_dir, "attachments.csv")
     if meta_rows:

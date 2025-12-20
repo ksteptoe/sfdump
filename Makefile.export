@@ -73,11 +73,11 @@ INDEX_BY_FLAGS := $(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj))
 # ----------------------------------------------------------------------
 
 .PHONY: help \
-        export-all export-core-crm export-crm-all export-ffa export-hr export-psa \
-        export-files export-files-index-only export-doc-index export-meta \
-        export-all-objects export-archive export-clean export-show-config \
-        csv-one view changelog fix-orphans cfo \
-        export-audit export-audit-lite export-audit-no-pdf
+        export-all export-core-crm export-crm-all export-ffa export-hr \
+        export-files export-meta export-archive export-clean \
+        export-show-config csv-one export-files-index-only export-doc-index view \
+        changelog fix-orphans cfo \
+        export-db export-finance finance-viewer
 
 help:
 	@echo "Salesforce / FinancialForce export Makefile"
@@ -415,41 +415,47 @@ export-hr: $(HR_TARGETS)
 	@echo "=== HR / employment export done → $(CSV_DIR) ==="
 
 export-files:
-<<<<<<< HEAD
-	@echo "=== Exporting Files & Attachments under $(FILES_DIR) and $(FILES_LEGACY_DIR) ==="
-	@echo "=== Building indexes + metadata under $(LINKS_DIR) ==="
-	@echo "=== Indexing files by: $(FILE_INDEX_OBJECTS) ==="
-	@mkdir -p "$(EXPORT_ROOT)"
-	@$(SFDUMP) files --out "$(EXPORT_ROOT)" $(INDEX_BY_FLAGS) \
-=======
 	@echo "=== Exporting Files & Attachments to $(FILES_DIR) and $(FILES_LEGACY_DIR) ==="
 	@echo "=== Indexing files by: $(FILE_INDEX_OBJECTS) ==="
 	@mkdir -p "$(EXPORT_ROOT)"
 	@$(SFDUMP) files --out "$(FILES_OUT_DIR)" $(INDEX_BY_FLAGS) \
->>>>>>> 8e76b0b (export: fix files output root to avoid files/files nesting)
 	  || echo "WARNING: sfdump files failed (see above); continuing export-all."
 
-
 export-files-index-only:
-<<<<<<< HEAD
-	@echo "=== Rebuilding file indexes only (no download) under $(LINKS_DIR) ==="
-	@mkdir -p "$(EXPORT_ROOT)"
-	@$(SFDUMP) files \
-		--out "$(EXPORT_ROOT)" \
-=======
 	@echo "=== Rebuilding file indexes only (no download) in $(LINKS_DIR) ==="
 	@mkdir -p "$(EXPORT_ROOT)"
 	@$(SFDUMP) files \
 		--out "$(FILES_OUT_DIR)" \
->>>>>>> 8e76b0b (export: fix files output root to avoid files/files nesting)
 		$(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj)) \
 		--index-only \
 	  || echo "WARNING: sfdump files --index-only failed (see above)."
 
-
 export-doc-index:
 	@echo "=== Building master documents index for $(EXPORT_ROOT) ==="
 	@$(SFDUMP) docs-index --export-root "$(EXPORT_ROOT)"
+
+# ------------------------------------------------------------------------------
+# FINANCE-FRIENDLY TARGETS (hide sequence knowledge)
+# ------------------------------------------------------------------------------
+
+export-db:
+	@echo "=== Building SQLite relationship DB → $(META_DIR)/sfdata.db ==="
+	@mkdir -p "$(META_DIR)"
+	@$(SFDUMP) build-db --export-dir "$(EXPORT_ROOT)" --db "$(META_DIR)/sfdata.db" --overwrite
+
+export-finance: export-all export-db
+	@echo "=== FINANCE EXPORT READY → $(EXPORT_ROOT) ==="
+	@echo "Artifacts:"
+	@echo "  CSVs:   $(CSV_DIR)"
+	@echo "  Files:  $(FILES_DIR)"
+	@echo "  Links:  $(FILES_DIR)/links (or wherever sfdump writes file indexes)"
+	@echo "  Docs:   $(EXPORT_ROOT)/docs/master_documents_index.csv"
+	@echo "  DB:     $(META_DIR)/sfdata.db"
+
+finance-viewer: export-finance
+	@echo "=== Launching Finance Evidence Viewer ==="
+	@$(SFDUMP) finance-viewer --db "$(META_DIR)/sfdata.db" --export-root "$(EXPORT_ROOT)"
+
 
 export-meta: $(META_DIR)/all_objects.txt
 	@echo "=== Object list written to $(META_DIR)/all_objects.txt ==="
