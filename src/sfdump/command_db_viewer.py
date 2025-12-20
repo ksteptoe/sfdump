@@ -15,6 +15,7 @@ import click
 
 @click.command(name="db-viewer")
 @click.option(
+    "-d",
     "--export-dir",
     "export_dir",
     type=click.Path(exists=True, file_okay=False, path_type=Path),

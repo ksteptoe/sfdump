@@ -100,6 +100,7 @@ def _inspect_relationships(db_path: Path) -> list[str]:
 
 @click.command(name="db-info")
 @click.option(
+    "-d",
     "--export-dir",
     "export_dir",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
