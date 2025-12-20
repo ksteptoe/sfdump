@@ -341,9 +341,9 @@ PSE_TARGETS           := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(PSE_OBJECTS
 
 ALL_CRM_TARGETS       := $(CRM_CORE_TARGETS) $(CRM_ACTIVITY_TARGETS) $(CRM_SECURITY_TARGETS)
 
-# All sObjects (dynamic list from sfdump)
-ALL_SOBJECTS        := $(shell $(SFDUMP) objects)
-ALL_SOBJECT_TARGETS := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(ALL_SOBJECTS)))
+ALL_SOBJECTS        = $(shell $(SFDUMP) objects)
+ALL_SOBJECT_TARGETS = $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(ALL_SOBJECTS)))
+
 
 # ------------------------------------------------------------------------------
 # TOP-LEVEL EXPORT TARGETS
