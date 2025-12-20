@@ -9,34 +9,34 @@
 #   BASE_EXPORT_ROOT="./exports"
 #   EXPORT_DATE=2025-11-30
 #
-# NOTE: This assumes:
-#   - sfdump csv wants:   sfdump csv --object <SOBJECT> --out <DIR>
-#   - sfdump files wants: sfdump files --out <DIR> --index-by <SOBJECT> [--index-by ...]
-#   If your CLI differs, tweak the lines marked "ADJUST HERE IF NEEDED".
+# Export layout (uniform):
+#   EXPORT_ROOT/
+#     csv/          (object CSVs)
+#     files/        (ContentVersion downloads)
+#     files_legacy/ (Attachment downloads)
+#     links/        (indexes + metadata from `sfdump files`)
+#     meta/         (object list + master_documents_index.csv)
+#     logs/         (optional)
 
-# Default target: show help
 .DEFAULT_GOAL := help
 
 SFDUMP ?= sfdump -v
 
-# Base directory for all exports (repo-local by default)
 BASE_EXPORT_ROOT ?= ./exports
-
-# Date and root directory for this run
 EXPORT_DATE  ?= $(shell date +%Y-%m-%d)
 EXPORT_ROOT  ?= $(BASE_EXPORT_ROOT)/export-$(EXPORT_DATE)
 
-LOG_DIR      := $(EXPORT_ROOT)/logs
+CSV_DIR          := $(EXPORT_ROOT)/csv
+FILES_DIR        := $(EXPORT_ROOT)/files
+FILES_LEGACY_DIR := $(EXPORT_ROOT)/files_legacy
+LINKS_DIR        := $(EXPORT_ROOT)/links
+META_DIR         := $(EXPORT_ROOT)/meta
+LOG_DIR          := $(EXPORT_ROOT)/logs
 
-CSV_DIR      := $(EXPORT_ROOT)/csv
-FILES_DIR    := $(EXPORT_ROOT)/files
-META_DIR     := $(EXPORT_ROOT)/meta
-
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # FILE INDEX SETTINGS (for --index-by)
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
-# Objects we care about when indexing files/attachments
 FILE_INDEX_OBJECTS = \
   Opportunity \
   Account \
@@ -64,18 +64,17 @@ FILE_INDEX_OBJECTS = \
   HR_Activity__c \
   Salary_History__c
 
-# Turn that into: --index-by Obj1 --index-by Obj2 ...
 INDEX_BY_FLAGS := $(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj))
 
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # HELP
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
 .PHONY: help \
-        export-all export-core-crm export-crm-all export-ffa export-hr \
-        export-files export-meta export-archive export-clean \
-        export-show-config csv-one export-files-index-only export-doc-index view \
-        changelog fix-orphans cfo
+        export-all export-core-crm export-crm-all export-ffa export-hr export-psa \
+        export-files export-files-index-only export-doc-index export-meta \
+        export-all-objects export-archive export-clean export-show-config \
+        csv-one view changelog fix-orphans cfo
 
 help:
 	@echo "Salesforce / FinancialForce export Makefile"
@@ -89,16 +88,22 @@ help:
 	@echo ""
 	@echo "Main targets:"
 	@echo "  help                       Show this help."
-	@echo "  export-all                 Files + all CRM + FFA + HR + object list."
-	@echo "  export-files               Export Files & Attachments + build indexes (--index-by ...)."
-	@echo "  export-files-index-only    Rebuild file indexes only (no download)."
-	@echo "  export-crm-all             Export core CRM (Accounts, Contacts, Opps, Quotes, etc.)."
+	@echo "  export-all                 One-command export: files + CRM + FFA + HR + meta + docs index."
+	@echo "  export-files               Download Files & Attachments + build indexes."
+	@echo "  export-files-index-only    Rebuild indexes only (no download)."
+	@echo "  export-crm-all             Export core CRM + activity + security."
 	@echo "  export-core-crm            Export just the core CRM subset."
-	@echo "  export-ffa                 Export FinancialForce/ERP objects (ff*)."
+	@echo "  export-ffa                 Export FinancialForce/ERP objects (ff* + c2g__)."
 	@echo "  export-hr                  Export HR / employment objects."
 	@echo "  export-meta                Export full sObject list to meta/all_objects.txt."
+	@echo "  export-doc-index           Build meta/master_documents_index.csv for browsing/search."
+	@echo "  export-all-objects         Export every queryable object (slow; runs login)."
 	@echo "  export-archive             Zip the entire EXPORT_ROOT directory."
-	@echo "  export-clean               Remove CSV/files/meta under EXPORT_ROOT (not the zip)."
+	@echo "  export-clean               Remove generated folders under EXPORT_ROOT."
+	@echo ""
+	@echo "Notes:"
+	@echo "  - Running 'help' does not log in or call Salesforce."
+	@echo "  - 'export-all-objects' will log in (it must discover objects)."
 	@echo ""
 	@echo "Variables:"
 	@echo "  SFDUMP              sfdump executable (default: sfdump -v)"
@@ -106,9 +111,9 @@ help:
 	@echo "  EXPORT_DATE         Date suffix (default: today from 'date +%Y-%m-%d')."
 	@echo "  EXPORT_ROOT         Full export dir; override to change entire location."
 
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # CORE SALESFORCE OBJECT LISTS
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
 CRM_CORE_OBJECTS = \
   Account \
@@ -159,9 +164,9 @@ CRM_SECURITY_OBJECTS = \
   PermissionSetLicenseAssign \
   RecordType
 
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # HR / EMPLOYMENT / PEOPLE-OPS OBJECTS
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
 HR_OBJECTS = \
   Engineer__c \
@@ -227,9 +232,9 @@ CODA_TAX_OBJECTS = \
   c2g__TaxDetailPayableCreditNote__c \
   c2g__TaxDetailPayableCreditNoteExpense__c
 
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # FINANCIALFORCE / CERTINIA (ff… PREFIX)
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
 FF_ERP_CORE_OBJECTS = \
   fferpcore__Company__c \
@@ -286,10 +291,6 @@ FF_SETTINGS_OBJECTS = \
   ffvat__VatReturnBatchSettings__c \
   ffvat__VatReturn__c
 
-# ------------------------------------------------------------------------------
-# PSA / PSE (Professional Services Automation) – core project data
-# ------------------------------------------------------------------------------
-
 PSE_OBJECTS = \
   pse__Proj__c \
   pse__Milestone__c \
@@ -328,9 +329,9 @@ FFA_OBJECTS = \
   $(CODA_TX_OBJECTS) \
   $(CODA_TAX_OBJECTS)
 
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # SENTINEL TARGETS
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
 CRM_CORE_TARGETS      := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(CRM_CORE_OBJECTS)))
 CRM_ACTIVITY_TARGETS  := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(CRM_ACTIVITY_OBJECTS)))
@@ -341,13 +342,9 @@ PSE_TARGETS           := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(PSE_OBJECTS
 
 ALL_CRM_TARGETS       := $(CRM_CORE_TARGETS) $(CRM_ACTIVITY_TARGETS) $(CRM_SECURITY_TARGETS)
 
-ALL_SOBJECTS        = $(shell $(SFDUMP) objects)
-ALL_SOBJECT_TARGETS = $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(ALL_SOBJECTS)))
-
-
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # TOP-LEVEL EXPORT TARGETS
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
 export-all: export-show-config export-files export-crm-all export-ffa export-hr export-meta export-doc-index
 	@echo "=== ALL EXPORTS COMPLETED → $(EXPORT_ROOT) ==="
@@ -366,7 +363,6 @@ export-all-objects: export-show-config
 	    echo "and *.failed sentinels in $(CSV_DIR)."; \
 	fi
 
-
 export-core-crm: $(CRM_CORE_TARGETS)
 	@echo "=== Core CRM export done → $(CSV_DIR) ==="
 
@@ -382,25 +378,22 @@ export-psa: $(PSE_TARGETS)
 export-hr: $(HR_TARGETS)
 	@echo "=== HR / employment export done → $(CSV_DIR) ==="
 
-# Files / Attachments + indexes for key parent objects
 export-files:
-	@echo "=== Exporting Files & Attachments under $(EXPORT_ROOT)/files ==="
-	@echo "=== Building indexes + metadata under $(EXPORT_ROOT)/files/links ==="
+	@echo "=== Exporting Files & Attachments under $(FILES_DIR) and $(FILES_LEGACY_DIR) ==="
+	@echo "=== Building indexes + metadata under $(LINKS_DIR) ==="
 	@echo "=== Indexing files by: $(FILE_INDEX_OBJECTS) ==="
 	@mkdir -p "$(EXPORT_ROOT)"
 	@$(SFDUMP) files --out "$(EXPORT_ROOT)" $(INDEX_BY_FLAGS) \
 	  || echo "WARNING: sfdump files failed (see above); continuing export-all."
 
-
 export-files-index-only:
-	@echo "=== Rebuilding file indexes only (no download) under $(EXPORT_ROOT)/files/links ==="
+	@echo "=== Rebuilding file indexes only (no download) under $(LINKS_DIR) ==="
 	@mkdir -p "$(EXPORT_ROOT)"
 	@$(SFDUMP) files \
 		--out "$(EXPORT_ROOT)" \
 		$(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj)) \
 		--index-only \
 	  || echo "WARNING: sfdump files --index-only failed (see above)."
-
 
 export-doc-index:
 	@echo "=== Building master documents index for $(EXPORT_ROOT) ==="
@@ -410,15 +403,15 @@ export-meta: $(META_DIR)/all_objects.txt
 	@echo "=== Object list written to $(META_DIR)/all_objects.txt ==="
 
 $(META_DIR)/all_objects.txt:
-	mkdir -p "$(META_DIR)"
-	$(SFDUMP) objects --all > "$(META_DIR)/all_objects.txt"
+	@mkdir -p "$(META_DIR)"
+	@$(SFDUMP) objects --all > "$(META_DIR)/all_objects.txt"
 
 export-archive:
 	@echo "=== Creating archive $(EXPORT_ROOT).zip ==="
-	zip -r "$(EXPORT_ROOT).zip" "$(EXPORT_ROOT)"
+	@zip -r "$(EXPORT_ROOT).zip" "$(EXPORT_ROOT)"
 
 export-clean:
-	rm -rf "$(CSV_DIR)" "$(FILES_DIR)" "$(META_DIR)"
+	@rm -rf "$(CSV_DIR)" "$(FILES_DIR)" "$(FILES_LEGACY_DIR)" "$(LINKS_DIR)" "$(META_DIR)" "$(LOG_DIR)"
 
 export-show-config:
 	@echo "SFDUMP             = $(SFDUMP)"
@@ -427,12 +420,15 @@ export-show-config:
 	@echo "EXPORT_ROOT        = $(EXPORT_ROOT)"
 	@echo "CSV_DIR            = $(CSV_DIR)"
 	@echo "FILES_DIR          = $(FILES_DIR)"
+	@echo "FILES_LEGACY_DIR   = $(FILES_LEGACY_DIR)"
+	@echo "LINKS_DIR          = $(LINKS_DIR)"
 	@echo "META_DIR           = $(META_DIR)"
+	@echo "LOG_DIR            = $(LOG_DIR)"
 	@echo "FILE_INDEX_OBJECTS = $(FILE_INDEX_OBJECTS)"
 
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # PATTERN RULE – HOW TO EXPORT ONE OBJECT
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
 $(CSV_DIR)/%.done:
 	@echo "=== Exporting $* to $(CSV_DIR) ==="
@@ -447,57 +443,51 @@ $(CSV_DIR)/%.done:
 
 csv-one:
 	@if [ -z "$(OBJ)" ]; then \
-	  echo "Usage: make csv-one OBJ=Account"; \
+	  echo "Usage: make -f Makefile.export csv-one OBJ=Account"; \
 	  exit 1; \
 	fi
-	$(MAKE) $(CSV_DIR)/$(OBJ).done
+	@$(MAKE) -f Makefile.export "$(CSV_DIR)/$(OBJ).done"
 
-# ------------------------------------------------------------------------------
-# VIEWER: Open the SFdump Web Viewer for the current exports folder
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# VIEWER: Open the SFdump Web Viewer for the exports folder
+# ----------------------------------------------------------------------
 
 view:
 	@echo "Launching SFdump Viewer..."
-	"$(HOME)/OneDrive/py/sfdump/sfdump-view.cmd" "$(BASE_EXPORT_ROOT)"
+	@"$(HOME)/OneDrive/py/sfdump/sfdump-view.cmd" "$(BASE_EXPORT_ROOT)"
 
 # --------------------------------------------------------------------
 # CFO REPORT PIPELINE
 # --------------------------------------------------------------------
 
-# The generated markdown file path
-CFO_MD := docs/admin-finance/cfo_report_dynamic.md
-
-# Directory where Sphinx builds the PDF
+CFO_MD  := docs/admin-finance/cfo_report_dynamic.md
 CFO_PDF := docs/_build/latex/sfdump.pdf
 
-
-cfo:  ## Generate CFO dynamic report and PDF
+cfo:
 	@echo ">>> Running CFO dynamic report generator..."
 	@echo ">>> Using export dir: $(FILES_DIR)"
-	sfdump cfo-generate-docs --export-dir "$(FILES_DIR)" --redact
+	@sfdump cfo-generate-docs --export-dir "$(FILES_DIR)" --redact
 	@echo ">>> CFO markdown generated."
-
 	@echo ">>> Building CFO PDF with Sphinx..."
-	$(MAKE) -C docs pdf
-
-	@echo ">>> CFO PDF ready at: docs/_build/latex/sfdump.pdf"
+	@$(MAKE) -C docs pdf
+	@echo ">>> CFO PDF ready at: $(CFO_PDF)"
 
 # --------------------------------------------------------------------
 # CHANGELOG AUTO-GENERATION
 # --------------------------------------------------------------------
 
-changelog:  ## Generate CHANGELOG.md from git log
+changelog:
 	@echo ">>> Generating CHANGELOG.md"
 	@echo "# Changelog" > docs/CHANGELOG.md
 	@echo "" >> docs/CHANGELOG.md
-	git log --pretty=format:"### %ad%n- %s%n" --date=short >> docs/CHANGELOG.md
+	@git log --pretty=format:"### %ad%n- %s%n" --date=short >> docs/CHANGELOG.md
 	@echo ">>> CHANGELOG.md updated."
 
 # --------------------------------------------------------------------
 # FIX ORPHANED FILES
 # --------------------------------------------------------------------
 
-fix-orphans:  ## Add :orphan: to any file not referenced in a toctree
+fix-orphans:
 	@echo ">>> Scanning for orphaned .md/.rst documentation files..."
 	@for f in `find docs -name "*.md" -o -name "*.rst"`; do \
 		if ! grep -q ":orphan:" $$f; then \
