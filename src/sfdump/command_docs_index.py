@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 import click
 
@@ -45,33 +45,95 @@ def _load_csv(path: Path) -> "pd.DataFrame":
         return pd.DataFrame()
 
 
-def _with_files_prefix(rel_path: object) -> str:
-    """Normalise a stored path so it is relative to EXPORT_ROOT.
-
-    attachments.csv / content_versions.csv typically store paths
-    relative to the files/ directory (e.g. 'files_legacy/00/...').
-    For the browser we want paths relative to EXPORT_ROOT, e.g.:
-
-        'files/files_legacy/00/...'
-
-    Handles missing / NaN / non-string values gracefully.
-    """
+def _norm_rel_path(rel_path: object) -> str:
+    """Normalise a stored path into a clean posix-style relative path."""
     if rel_path is None:
         return ""
-
-    # Convert to string, but treat 'nan' as empty
     s = str(rel_path).strip()
     if not s or s.lower() == "nan":
         return ""
+    return s.replace("\\", "/").lstrip("/")
 
-    # Normalise separators and strip leading slashes
-    p = s.replace("\\", "/").lstrip("/")
 
-    # If it already starts with 'files/', don't double-prefix
-    if p.lower().startswith("files/"):
-        return p
+def _find_links_dir(export_root: Path) -> Tuple[Path, str]:
+    """Find the directory containing *_files_index.csv and file metadata CSVs.
 
-    return f"files/{p}"
+    Supported layouts:
+      - EXPORT_ROOT/files/links
+      - EXPORT_ROOT/links
+    """
+    cand1 = export_root / "files" / "links"
+    if cand1.exists():
+        return cand1, "files/links"
+    cand2 = export_root / "links"
+    if cand2.exists():
+        return cand2, "links"
+    # Default for error message
+    return cand1, "files/links"
+
+
+def _first_existing(export_root: Path, candidates: List[str]) -> Optional[str]:
+    """Return the first candidate that exists under export_root."""
+    for c in candidates:
+        if not c:
+            continue
+        if (export_root / c).exists():
+            return c
+    return None
+
+
+def _resolve_local_path(export_root: Path, rel_path: object, kind: str) -> str:
+    """Resolve a local path relative to EXPORT_ROOT by probing common layouts.
+
+    This avoids hard-coded assumptions like 'files/files' by checking what exists.
+    Returns a path relative to EXPORT_ROOT.
+    """
+    p = _norm_rel_path(rel_path)
+    if not p:
+        return ""
+
+    # If p already looks rooted (files/... or files_legacy/...), keep it as a candidate.
+    candidates: List[str] = []
+
+    def add(x: str) -> None:
+        x = x.replace("\\", "/").lstrip("/")
+        if x and x not in candidates:
+            candidates.append(x)
+
+    add(p)
+
+    if kind == "attachment":
+        # Attachments typically live under files_legacy/
+        if p.lower().startswith("files_legacy/"):
+            tail = p[len("files_legacy/") :]
+            add(p)  # as-is
+            add(f"files/files_legacy/{tail}")  # legacy nested layout
+        else:
+            add(f"files_legacy/{p}")
+            add(f"files/files_legacy/{p}")
+
+        # Some historical exports may have prefixed with files/
+        add(f"files/{p}")
+        add(f"files/files/{p}")
+
+        preferred = f"files_legacy/{p}" if not p.lower().startswith("files_legacy/") else p
+    else:
+        # Content files typically live under files/<bucket>/...
+        if p.lower().startswith("files/files/"):
+            add(p)
+            preferred = p
+        elif p.lower().startswith("files/"):
+            tail = p[len("files/") :]
+            add(p)
+            add(f"files/files/{tail}")  # legacy nested layout
+            preferred = p
+        else:
+            add(f"files/{p}")
+            add(f"files/files/{p}")  # legacy nested layout
+            preferred = f"files/{p}"
+
+    found = _first_existing(export_root, candidates)
+    return found if found is not None else preferred
 
 
 def _build_master_index(export_root: Path) -> Path:
@@ -79,11 +141,10 @@ def _build_master_index(export_root: Path) -> Path:
 
     export_root is expected to contain:
       - csv/
-      - files/links/ (with *_files_index.csv, attachments/content meta)
+      - (files/links/ OR links/) with *_files_index.csv and attachments/content meta
       - meta/ (we'll create if missing)
     """
-    files_dir = export_root / "files"
-    links_dir = files_dir / "links"
+    links_dir, links_layout = _find_links_dir(export_root)
     csv_dir = export_root / "csv"
     meta_dir = export_root / "meta"
     meta_dir.mkdir(parents=True, exist_ok=True)
@@ -114,9 +175,10 @@ def _build_master_index(export_root: Path) -> Path:
 
     index_df = pd.concat(dfs, ignore_index=True)
     _logger.info(
-        "Loaded %d document-links from %d index file(s).",
+        "Loaded %d document-links from %d index file(s) (links layout: %s).",
         len(index_df),
         len(index_files),
+        links_layout,
     )
 
     # ------------------------------------------------------------------
@@ -136,7 +198,6 @@ def _build_master_index(export_root: Path) -> Path:
 
         attachments_meta = attachments_meta.rename(columns={ATTACHMENTS_ID_COL: "attachment_id"})
 
-        # Try configured path col first, then fall back to any *path* column
         path_col = (
             ATTACHMENTS_PATH_COL if ATTACHMENTS_PATH_COL in attachments_meta.columns else None
         )
@@ -200,7 +261,9 @@ def _build_master_index(export_root: Path) -> Path:
             right_on="attachment_id",
             how="left",
         )
-        df_att["local_path"] = df_att["attachment_path"].map(_with_files_prefix)
+        df_att["local_path"] = df_att["attachment_path"].map(
+            lambda x: _resolve_local_path(export_root, x, "attachment")
+        )
     else:
         df_att["local_path"] = ""
 
@@ -212,47 +275,9 @@ def _build_master_index(export_root: Path) -> Path:
             right_on="content_document_id",
             how="left",
         )
-
-        def _with_files_prefix_for_files(rel_path: object) -> str:
-            """
-            Normalise ContentVersion paths for the actual on-disk layout.
-
-            In the current exports, content_versions.csv paths plus the
-            downloader result in files being stored under:
-
-                EXPORT_ROOT / files / files / <subdir> / <filename>
-
-            `_with_files_prefix` returns a path relative to EXPORT_ROOT, e.g.:
-
-                'files/06/<filename>'
-
-            which resolves to:
-
-                EXPORT_ROOT / files / 06 / <filename>
-
-            and misses the extra 'files/' component. For File rows we add
-            that extra segment so the viewer resolves to:
-
-                EXPORT_ROOT / files / files / 06 / <filename>
-            """
-            base = _with_files_prefix(rel_path)
-            if not base:
-                return ""
-
-            p = base.replace("\\", "/")
-
-            # Already in the desired form
-            if p.lower().startswith("files/files/"):
-                return p
-
-            # If it starts with 'files/', add one more 'files/' in front
-            if p.lower().startswith("files/"):
-                return f"files/{p}"
-
-            # Fallback: just return the normalised path
-            return p
-
-        df_file["local_path"] = df_file["content_path"].map(_with_files_prefix_for_files)
+        df_file["local_path"] = df_file["content_path"].map(
+            lambda x: _resolve_local_path(export_root, x, "content")
+        )
     else:
         df_file["local_path"] = ""
 
@@ -289,23 +314,16 @@ def _build_master_index(export_root: Path) -> Path:
                     right_on="opp_id",
                     how="left",
                 )
-                master = pd.concat(
-                    [master[~is_opp], master_opp],
-                    ignore_index=True,
-                )
+                master = pd.concat([master[~is_opp], master_opp], ignore_index=True)
         else:
             _logger.warning(
-                "Opportunity.csv has none of the expected columns; "
-                "skipping Opportunity enrichment (columns: %s)",
+                "Opportunity.csv has none of the expected columns; skipping Opportunity enrichment (columns: %s)",
                 list(opps.columns),
             )
 
     # --- Accounts: bring name (and join from opp_account_id if present) --
     if not accounts.empty:
-        acct_cols_map = {
-            "Id": "account_id",
-            "Name": "account_name",
-        }
+        acct_cols_map = {"Id": "account_id", "Name": "account_name"}
         present_acct_map = {
             src: dst for src, dst in acct_cols_map.items() if src in accounts.columns
         }
@@ -323,10 +341,7 @@ def _build_master_index(export_root: Path) -> Path:
                     right_on="account_id",
                     how="left",
                 )
-                master = pd.concat(
-                    [master[~is_acct], master_acct],
-                    ignore_index=True,
-                )
+                master = pd.concat([master[~is_acct], master_acct], ignore_index=True)
 
             # 2) Join Account via opp_account_id if present
             if "opp_account_id" in master.columns and "account_id" in acct_subset.columns:
@@ -338,13 +353,11 @@ def _build_master_index(export_root: Path) -> Path:
                     suffixes=("", "_from_opp"),
                 )
 
-                # Ensure base columns exist
                 if "account_id" not in master.columns:
                     master["account_id"] = ""
                 if "account_name" not in master.columns:
                     master["account_name"] = ""
 
-                # Normalise NaNs to empty strings
                 for col in [
                     "account_id",
                     "account_name",
@@ -354,25 +367,20 @@ def _build_master_index(export_root: Path) -> Path:
                     if col in master.columns:
                         master[col] = master[col].fillna("")
 
-                # Prefer any existing direct Account mapping; otherwise
-                # fill from the Opportunity's Account
                 if "account_id_from_opp" in master.columns:
                     master["account_id"] = master["account_id"].where(
-                        master["account_id"] != "",
-                        master["account_id_from_opp"],
+                        master["account_id"] != "", master["account_id_from_opp"]
                     )
                     master = master.drop(columns=["account_id_from_opp"])
 
                 if "account_name_from_opp" in master.columns:
                     master["account_name"] = master["account_name"].where(
-                        master["account_name"] != "",
-                        master["account_name_from_opp"],
+                        master["account_name"] != "", master["account_name_from_opp"]
                     )
                     master = master.drop(columns=["account_name_from_opp"])
         else:
             _logger.warning(
-                "Account.csv has none of the expected columns; "
-                "skipping Account enrichment (columns: %s)",
+                "Account.csv has none of the expected columns; skipping Account enrichment (columns: %s)",
                 list(accounts.columns),
             )
 
@@ -400,11 +408,7 @@ def _build_master_index(export_root: Path) -> Path:
     master = master[key_cols + other_cols]
     master.to_csv(out_path, index=False)
 
-    _logger.info(
-        "Master documents index written to %s (%d rows).",
-        out_path,
-        len(master),
-    )
+    _logger.info("Master documents index written to %s (%d rows).", out_path, len(master))
     return out_path
 
 
@@ -419,14 +423,12 @@ def _build_master_index(export_root: Path) -> Path:
 def docs_index_cmd(export_root: Path) -> None:
     """Build master_documents_index.csv for a given export root.
 
-    This command reads per-object *_files_index.csv and file metadata
-    from files/links/ under EXPORT_ROOT, enriches with Account and
-    Opportunity context, and writes:
+    Reads per-object *_files_index.csv and file metadata from either:
+      - files/links/ under EXPORT_ROOT, or
+      - links/ under EXPORT_ROOT (older layout)
 
-        meta/master_documents_index.csv
-
-    which can then be used by downstream tools (e.g. a document browser)
-    to search and open files without Salesforce.
+    Enriches with Account and Opportunity context and writes:
+      meta/master_documents_index.csv
     """
     export_root = export_root.resolve()
     if not export_root.exists():
