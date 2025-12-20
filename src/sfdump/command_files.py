@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import logging
-import os
 from pathlib import Path
 from typing import Dict, Iterable, List
 
@@ -47,6 +46,15 @@ def _chunk(seq: List[str], size: int) -> Iterable[List[str]]:
         yield seq[i : i + size]
 
 
+def _links_dir_for_out(out_dir: str) -> Path:
+    """Canonical location for file indexes + metadata CSVs.
+
+    Contract:
+      EXPORT_ROOT/files/links/
+    """
+    return Path(out_dir) / "files" / "links"
+
+
 def build_files_index(
     api: SalesforceAPI,
     index_object: str,
@@ -57,7 +65,7 @@ def build_files_index(
 ) -> None:
     """Build a CSV index linking one sObject type to its Attachments and Files.
 
-    The CSV will be written to: <out_dir>/links/<index_object>_files_index.csv
+    The CSV will be written to: <out_dir>/files/links/<index_object>_files_index.csv
 
     Columns:
         object_type, record_id, record_name,
@@ -68,8 +76,7 @@ def build_files_index(
         _logger.warning("No index object provided, skipping index generation.")
         return
 
-    base = Path(out_dir)
-    links_dir = base / "links"
+    links_dir = _links_dir_for_out(out_dir)
     links_dir.mkdir(parents=True, exist_ok=True)
     csv_path = links_dir / f"{object_name}_files_index.csv"
 
@@ -241,7 +248,7 @@ def build_files_index(
     "out_dir",
     required=True,
     type=click.Path(file_okay=False),
-    help="Output directory.",
+    help="Output directory (EXPORT_ROOT).",
 )
 @click.option("--no-content", is_flag=True, help="Skip ContentVersion downloads.")
 @click.option("--no-attachments", is_flag=True, help="Skip legacy Attachment downloads.")
@@ -319,27 +326,13 @@ def files_cmd(
     results: list[dict] = []
 
     if estimate_only:
-        # Estimation mode: no filesystem writes for file bodies.
         if not no_content:
-            results.append(
-                estimate_content_versions(
-                    api,
-                    where=content_where,
-                )
-            )
+            results.append(estimate_content_versions(api, where=content_where))
         if not no_attachments:
-            results.append(
-                estimate_attachments(
-                    api,
-                    where=attachments_where,
-                )
-            )
+            results.append(estimate_attachments(api, where=attachments_where))
     elif index_only:
-        # Index-only mode: assume files already exist in out_dir; do not download again.
         ensure_dir(out_dir)
-        # No entries added to results – we only care about index_by below.
     else:
-        # Real download mode.
         ensure_dir(out_dir)
         try:
             if not no_content:
@@ -362,7 +355,6 @@ def files_cmd(
                     )
                 )
         except KeyboardInterrupt as exc:
-            # Graceful abort on Ctrl+C
             click.echo(
                 f"\nAborted by user (Ctrl+C). Partial output may remain in: {out_dir}",
                 err=True,
@@ -383,7 +375,6 @@ def files_cmd(
                     include_attachments=not no_attachments,
                 )
             except click.ClickException as exc:
-                # build_files_index has already crafted a clear, user-facing message
                 raise exc
             except Exception as exc:  # pragma: no cover - defensive
                 _logger.exception(
@@ -395,7 +386,6 @@ def files_cmd(
         click.echo("Note: no records found for index objects: " + ", ".join(sorted(empty_indexes)))
 
     if not results and not index_by:
-        # We didn't estimate, download, or index anything – bail out.
         raise click.ClickException(
             "Nothing to do: both ContentVersion and Attachment were disabled, "
             "and no --index-by objects were specified."
@@ -411,7 +401,6 @@ def files_cmd(
             value /= 1024.0
         return f"{value:,.1f} PB"
 
-    # short human summary per kind
     def line(r: dict) -> str:
         bytes_val = int(r.get("bytes") or 0)
         human = _format_bytes(float(bytes_val))
@@ -421,10 +410,16 @@ def files_cmd(
     total_bytes = 0
 
     if results:
+        for r in results:
+            total_files += int(r.get("count") or 0)
+            total_bytes += int(r.get("bytes") or 0)
+
         total_human = _format_bytes(float(total_bytes))
         click.echo("")
         click.echo("=== File export summary ===")
         for r in results:
             click.echo("  " + line(r))
         click.echo(f"  Total: {total_files} files, {total_human} ({total_bytes:,.0f} bytes)")
-        click.echo(f"  Metadata CSVs are under: {os.path.join(out_dir, 'links')}")
+
+    # Always tell the user where the index/meta CSVs are (even in index-only mode).
+    click.echo(f"  Index & metadata CSVs are under: {_links_dir_for_out(out_dir)}")
