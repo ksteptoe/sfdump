@@ -101,11 +101,10 @@ def _build_master_index(export_root: Path) -> Path:
 
     export_root is expected to contain:
       - csv/
-      - files/links/ (with *_files_index.csv, attachments/content meta)
-      - meta/ (we'll create if missing)
+      - links/   (with *_files_index.csv, attachments.csv, content_versions.csv)
+      - meta/    (we'll create if missing)
     """
-    files_dir = export_root / "files"
-    links_dir = files_dir / "links"
+    links_dir = export_root / "links"
     csv_dir = export_root / "csv"
     meta_dir = export_root / "meta"
     meta_dir.mkdir(parents=True, exist_ok=True)
@@ -113,7 +112,7 @@ def _build_master_index(export_root: Path) -> Path:
     if not links_dir.exists():
         raise click.ClickException(
             f"Expected links directory not found: {links_dir} "
-            "(did you run `sfdump files` with --index-by ?)"
+            "(did you run `sfdump files --out EXPORT_ROOT --index-by ...` ?)"
         )
 
     out_path = meta_dir / "master_documents_index.csv"
@@ -136,7 +135,7 @@ def _build_master_index(export_root: Path) -> Path:
 
     index_df = pd.concat(dfs, ignore_index=True)
     _logger.info(
-        "Loaded %d document-links from %d index file(s) (links layout: files/links).",
+        "Loaded %d document-links from %d index file(s) (links layout: links/).",
         len(index_df),
         len(index_files),
     )
@@ -365,7 +364,7 @@ def _build_master_index(export_root: Path) -> Path:
     "export_root",
     required=True,
     type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
-    help="Export root directory (contains csv/, files/, meta/).",
+    help="Export root directory (contains csv/, links/, meta/).",
 )
 def docs_index_cmd(export_root: Path) -> None:
     """Build master_documents_index.csv for a given export root."""
