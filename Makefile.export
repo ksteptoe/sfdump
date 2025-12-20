@@ -26,14 +26,16 @@ BASE_EXPORT_ROOT ?= ./exports
 EXPORT_DATE  ?= $(shell date +%Y-%m-%d)
 EXPORT_ROOT  ?= $(BASE_EXPORT_ROOT)/export-$(EXPORT_DATE)
 
-CSV_DIR          := $(EXPORT_ROOT)/csv
+CSV_DIR      := $(EXPORT_ROOT)/csv
+META_DIR     := $(EXPORT_ROOT)/meta
+
+# sfdump files creates: files/, files_legacy/, links/ under --out
+FILES_OUT_DIR    := $(EXPORT_ROOT)
 FILES_DIR        := $(EXPORT_ROOT)/files
 FILES_LEGACY_DIR := $(EXPORT_ROOT)/files_legacy
 LINKS_DIR        := $(EXPORT_ROOT)/links
-META_DIR         := $(EXPORT_ROOT)/meta
-LOG_DIR          := $(EXPORT_ROOT)/logs
+LOG_DIR      	 := $(EXPORT_ROOT)/logs
 
-# ----------------------------------------------------------------------
 # FILE INDEX SETTINGS (for --index-by)
 # ----------------------------------------------------------------------
 
@@ -413,21 +415,37 @@ export-hr: $(HR_TARGETS)
 	@echo "=== HR / employment export done → $(CSV_DIR) ==="
 
 export-files:
+<<<<<<< HEAD
 	@echo "=== Exporting Files & Attachments under $(FILES_DIR) and $(FILES_LEGACY_DIR) ==="
 	@echo "=== Building indexes + metadata under $(LINKS_DIR) ==="
 	@echo "=== Indexing files by: $(FILE_INDEX_OBJECTS) ==="
 	@mkdir -p "$(EXPORT_ROOT)"
 	@$(SFDUMP) files --out "$(EXPORT_ROOT)" $(INDEX_BY_FLAGS) \
+=======
+	@echo "=== Exporting Files & Attachments to $(FILES_DIR) and $(FILES_LEGACY_DIR) ==="
+	@echo "=== Indexing files by: $(FILE_INDEX_OBJECTS) ==="
+	@mkdir -p "$(EXPORT_ROOT)"
+	@$(SFDUMP) files --out "$(FILES_OUT_DIR)" $(INDEX_BY_FLAGS) \
+>>>>>>> 8e76b0b (export: fix files output root to avoid files/files nesting)
 	  || echo "WARNING: sfdump files failed (see above); continuing export-all."
 
+
 export-files-index-only:
+<<<<<<< HEAD
 	@echo "=== Rebuilding file indexes only (no download) under $(LINKS_DIR) ==="
 	@mkdir -p "$(EXPORT_ROOT)"
 	@$(SFDUMP) files \
 		--out "$(EXPORT_ROOT)" \
+=======
+	@echo "=== Rebuilding file indexes only (no download) in $(LINKS_DIR) ==="
+	@mkdir -p "$(EXPORT_ROOT)"
+	@$(SFDUMP) files \
+		--out "$(FILES_OUT_DIR)" \
+>>>>>>> 8e76b0b (export: fix files output root to avoid files/files nesting)
 		$(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj)) \
 		--index-only \
 	  || echo "WARNING: sfdump files --index-only failed (see above)."
+
 
 export-doc-index:
 	@echo "=== Building master documents index for $(EXPORT_ROOT) ==="
@@ -445,7 +463,11 @@ export-archive:
 	@zip -r "$(EXPORT_ROOT).zip" "$(EXPORT_ROOT)"
 
 export-clean:
+<<<<<<< HEAD
 	@rm -rf "$(CSV_DIR)" "$(FILES_DIR)" "$(FILES_LEGACY_DIR)" "$(LINKS_DIR)" "$(META_DIR)" "$(LOG_DIR)"
+=======
+	rm -rf "$(CSV_DIR)" "$(FILES_DIR)" "$(FILES_LEGACY_DIR)" "$(LINKS_DIR)" "$(META_DIR)" "$(LOG_DIR)"
+>>>>>>> 8e76b0b (export: fix files output root to avoid files/files nesting)
 
 export-show-config:
 	@echo "SFDUMP             = $(SFDUMP)"
