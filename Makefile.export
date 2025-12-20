@@ -378,20 +378,23 @@ export-hr: $(HR_TARGETS)
 
 # Files / Attachments + indexes for key parent objects
 export-files:
-	@echo "=== Exporting Files & Attachments to $(FILES_DIR) ==="
+	@echo "=== Exporting Files & Attachments under $(EXPORT_ROOT)/files ==="
+	@echo "=== Building indexes + metadata under $(EXPORT_ROOT)/files/links ==="
 	@echo "=== Indexing files by: $(FILE_INDEX_OBJECTS) ==="
-	@mkdir -p "$(FILES_DIR)"
-	@$(SFDUMP) files --out "$(FILES_DIR)" $(INDEX_BY_FLAGS) \
+	@mkdir -p "$(EXPORT_ROOT)"
+	@$(SFDUMP) files --out "$(EXPORT_ROOT)" $(INDEX_BY_FLAGS) \
 	  || echo "WARNING: sfdump files failed (see above); continuing export-all."
 
+
 export-files-index-only:
-	@echo "=== Rebuilding file indexes only (no download) in $(FILES_DIR) ==="
-	@mkdir -p "$(FILES_DIR)"
+	@echo "=== Rebuilding file indexes only (no download) under $(EXPORT_ROOT)/files/links ==="
+	@mkdir -p "$(EXPORT_ROOT)"
 	@$(SFDUMP) files \
-		--out "$(FILES_DIR)" \
+		--out "$(EXPORT_ROOT)" \
 		$(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj)) \
 		--index-only \
 	  || echo "WARNING: sfdump files --index-only failed (see above)."
+
 
 export-doc-index:
 	@echo "=== Building master documents index for $(EXPORT_ROOT) ==="
