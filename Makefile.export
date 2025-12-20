@@ -352,7 +352,12 @@ ALL_SOBJECT_TARGETS := $(addprefix $(CSV_DIR)/,$(addsuffix .done,$(ALL_SOBJECTS)
 export-all: export-show-config export-files export-crm-all export-ffa export-hr export-meta export-doc-index
 	@echo "=== ALL EXPORTS COMPLETED → $(EXPORT_ROOT) ==="
 
-export-all-objects: export-show-config $(ALL_SOBJECT_TARGETS)
+export-all-objects: export-show-config
+	@echo "=== Exporting all queryable objects to $(CSV_DIR) ==="
+	@mkdir -p "$(CSV_DIR)"
+	@$(SFDUMP) objects | while read obj; do \
+		$(MAKE) -f Makefile.export "$(CSV_DIR)/$$obj.done" || true; \
+	done
 	@echo "=== ALL QUERYABLE OBJECTS EXPORTED → $(CSV_DIR) ==="
 	@if [ -f "$(CSV_DIR)/_export_failures.txt" ]; then \
 	    echo ""; \
@@ -360,6 +365,7 @@ export-all-objects: export-show-config $(ALL_SOBJECT_TARGETS)
 	    echo "  $(CSV_DIR)/_export_failures.txt"; \
 	    echo "and *.failed sentinels in $(CSV_DIR)."; \
 	fi
+
 
 export-core-crm: $(CRM_CORE_TARGETS)
 	@echo "=== Core CRM export done → $(CSV_DIR) ==="
