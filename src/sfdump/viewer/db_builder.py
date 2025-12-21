@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from sfdump.indexing import SFObject, iter_objects
+from sfdump.indexing.build_record_documents import build_record_documents
 
 from .sqlite_schema import (
     SqliteIndexConfig,
@@ -242,6 +243,8 @@ def build_sqlite_from_export(
         conn.commit()
     finally:
         conn.close()
+
+    build_record_documents(db_path=db_path, export_root=export_dir)
 
     log.info("SQLite database built successfully at %s", db_path)
     return db_path
