@@ -120,6 +120,21 @@ OBJECTS: Dict[str, SFObject] = {
         label="Invoice Line Item",
         table_name="c2g__codaInvoiceLineItem__c",
     ),
+    "c2g__codaTransaction__c": SFObject(
+        api_name="c2g__codaTransaction__c",
+        label="Transaction",
+        table_name="c2g__codaTransaction__c",
+    ),
+    "c2g__codaJournal__c": SFObject(
+        api_name="c2g__codaJournal__c",
+        label="Journal",
+        table_name="c2g__codaJournal__c",
+    ),
+    "c2g__codaJournalLineItem__c": SFObject(
+        api_name="c2g__codaJournalLineItem__c",
+        label="Journal Line Item",
+        table_name="c2g__codaJournalLineItem__c",
+    ),
     # Add further exported objects here as we need them
 }
 
@@ -181,6 +196,41 @@ RELATIONSHIPS: List[SFRelationship] = [
         parent="c2g__codaInvoice__c",
         child="c2g__codaInvoiceLineItem__c",
         child_field="c2g__Invoice__c",
+    ),
+    # Account -> Invoice (Invoice has c2g__Account__c)
+    SFRelationship(
+        name="Account_CodaInvoice",
+        parent="Account",
+        child="c2g__codaInvoice__c",
+        child_field="c2g__Account__c",
+    ),
+    # Opportunity -> Invoice (Invoice has c2g__Opportunity__c)
+    SFRelationship(
+        name="Opportunity_CodaInvoice",
+        parent="Opportunity",
+        child="c2g__codaInvoice__c",
+        child_field="c2g__Opportunity__c",
+    ),
+    # Transaction -> Invoice (Invoice has c2g__Transaction__c)
+    SFRelationship(
+        name="CodaTransaction_CodaInvoice",
+        parent="c2g__codaTransaction__c",
+        child="c2g__codaInvoice__c",
+        child_field="c2g__Transaction__c",
+    ),
+    # Journal -> Transaction (Transaction has c2g__Journal__c)
+    SFRelationship(
+        name="CodaJournal_CodaTransaction",
+        parent="c2g__codaJournal__c",
+        child="c2g__codaTransaction__c",
+        child_field="c2g__Journal__c",
+    ),
+    # Journal -> Journal Line Items
+    SFRelationship(
+        name="CodaJournal_JournalLineItem",
+        parent="c2g__codaJournal__c",
+        child="c2g__codaJournalLineItem__c",
+        child_field="c2g__Journal__c",
     ),
 ]
 
