@@ -13,7 +13,105 @@ import streamlit.components.v1 as components
 
 from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children, inspect_sqlite_db, list_records
-from sfdump.viewer_app.config import important_fields_for
+from sfdump.viewer_app.services.paths import (
+    infer_export_root,
+    resolve_export_path,
+)
+
+IMPORTANT_FIELDS = {
+    "Account": ["Id", "Name", "AccountNumber", "Type", "Industry"],
+    "Opportunity": ["Id", "Name", "StageName", "CloseDate", "Amount"],
+    "Contact": ["Id", "Name", "Email", "Phone", "Title"],
+    "ContentDocument": ["Id", "Title", "LatestPublishedVersionId"],
+    "ContentVersion": ["Id", "Title", "VersionNumber", "CreatedDate"],
+    "ContentDocumentLink": [
+        "Id",
+        "LinkedEntityId",
+        "ContentDocumentId",
+        "DocumentTitle",
+        "ShareType",
+        "Visibility",
+    ],
+    "Attachment": ["Id", "ParentId", "Name", "ContentType", "BodyLength"],
+    # 🧾 Generic finance shapes (kept in case you end up with these names)
+    "Invoice": [
+        "Id",
+        "Name",  # if present
+        "InvoiceNumber",
+        "InvoiceDate",
+        "Status",
+        "TotalAmount",
+        "Balance",
+    ],
+    "InvoiceLine": [
+        "Id",
+        "InvoiceId",
+        "LineNumber",
+        "ProductName",
+        "Description",
+        "Quantity",
+        "UnitPrice",
+        "Amount",
+    ],
+    "CreditNote": [
+        "Id",
+        "Name",
+        "CreditNoteNumber",
+        "CreditNoteDate",
+        "Status",
+        "TotalAmount",
+        "Balance",
+    ],
+    "CreditNoteLine": [
+        "Id",
+        "CreditNoteId",
+        "LineNumber",
+        "Description",
+        "Quantity",
+        "UnitPrice",
+        "Amount",
+    ],
+    # Concrete Coda / FinancialForce objects from your export
+    "c2g__codaInvoice__c": [
+        "Id",
+        "Name",  # invoice number (SIN001673 etc.)
+        "CurrencyIsoCode",
+        "c2g__InvoiceDate__c",
+        "c2g__DueDate__c",
+        "c2g__InvoiceStatus__c",
+        "c2g__PaymentStatus__c",
+        "c2g__InvoiceTotal__c",
+        "c2g__NetTotal__c",
+        "c2g__OutstandingValue__c",
+        "c2g__TaxTotal__c",
+        "Days_Overdue__c",
+        "c2g__AccountName__c",
+        "c2g__CompanyReference__c",
+    ],
+    "c2g__codaInvoiceLineItem__c": [
+        "Id",
+        "Name",
+        "c2g__LineNumber__c",
+        "c2g__LineDescription__c",
+        "c2g__Quantity__c",
+        "c2g__UnitPrice__c",
+        "c2g__NetValue__c",
+        "c2g__TaxRateTotal__c",
+        "c2g__TaxValueTotal__c",
+        "c2g__ProductCode__c",
+        "c2g__ProductReference__c",
+    ],
+    "OpportunityLineItem": [
+        "Id",
+        "OpportunityId",
+        "PricebookEntryId",
+        "Product2Id",
+        "Quantity",
+        "UnitPrice",
+        "TotalPrice",
+        "Description",
+    ],
+}
 
 
 def _render_pdf_inline(pdf_bytes: bytes, *, height: int = 900) -> None:
@@ -34,19 +132,7 @@ def _export_root_from_db_path(db_path: Path) -> Optional[Path]:
     Best-effort: infer EXPORT_ROOT from db_path.
     Typical layout: EXPORT_ROOT/meta/sfdata.db
     """
-    try:
-        if db_path.name.lower() == "sfdata.db" and db_path.parent.name.lower() == "meta":
-            return db_path.parent.parent
-    except Exception:
-        pass
-
-    # fallback: walk up a few levels looking for a folder that contains csv/ and meta/
-    p = db_path.resolve()
-    for _ in range(6):
-        if (p / "csv").exists() and (p / "meta").exists():
-            return p
-        p = p.parent
-    return None
+    return infer_export_root(db_path)
 
 
 def _load_master_documents_index(export_root: Path):
@@ -398,7 +484,7 @@ def _load_files_for_record(db_path: Path, parent_id: str) -> dict[str, list[dict
 
 def _get_important_fields(api_name: str) -> list[str]:
     """Return the configured 'important' fields for this object, if any."""
-    return important_fields_for(api_name)
+    return IMPORTANT_FIELDS.get(api_name, [])
 
 
 def _select_display_columns(api_name: str, df, show_all: bool) -> list[str]:
@@ -445,14 +531,6 @@ def _initial_db_path_from_argv() -> Optional[Path]:
     return None
 
 
-def _export_root_from_db_path(db_path: Path) -> Path:
-    """
-    Your DB lives at: <export_root>/meta/sfdata.db
-    So export_root is db_path.parent.parent
-    """
-    return db_path.parent.parent
-
-
 def _list_record_documents(db_path: Path, object_type: str, record_id: str) -> list[dict[str, Any]]:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
@@ -477,9 +555,7 @@ def _list_record_documents(db_path: Path, object_type: str, record_id: str) -> l
 
 
 def _resolve_export_path(export_root: Path, rel_path: str) -> Path:
-    # Paths in your CSV/DB use Windows backslashes like files_legacy\00\...
-    rel_path = (rel_path or "").replace("\\", "/")
-    return export_root / rel_path
+    return resolve_export_path(export_root, rel_path)
 
 
 def _open_local_file(path: Path) -> None:
@@ -742,6 +818,13 @@ def main() -> None:
 
         with tab_docs:
             export_root = _export_root_from_db_path(db_path)
+            if export_root is None:
+                # Keep the UI usable even if we can't infer export root
+                st.warning(
+                    "Could not infer EXPORT_ROOT from DB path. "
+                    "Expected EXPORT_ROOT/meta/sfdata.db layout."
+                )
+                st.stop()
 
             docs = _list_record_documents(
                 db_path=db_path,
@@ -800,7 +883,7 @@ def main() -> None:
                     with cols[1]:
                         st.caption(str(full_path))
 
-                    # --- NEW: inline preview / download ---
+                    # --- inline preview / download ---
                     if full_path.exists():
                         data = full_path.read_bytes()
                         download_name = full_path.name
