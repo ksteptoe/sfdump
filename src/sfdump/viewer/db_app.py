@@ -215,6 +215,33 @@ def _collect_subtree_ids(
     return out
 
 
+def _pdf_iframe(path: Path, height: int = 750) -> None:
+    pdf_bytes = path.read_bytes()
+    b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+    html = f"""
+    <iframe
+        src="data:application/pdf;base64,{b64}"
+        width="100%"
+        height="{height}"
+        style="border: none;"
+    ></iframe>
+    """
+    st.components.v1.html(html, height=height, scrolling=True)
+
+
+def _pdf_iframe_bytes(pdf_bytes: bytes, height: int = 750) -> None:
+    b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+    html = f"""
+    <iframe
+        src="data:application/pdf;base64,{b64}"
+        width="100%"
+        height="{height}"
+        style="border:none;"
+    ></iframe>
+    """
+    st.components.v1.html(html, height=height, scrolling=True)
+
+
 def _preview_file(export_root: Path, local_path: str) -> None:
     """
     Preview PDFs inline; otherwise offer a download button.
@@ -602,7 +629,7 @@ def main() -> None:
 
             df = pd.DataFrame(rows)
             display_cols = _select_display_columns(api_name, df, show_all_fields)
-            st.dataframe(df[display_cols], height=260, hide_index=True, uwidth="stretch")
+            st.dataframe(df[display_cols], height=260, hide_index=True, width="stretch")
 
             # Selection widget
             options = []
@@ -764,23 +791,24 @@ def main() -> None:
                         download_name = full_path.name
                         mime = chosen.get("content_type") or "application/octet-stream"
 
+                        # Preview (PDF + images)
+                        ext = full_path.suffix.lower()
+
+                        if ext == ".pdf":
+                            with st.expander("Preview PDF", expanded=True):
+                                _pdf_iframe_bytes(data, height=750)
+                        elif str(mime).startswith("image/"):
+                            with st.expander("Preview image", expanded=True):
+                                st.image(data, caption=download_name)
+
                         st.download_button(
                             "Download",
                             data=data,
                             file_name=download_name,
                             mime=str(mime),
                         )
-
-                        # Preview PDFs inline
-                        ext = str(chosen.get("file_extension") or "").lower()
-                        if ext == "pdf":
-                            st.divider()
-                            st.subheader("Preview")
-                            _render_pdf_inline(data, height=900)
                     else:
-                        st.warning(
-                            "File missing on disk (path exists in DB but file wasn’t downloaded)."
-                        )
+                        st.error(f"File not found on disk: {full_path}")
 
         # ------------------------------------------------------------------
         # Recursive subtree document search (Account -> Opp -> Invoice -> ...)
