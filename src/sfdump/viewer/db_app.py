@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import base64
-import os
 import sqlite3
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -13,6 +11,7 @@ import streamlit.components.v1 as components
 
 from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children, inspect_sqlite_db, list_records
+from sfdump.viewer_app.preview.files import open_local_file, preview_file
 from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
 from sfdump.viewer_app.services.content import enrich_contentdocument_links_with_title
 from sfdump.viewer_app.services.display import get_important_fields, select_display_columns
@@ -182,27 +181,6 @@ def _pdf_iframe_bytes(pdf_bytes: bytes, height: int = 750) -> None:
     st.components.v1.html(html, height=height, scrolling=True)
 
 
-def _preview_file(export_root: Path, local_path: str) -> None:
-    """
-    Preview PDFs inline; otherwise offer a download button.
-    local_path must be relative to export_root, e.g. files/... or files_legacy/...
-    """
-    p = (export_root / local_path).resolve()
-    if not p.exists():
-        st.error(f"File not found: {p}")
-        return
-
-    if p.suffix.lower() == ".pdf":
-        data = p.read_bytes()
-        preview_pdf_bytes(data, height=900)
-    else:
-        st.download_button(
-            "Download file",
-            data=p.read_bytes(),
-            file_name=p.name,
-        )
-
-
 def _load_files_for_record(db_path: Path, parent_id: str) -> dict[str, list[dict[str, object]]]:
     """
     Look up files/attachments for a given Salesforce record Id in the viewer DB.
@@ -290,16 +268,6 @@ def _initial_db_path_from_argv() -> Optional[Path]:
 
 def _resolve_export_path(export_root: Path, rel_path: str) -> Path:
     return resolve_export_path(export_root, rel_path)
-
-
-def _open_local_file(path: Path) -> None:
-    # Opens on the machine running Streamlit (your Windows box)
-    if sys.platform.startswith("win"):
-        os.startfile(str(path))  # type: ignore[attr-defined]
-    elif sys.platform == "darwin":
-        subprocess.Popen(["open", str(path)])
-    else:
-        subprocess.Popen(["xdg-open", str(path)])
 
 
 def main() -> None:
@@ -588,7 +556,7 @@ def main() -> None:
                     with cols[0]:
                         if st.button("Open"):
                             if full_path.exists():
-                                _open_local_file(full_path)
+                                open_local_file(full_path)
                                 st.success("Opened locally.")
                             else:
                                 st.error(f"File not found on disk: {full_path}")
@@ -724,7 +692,7 @@ def main() -> None:
             # local_path is after ':: '
             local_path = selected_doc.rsplit("::", 1)[-1].strip()
             if local_path:
-                _preview_file(export_root, local_path)
+                preview_file(export_root, local_path)
 
 
 if __name__ == "__main__":
