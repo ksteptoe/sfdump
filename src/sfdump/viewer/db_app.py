@@ -7,18 +7,18 @@ from typing import Any, Optional
 import streamlit as st
 
 from sfdump.indexing import OBJECTS
-from sfdump.viewer import get_record_with_children, inspect_sqlite_db, list_records
+from sfdump.viewer import get_record_with_children
 from sfdump.viewer_app.preview.files import open_local_file, preview_file
 from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
 from sfdump.viewer_app.services.content import enrich_contentdocument_links_with_title
 from sfdump.viewer_app.services.display import get_important_fields, select_display_columns
 from sfdump.viewer_app.services.documents import list_record_documents, load_master_documents_index
-from sfdump.viewer_app.services.objects import get_object_choices
 from sfdump.viewer_app.services.paths import (
     infer_export_root,
     resolve_export_path,
 )
 from sfdump.viewer_app.services.traversal import collect_subtree_ids
+from sfdump.viewer_app.ui.main_parts import render_record_list, render_sidebar_controls
 
 
 def _export_root_from_db_path(db_path: Path) -> Optional[Path]:
@@ -65,130 +65,31 @@ def main() -> None:
     )
 
     st.title("SF Dump DB Viewer")
-
-    # Sidebar: DB selection
+    # Sidebar: DB selection (delegated)
     initial_db = _initial_db_path_from_argv()
-    db_path_str = st.sidebar.text_input(
-        "SQLite DB path",
-        value=str(initial_db) if initial_db is not None else "",
-        help="Path to sfdata.db created by 'sfdump build-db'.",
-    )
-
-    if not db_path_str:
-        st.info("Enter a path to a sfdata.db file in the sidebar to get started.")
+    state = render_sidebar_controls(initial_db=initial_db)
+    if state is None:
         return
 
-    db_path = Path(db_path_str)
-
-    try:
-        overview = inspect_sqlite_db(db_path)
-    except Exception as exc:  # noqa: BLE001
-        st.error(f"Unable to open or inspect DB at {db_path}: {exc}")
-        return
-
-    st.sidebar.markdown(f"**DB:** `{overview.path}`")
-    st.sidebar.markdown(
-        f"**Tables:** {len(overview.tables)}  |  **Indexes:** {overview.index_count}"
-    )
-
-    object_choices = get_object_choices(overview.tables)
-    if not object_choices:
-        st.warning(
-            "No known Salesforce objects found in this DB. "
-            "Did you build it with 'sfdump build-db' from an export that included object CSVs?"
-        )
-        return
-
-    labels = [label for (label, _api) in object_choices]
-    label_to_api = {label: api for (label, api) in object_choices}
-
-    selected_label = st.sidebar.selectbox("Object", labels, index=0)
-    api_name = label_to_api[selected_label]
-
-    search_term = st.sidebar.text_input(
-        "Search (Name contains)",
-        value="",
-        help="Substring match on the Name field where present.",
-    )
-    limit = st.sidebar.number_input(
-        "Max rows",
-        min_value=1,
-        max_value=1000,
-        value=100,
-        step=10,
-    )
-
-    regex_search = st.sidebar.checkbox(
-        "Use regex (Name REGEXP)",
-        value=False,
-        help="When enabled, interpret the search string as a regular expression applied to the Name field.",
-    )
-
-    show_all_fields = st.sidebar.checkbox(
-        "Show all fields",
-        value=False,
-        help="When checked, show all columns for this object. When unchecked, only show key fields.",
-    )
-
-    # Build WHERE clause for Name search
-    where_clause: Optional[str] = None
-    if search_term:
-        # simple SQL escaping for single quotes
-        safe_term = search_term.replace("'", "''")
-        if regex_search:
-            # Use our SQLite REGEXP function defined in record_list.py
-            where_clause = f"Name REGEXP '{safe_term}'"
-        else:
-            # Default behaviour: substring match
-            where_clause = f"Name LIKE '%{safe_term}%'"
-
-    try:
-        listing = list_records(
-            db_path=db_path,
-            api_name=api_name,
-            where=where_clause,
-            limit=int(limit),
-            order_by="Name",
-        )
-    except Exception as exc:  # noqa: BLE001
-        st.error(f"Error listing records for {api_name}: {exc}")
-        return
-
-    rows = listing.rows
+    db_path = state.db_path
+    api_name = state.api_name
+    selected_label = state.selected_label
+    search_term = state.search_term
+    limit = state.limit
+    regex_search = state.regex_search
+    show_all_fields = state.show_all_fields
 
     col_left, col_right = st.columns([2, 3])
-
     with col_left:
-        st.subheader(f"{selected_label} records")
-
-        if not rows:
-            st.info("No records found. Try adjusting the search or increasing the max rows.")
-            selected_id = None
-        else:
-            # Show a small table
-            import pandas as pd  # type: ignore[import-not-found]
-
-            df = pd.DataFrame(rows)
-            display_cols = select_display_columns(api_name, df, show_all_fields)
-            st.dataframe(df[display_cols], height=260, hide_index=True, width="stretch")
-
-            # Selection widget
-            options = []
-            for r in rows:
-                rid = r.get("Id")
-                label = r.get("Name") or rid or "(no Id)"
-                options.append(f"{label} [{rid}]")
-            selected_label_value = st.selectbox(
-                "Select record",
-                options,
-                index=0,
-            )
-            # Extract Id from label
-            if "[" in selected_label_value and selected_label_value.endswith("]"):
-                selected_id = selected_label_value.rsplit("[", 1)[-1].rstrip("]")
-            else:
-                # Fallback: try to find by Name
-                selected_id = rows[0].get("Id")
+        rows, selected_id = render_record_list(
+            db_path=db_path,
+            api_name=api_name,
+            selected_label=selected_label,
+            search_term=search_term,
+            regex_search=regex_search,
+            limit=int(limit),
+            show_all_fields=show_all_fields,
+        )
 
     with col_right:
         st.subheader("Record details & relationships")
