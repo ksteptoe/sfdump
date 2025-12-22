@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import base64
+import os
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import streamlit as st
 
@@ -387,6 +389,53 @@ def _initial_db_path_from_argv() -> Optional[Path]:
     return None
 
 
+def _export_root_from_db_path(db_path: Path) -> Path:
+    """
+    Your DB lives at: <export_root>/meta/sfdata.db
+    So export_root is db_path.parent.parent
+    """
+    return db_path.parent.parent
+
+
+def _list_record_documents(db_path: Path, object_type: str, record_id: str) -> list[dict[str, Any]]:
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+              object_type, record_id, record_name,
+              file_source, file_id, file_link_id,
+              file_name, file_extension,
+              path, content_type, size_bytes, sha256
+            FROM record_documents
+            WHERE object_type = ? AND record_id = ?
+            ORDER BY lower(file_extension), file_name
+            """,
+            (object_type, record_id),
+        )
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def _resolve_export_path(export_root: Path, rel_path: str) -> Path:
+    # Paths in your CSV/DB use Windows backslashes like files_legacy\00\...
+    rel_path = (rel_path or "").replace("\\", "/")
+    return export_root / rel_path
+
+
+def _open_local_file(path: Path) -> None:
+    # Opens on the machine running Streamlit (your Windows box)
+    if sys.platform.startswith("win"):
+        os.startfile(str(path))  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    else:
+        subprocess.Popen(["xdg-open", str(path)])
+
+
 def _get_object_choices(tables) -> list[tuple[str, str]]:
     """
     Return sorted (label, api_name) for objects that actually exist in the DB.
@@ -636,27 +685,66 @@ def main() -> None:
                             )
 
         with tab_docs:
-            files = _load_files_for_record(db_path, selected_id)
-            if not files["attachments"] and not files["content_docs"]:
-                st.info("No files or attachments found for this record.")
-            else:
-                if files["attachments"]:
-                    st.markdown("**Legacy Attachments**")
-                    st.dataframe(
-                        pd.DataFrame(files["attachments"]),
-                        use_container_width=True,
-                        hide_index=True,
-                        height=240,
-                    )
+            export_root = _export_root_from_db_path(db_path)
 
-                if files["content_docs"]:
-                    st.markdown("**Content Documents (via ContentDocumentLink)**")
-                    st.dataframe(
-                        pd.DataFrame(files["content_docs"]),
-                        use_container_width=True,
-                        hide_index=True,
-                        height=240,
+            docs = _list_record_documents(
+                db_path=db_path,
+                object_type=api_name,  # IMPORTANT: this matches record_documents.object_type
+                record_id=selected_id,
+            )
+
+            if not docs:
+                st.info("No documents indexed for this record.")
+            else:
+                docs_df = pd.DataFrame(docs)
+
+                # Show a compact table
+                show_cols = [
+                    c
+                    for c in [
+                        "file_source",
+                        "file_id",
+                        "file_name",
+                        "file_extension",
+                        "path",
+                        "size_bytes",
+                        "content_type",
+                    ]
+                    if c in docs_df.columns
+                ]
+                st.dataframe(
+                    docs_df[show_cols], use_container_width=True, hide_index=True, height=260
+                )
+
+                # Pick one to open
+                def _label(row: dict[str, Any]) -> str:
+                    name = row.get("file_name") or "(no name)"
+                    fid = row.get("file_id") or ""
+                    return f"{name} [{fid}]"
+
+                options = [_label(r) for r in docs]
+                choice = st.selectbox("Select a document", options, index=0)
+
+                chosen = docs[options.index(choice)]
+                rel_path = str(chosen.get("path") or "")
+                if not rel_path:
+                    st.warning(
+                        "This row has no local path. That usually means the file wasn’t downloaded into the export."
                     )
+                else:
+                    full_path = _resolve_export_path(export_root, rel_path)
+
+                    cols = st.columns([1, 3])
+                    with cols[0]:
+                        if st.button("Open"):
+                            if full_path.exists():
+                                _open_local_file(full_path)
+                                st.success("Opened locally.")
+                            else:
+                                st.error(f"File not found on disk: {full_path}")
+
+                    with cols[1]:
+                        st.caption(str(full_path))
 
         # ------------------------------------------------------------------
         # Recursive subtree document search (Account -> Opp -> Invoice -> ...)
