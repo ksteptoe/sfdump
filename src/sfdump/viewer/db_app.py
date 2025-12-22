@@ -14,107 +14,13 @@ import streamlit.components.v1 as components
 from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children, inspect_sqlite_db, list_records
 from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
+from sfdump.viewer_app.services.display import get_important_fields, select_display_columns
 from sfdump.viewer_app.services.documents import list_record_documents, load_master_documents_index
 from sfdump.viewer_app.services.paths import (
     infer_export_root,
     resolve_export_path,
 )
 from sfdump.viewer_app.services.traversal import collect_subtree_ids
-
-IMPORTANT_FIELDS = {
-    "Account": ["Id", "Name", "AccountNumber", "Type", "Industry"],
-    "Opportunity": ["Id", "Name", "StageName", "CloseDate", "Amount"],
-    "Contact": ["Id", "Name", "Email", "Phone", "Title"],
-    "ContentDocument": ["Id", "Title", "LatestPublishedVersionId"],
-    "ContentVersion": ["Id", "Title", "VersionNumber", "CreatedDate"],
-    "ContentDocumentLink": [
-        "Id",
-        "LinkedEntityId",
-        "ContentDocumentId",
-        "DocumentTitle",
-        "ShareType",
-        "Visibility",
-    ],
-    "Attachment": ["Id", "ParentId", "Name", "ContentType", "BodyLength"],
-    # 🧾 Generic finance shapes (kept in case you end up with these names)
-    "Invoice": [
-        "Id",
-        "Name",  # if present
-        "InvoiceNumber",
-        "InvoiceDate",
-        "Status",
-        "TotalAmount",
-        "Balance",
-    ],
-    "InvoiceLine": [
-        "Id",
-        "InvoiceId",
-        "LineNumber",
-        "ProductName",
-        "Description",
-        "Quantity",
-        "UnitPrice",
-        "Amount",
-    ],
-    "CreditNote": [
-        "Id",
-        "Name",
-        "CreditNoteNumber",
-        "CreditNoteDate",
-        "Status",
-        "TotalAmount",
-        "Balance",
-    ],
-    "CreditNoteLine": [
-        "Id",
-        "CreditNoteId",
-        "LineNumber",
-        "Description",
-        "Quantity",
-        "UnitPrice",
-        "Amount",
-    ],
-    # Concrete Coda / FinancialForce objects from your export
-    "c2g__codaInvoice__c": [
-        "Id",
-        "Name",  # invoice number (SIN001673 etc.)
-        "CurrencyIsoCode",
-        "c2g__InvoiceDate__c",
-        "c2g__DueDate__c",
-        "c2g__InvoiceStatus__c",
-        "c2g__PaymentStatus__c",
-        "c2g__InvoiceTotal__c",
-        "c2g__NetTotal__c",
-        "c2g__OutstandingValue__c",
-        "c2g__TaxTotal__c",
-        "Days_Overdue__c",
-        "c2g__AccountName__c",
-        "c2g__CompanyReference__c",
-    ],
-    "c2g__codaInvoiceLineItem__c": [
-        "Id",
-        "Name",
-        "c2g__LineNumber__c",
-        "c2g__LineDescription__c",
-        "c2g__Quantity__c",
-        "c2g__UnitPrice__c",
-        "c2g__NetValue__c",
-        "c2g__TaxRateTotal__c",
-        "c2g__TaxValueTotal__c",
-        "c2g__ProductCode__c",
-        "c2g__ProductReference__c",
-    ],
-    "OpportunityLineItem": [
-        "Id",
-        "OpportunityId",
-        "PricebookEntryId",
-        "Product2Id",
-        "Quantity",
-        "UnitPrice",
-        "TotalPrice",
-        "Description",
-    ],
-}
 
 
 def _render_pdf_inline(pdf_bytes: bytes, *, height: int = 900) -> None:
@@ -409,45 +315,6 @@ def _load_files_for_record(db_path: Path, parent_id: str) -> dict[str, list[dict
     return results
 
 
-def _get_important_fields(api_name: str) -> list[str]:
-    """Return the configured 'important' fields for this object, if any."""
-    return IMPORTANT_FIELDS.get(api_name, [])
-
-
-def _select_display_columns(api_name: str, df, show_all: bool) -> list[str]:
-    """
-    Decide which columns to show for a given object + DataFrame.
-
-    - If show_all: return all columns.
-    - Else: use IMPORTANT_FIELDS if present.
-    - Else: fall back to a simple Id/Name/... heuristic.
-    """
-    cols = list(df.columns)
-
-    if show_all:
-        return cols
-
-    # 1) Try configured IMPORTANT_FIELDS
-    important = _get_important_fields(api_name)
-    display_cols: list[str] = [c for c in important if c in cols]
-
-    # 2) If no configured fields (or none matched), use generic heuristic
-    if not display_cols:
-        for col in ("Id", "Name"):
-            if col in cols and col not in display_cols:
-                display_cols.append(col)
-
-        for extra in ("Email", "Title", "StageName", "Amount"):
-            if extra in cols and extra not in display_cols:
-                display_cols.append(extra)
-
-    # 3) Fallback: if still empty, just take the first few columns
-    if not display_cols:
-        display_cols = cols[:5]
-
-    return display_cols
-
-
 def _initial_db_path_from_argv() -> Optional[Path]:
     # When launched via: streamlit run db_app.py -- <db-path>
     # sys.argv for this script will look like: ['db_app.py', '<db-path>']
@@ -623,7 +490,7 @@ def main() -> None:
             import pandas as pd  # type: ignore[import-not-found]
 
             df = pd.DataFrame(rows)
-            display_cols = _select_display_columns(api_name, df, show_all_fields)
+            display_cols = select_display_columns(api_name, df, show_all_fields)
             st.dataframe(df[display_cols], height=260, hide_index=True, width="stretch")
 
             # Selection widget
@@ -683,7 +550,7 @@ def main() -> None:
                 if show_all_fields:
                     parent_df = all_df
                 else:
-                    important = _get_important_fields(parent.sf_object.api_name)
+                    important = get_important_fields(parent.sf_object.api_name)
                     parent_df = all_df[all_df["Field"].isin(important)] if important else all_df
 
                 st.table(parent_df)
@@ -710,7 +577,7 @@ def main() -> None:
                                     db_path, child_df
                                 )
 
-                            display_cols = _select_display_columns(
+                            display_cols = select_display_columns(
                                 child_obj.api_name, child_df, show_all_fields
                             )
                             st.dataframe(
