@@ -14,6 +14,7 @@ import streamlit.components.v1 as components
 from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children, inspect_sqlite_db, list_records
 from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
+from sfdump.viewer_app.services.documents import list_record_documents, load_master_documents_index
 from sfdump.viewer_app.services.paths import (
     infer_export_root,
     resolve_export_path,
@@ -134,26 +135,6 @@ def _export_root_from_db_path(db_path: Path) -> Optional[Path]:
     Typical layout: EXPORT_ROOT/meta/sfdata.db
     """
     return infer_export_root(db_path)
-
-
-def _load_master_documents_index(export_root: Path):
-    """
-    Load meta/master_documents_index.csv (built by `sfdump docs-index`).
-    Returns df or None if not present.
-    """
-    try:
-        import pandas as pd  # type: ignore[import-not-found]
-    except Exception:
-        return None
-
-    path = export_root / "meta" / "master_documents_index.csv"
-    if not path.exists():
-        return None
-
-    try:
-        return pd.read_csv(path, dtype=str).fillna("")
-    except Exception:
-        return None
 
 
 def _collect_subtree_ids(
@@ -528,29 +509,6 @@ def _initial_db_path_from_argv() -> Optional[Path]:
     return None
 
 
-def _list_record_documents(db_path: Path, object_type: str, record_id: str) -> list[dict[str, Any]]:
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT
-              object_type, record_id, record_name,
-              file_source, file_id, file_link_id,
-              file_name, file_extension,
-              path, content_type, size_bytes, sha256
-            FROM record_documents
-            WHERE object_type = ? AND record_id = ?
-            ORDER BY lower(file_extension), file_name
-            """,
-            (object_type, record_id),
-        )
-        return [dict(r) for r in cur.fetchall()]
-    finally:
-        conn.close()
-
-
 def _resolve_export_path(export_root: Path, rel_path: str) -> Path:
     return resolve_export_path(export_root, rel_path)
 
@@ -823,7 +781,7 @@ def main() -> None:
                 )
                 st.stop()
 
-            docs = _list_record_documents(
+            docs = list_record_documents(
                 db_path=db_path,
                 object_type=api_name,  # IMPORTANT: this matches record_documents.object_type
                 record_id=selected_id,
@@ -952,7 +910,7 @@ def main() -> None:
             )
             st.write({k: len(v) for k, v in sorted(subtree.items(), key=lambda x: -len(x[1]))})
 
-            docs_df = _load_master_documents_index(export_root)
+            docs_df = load_master_documents_index(export_root)
             if docs_df is None:
                 st.error(
                     "meta/master_documents_index.csv not found. "
