@@ -86,7 +86,7 @@ def render_record_tabs(
                             child_df = enrich_contentdocument_links_with_title(db_path, child_df)
 
                         display_cols = select_display_columns(
-                            child_obj.api_name, child_df, show_all_fields
+                            child_obj.api_name, child_df, show_all_fields, show_ids=False
                         )
                         st.dataframe(
                             child_df[display_cols],

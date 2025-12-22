@@ -143,7 +143,7 @@ def render_record_list(
     import pandas as pd  # type: ignore[import-not-found]
 
     df = pd.DataFrame(rows)
-    display_cols = select_display_columns(api_name, df, show_all_fields)
+    display_cols = select_display_columns(api_name, df, show_all_fields, show_ids=False)
     st.dataframe(df[display_cols], height=260, hide_index=True, width="stretch")
 
     options = []
