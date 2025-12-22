@@ -15,6 +15,7 @@ from sfdump.viewer_app.services.documents import (
     list_record_documents,
     load_master_documents_index,
 )
+from sfdump.viewer_app.services.nav import push
 from sfdump.viewer_app.services.paths import infer_export_root, resolve_export_path
 from sfdump.viewer_app.services.traversal import collect_subtree_ids
 
@@ -94,6 +95,29 @@ def render_record_tabs(
                             hide_index=True,
                             height=260,
                         )
+
+                        # Option A drill-down (Open) for Opportunities
+                        if child_obj.api_name == "Opportunity" and "Id" in child_df.columns:
+                            opts = []
+                            for _, r in child_df.iterrows():
+                                rid = str(r.get("Id") or "")
+                                name = str(r.get("Name") or rid or "(no name)")
+                                opts.append(f"{name} [{rid}]")
+
+                            cols_open = st.columns([4, 1])
+                            with cols_open[0]:
+                                choice = st.selectbox(
+                                    "Open Opportunity",
+                                    options=opts,
+                                    index=0,
+                                    key=f"open_opp_{selected_id}",
+                                )
+                            with cols_open[1]:
+                                if st.button("Open", key=f"btn_open_opp_{selected_id}"):
+                                    rid = choice.rsplit("[", 1)[-1].rstrip("]")
+                                    label = choice.rsplit("[", 1)[0].strip()
+                                    push("Opportunity", rid, label=label)
+                                    st.rerun()
 
     with tab_docs:
         export_root = infer_export_root(db_path)

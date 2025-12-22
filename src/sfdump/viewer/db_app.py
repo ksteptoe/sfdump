@@ -6,6 +6,7 @@ from typing import Optional
 
 import streamlit as st
 
+from sfdump.viewer_app.services.nav import breadcrumb, get_current_override, pop
 from sfdump.viewer_app.services.paths import (
     infer_export_root,
 )
@@ -87,10 +88,31 @@ def main() -> None:
             st.info("Select a record on the left to see details and related records.")
             return
 
+        # Navigation override (drill-down)
+        ov = get_current_override()
+        show_api = api_name
+        show_id = str(selected_id)
+
+        if ov is not None:
+            show_api = ov.api_name
+            show_id = ov.record_id
+
+        # Breadcrumb + back
+        bc = breadcrumb()
+        cols_nav = st.columns([6, 1])
+        with cols_nav[0]:
+            if bc:
+                st.caption(bc)
+        with cols_nav[1]:
+            if ov is not None:
+                if st.button("Back"):
+                    pop()
+                    st.rerun()
+
         render_record_tabs(
             db_path=db_path,
-            api_name=api_name,
-            selected_id=str(selected_id),
+            api_name=show_api,
+            selected_id=show_id,
             show_all_fields=show_all_fields,
         )
 
