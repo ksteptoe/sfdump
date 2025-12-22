@@ -13,101 +13,7 @@ import streamlit.components.v1 as components
 
 from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children, inspect_sqlite_db, list_records
-
-IMPORTANT_FIELDS = {
-    "Account": ["Id", "Name", "AccountNumber", "Type", "Industry"],
-    "Opportunity": ["Id", "Name", "StageName", "CloseDate", "Amount"],
-    "Contact": ["Id", "Name", "Email", "Phone", "Title"],
-    "ContentDocument": ["Id", "Title", "LatestPublishedVersionId"],
-    "ContentVersion": ["Id", "Title", "VersionNumber", "CreatedDate"],
-    "ContentDocumentLink": [
-        "Id",
-        "LinkedEntityId",
-        "ContentDocumentId",
-        "DocumentTitle",
-        "ShareType",
-        "Visibility",
-    ],
-    "Attachment": ["Id", "ParentId", "Name", "ContentType", "BodyLength"],
-    # 🧾 Generic finance shapes (kept in case you end up with these names)
-    "Invoice": [
-        "Id",
-        "Name",  # if present
-        "InvoiceNumber",
-        "InvoiceDate",
-        "Status",
-        "TotalAmount",
-        "Balance",
-    ],
-    "InvoiceLine": [
-        "Id",
-        "InvoiceId",
-        "LineNumber",
-        "ProductName",
-        "Description",
-        "Quantity",
-        "UnitPrice",
-        "Amount",
-    ],
-    "CreditNote": [
-        "Id",
-        "Name",
-        "CreditNoteNumber",
-        "CreditNoteDate",
-        "Status",
-        "TotalAmount",
-        "Balance",
-    ],
-    "CreditNoteLine": [
-        "Id",
-        "CreditNoteId",
-        "LineNumber",
-        "Description",
-        "Quantity",
-        "UnitPrice",
-        "Amount",
-    ],
-    # Concrete Coda / FinancialForce objects from your export
-    "c2g__codaInvoice__c": [
-        "Id",
-        "Name",  # invoice number (SIN001673 etc.)
-        "CurrencyIsoCode",
-        "c2g__InvoiceDate__c",
-        "c2g__DueDate__c",
-        "c2g__InvoiceStatus__c",
-        "c2g__PaymentStatus__c",
-        "c2g__InvoiceTotal__c",
-        "c2g__NetTotal__c",
-        "c2g__OutstandingValue__c",
-        "c2g__TaxTotal__c",
-        "Days_Overdue__c",
-        "c2g__AccountName__c",
-        "c2g__CompanyReference__c",
-    ],
-    "c2g__codaInvoiceLineItem__c": [
-        "Id",
-        "Name",
-        "c2g__LineNumber__c",
-        "c2g__LineDescription__c",
-        "c2g__Quantity__c",
-        "c2g__UnitPrice__c",
-        "c2g__NetValue__c",
-        "c2g__TaxRateTotal__c",
-        "c2g__TaxValueTotal__c",
-        "c2g__ProductCode__c",
-        "c2g__ProductReference__c",
-    ],
-    "OpportunityLineItem": [
-        "Id",
-        "OpportunityId",
-        "PricebookEntryId",
-        "Product2Id",
-        "Quantity",
-        "UnitPrice",
-        "TotalPrice",
-        "Description",
-    ],
-}
+from sfdump.viewer_app.config import important_fields_for
 
 
 def _render_pdf_inline(pdf_bytes: bytes, *, height: int = 900) -> None:
@@ -492,7 +398,7 @@ def _load_files_for_record(db_path: Path, parent_id: str) -> dict[str, list[dict
 
 def _get_important_fields(api_name: str) -> list[str]:
     """Return the configured 'important' fields for this object, if any."""
-    return IMPORTANT_FIELDS.get(api_name, [])
+    return important_fields_for(api_name)
 
 
 def _select_display_columns(api_name: str, df, show_all: bool) -> list[str]:
