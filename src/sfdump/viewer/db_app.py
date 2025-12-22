@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children, inspect_sqlite_db, list_records
@@ -107,6 +108,19 @@ IMPORTANT_FIELDS = {
         "Description",
     ],
 }
+
+
+def _render_pdf_inline(pdf_bytes: bytes, *, height: int = 900) -> None:
+    b64 = base64.b64encode(pdf_bytes).decode("ascii")
+    html = f"""
+    <iframe
+        src="data:application/pdf;base64,{b64}"
+        width="100%"
+        height="{height}"
+        style="border: 1px solid #ddd; border-radius: 8px;"
+    ></iframe>
+    """
+    components.html(html, height=height + 20, scrolling=True)
 
 
 def _export_root_from_db_path(db_path: Path) -> Optional[Path]:
@@ -588,7 +602,7 @@ def main() -> None:
 
             df = pd.DataFrame(rows)
             display_cols = _select_display_columns(api_name, df, show_all_fields)
-            st.dataframe(df[display_cols], height=260, hide_index=True, use_container_width=True)
+            st.dataframe(df[display_cols], height=260, hide_index=True, uwidth="stretch")
 
             # Selection widget
             options = []
@@ -679,7 +693,7 @@ def main() -> None:
                             )
                             st.dataframe(
                                 child_df[display_cols],
-                                use_container_width=True,
+                                width="stretch",
                                 hide_index=True,
                                 height=260,
                             )
@@ -712,9 +726,7 @@ def main() -> None:
                     ]
                     if c in docs_df.columns
                 ]
-                st.dataframe(
-                    docs_df[show_cols], use_container_width=True, hide_index=True, height=260
-                )
+                st.dataframe(docs_df[show_cols], width="stretch", hide_index=True, height=260)
 
                 # Pick one to open
                 def _label(row: dict[str, Any]) -> str:
@@ -745,6 +757,30 @@ def main() -> None:
 
                     with cols[1]:
                         st.caption(str(full_path))
+
+                    # --- NEW: inline preview / download ---
+                    if full_path.exists():
+                        data = full_path.read_bytes()
+                        download_name = full_path.name
+                        mime = chosen.get("content_type") or "application/octet-stream"
+
+                        st.download_button(
+                            "Download",
+                            data=data,
+                            file_name=download_name,
+                            mime=str(mime),
+                        )
+
+                        # Preview PDFs inline
+                        ext = str(chosen.get("file_extension") or "").lower()
+                        if ext == "pdf":
+                            st.divider()
+                            st.subheader("Preview")
+                            _render_pdf_inline(data, height=900)
+                    else:
+                        st.warning(
+                            "File missing on disk (path exists in DB but file wasn’t downloaded)."
+                        )
 
         # ------------------------------------------------------------------
         # Recursive subtree document search (Account -> Opp -> Invoice -> ...)
@@ -831,7 +867,7 @@ def main() -> None:
             ]
             show_cols = [c for c in show_cols if c in sub_docs.columns]
 
-            st.dataframe(sub_docs[show_cols], height=260, hide_index=True, use_container_width=True)
+            st.dataframe(sub_docs[show_cols], height=260, hide_index=True, width="stretch")
 
             # Select + preview
             choices = []
