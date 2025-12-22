@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import sqlite3
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -179,81 +178,6 @@ def _pdf_iframe_bytes(pdf_bytes: bytes, height: int = 750) -> None:
     </script>
     """
     st.components.v1.html(html, height=height, scrolling=True)
-
-
-def _load_files_for_record(db_path: Path, parent_id: str) -> dict[str, list[dict[str, object]]]:
-    """
-    Look up files/attachments for a given Salesforce record Id in the viewer DB.
-
-    We try:
-      - Legacy Attachment records via Attachment.ParentId
-      - ContentDocumentLink -> ContentDocument -> ContentVersion (latest version)
-    If the relevant tables are missing, we just return empty lists.
-    """
-    results: dict[str, list[dict[str, object]]] = {
-        "attachments": [],
-        "content_docs": [],
-    }
-
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    try:
-        cur = conn.cursor()
-
-        # --- Legacy Attachments ---------------------------------------------
-        try:
-            cur.execute(
-                """
-                SELECT
-                    Id,
-                    Name,
-                    ContentType,
-                    BodyLength,
-                    ParentId
-                FROM Attachment
-                WHERE ParentId = ?
-                """,
-                (parent_id,),
-            )
-            results["attachments"] = [dict(r) for r in cur.fetchall()]
-        except sqlite3.OperationalError:
-            # Table doesn't exist in this DB – ignore
-            pass
-
-        # --- ContentDocumentLink / ContentDocument / ContentVersion ----------
-        try:
-            cur.execute(
-                """
-                SELECT
-                    l.Id                AS LinkId,
-                    l.ContentDocumentId AS ContentDocumentId,
-                    l.LinkedEntityId    AS LinkedEntityId,
-                    l.ShareType         AS ShareType,
-                    l.Visibility        AS Visibility,
-                    cd.Title            AS DocumentTitle,
-                    cd.FileType         AS DocumentFileType,
-                    cv.VersionNumber    AS VersionNumber,
-                    cv.FileExtension    AS FileExtension,
-                    cv.ContentSize      AS ContentSize
-                FROM ContentDocumentLink AS l
-                LEFT JOIN ContentDocument AS cd
-                    ON cd.Id = l.ContentDocumentId
-                LEFT JOIN ContentVersion AS cv
-                    ON cv.ContentDocumentId = cd.Id
-                   AND (cv.IsLatest = 1 OR cv.IsLatest IS NULL)
-                WHERE l.LinkedEntityId = ?
-                """,
-                (parent_id,),
-            )
-            results["content_docs"] = [dict(r) for r in cur.fetchall()]
-        except sqlite3.OperationalError:
-            # One or more of the tables doesn't exist – ignore
-            pass
-
-    finally:
-        conn.close()
-
-    return results
 
 
 def _initial_db_path_from_argv() -> Optional[Path]:
