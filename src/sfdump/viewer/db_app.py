@@ -17,6 +17,7 @@ from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
 from sfdump.viewer_app.services.content import enrich_contentdocument_links_with_title
 from sfdump.viewer_app.services.display import get_important_fields, select_display_columns
 from sfdump.viewer_app.services.documents import list_record_documents, load_master_documents_index
+from sfdump.viewer_app.services.objects import get_object_choices
 from sfdump.viewer_app.services.paths import (
     infer_export_root,
     resolve_export_path,
@@ -301,27 +302,6 @@ def _open_local_file(path: Path) -> None:
         subprocess.Popen(["xdg-open", str(path)])
 
 
-def _get_object_choices(tables) -> list[tuple[str, str]]:
-    """
-    Return sorted (label, api_name) for objects that actually exist in the DB.
-
-    Uses SFObject.label for friendliness, but keeps the API name visible.
-    """
-    table_names = {t.name for t in tables}
-    choices: list[tuple[str, str]] = []
-
-    for obj in OBJECTS.values():
-        if obj.table_name in table_names:
-            label = getattr(obj, "label", None) or obj.api_name
-            if label != obj.api_name:
-                ui_label = f"{label} ({obj.api_name})"
-            else:
-                ui_label = label
-            choices.append((ui_label, obj.api_name))
-
-    return sorted(choices, key=lambda x: x[0])
-
-
 def main() -> None:
     st.set_page_config(page_title="SF Dump DB Viewer", layout="wide")
     st.markdown(
@@ -374,7 +354,7 @@ def main() -> None:
         f"**Tables:** {len(overview.tables)}  |  **Indexes:** {overview.index_count}"
     )
 
-    object_choices = _get_object_choices(overview.tables)
+    object_choices = get_object_choices(overview.tables)
     if not object_choices:
         st.warning(
             "No known Salesforce objects found in this DB. "
