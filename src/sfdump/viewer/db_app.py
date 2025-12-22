@@ -13,6 +13,7 @@ import streamlit.components.v1 as components
 
 from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children, inspect_sqlite_db, list_records
+from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
 from sfdump.viewer_app.services.paths import (
     infer_export_root,
     resolve_export_path,
@@ -355,11 +356,7 @@ def _preview_file(export_root: Path, local_path: str) -> None:
 
     if p.suffix.lower() == ".pdf":
         data = p.read_bytes()
-        b64 = base64.b64encode(data).decode("utf-8")
-        st.components.v1.html(
-            f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="900px"></iframe>',
-            height=900,
-        )
+        preview_pdf_bytes(data, height=900)
     else:
         st.download_button(
             "Download file",
@@ -894,7 +891,7 @@ def main() -> None:
 
                         if ext == ".pdf":
                             with st.expander("Preview PDF", expanded=True):
-                                _pdf_preview_pdfjs(data, height=750)
+                                preview_pdf_bytes(data, height=750)
 
                         elif str(mime).startswith("image/"):
                             with st.expander("Preview image", expanded=True):
