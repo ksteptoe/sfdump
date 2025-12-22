@@ -14,6 +14,7 @@ import streamlit.components.v1 as components
 from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children, inspect_sqlite_db, list_records
 from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
+from sfdump.viewer_app.services.content import enrich_contentdocument_links_with_title
 from sfdump.viewer_app.services.display import get_important_fields, select_display_columns
 from sfdump.viewer_app.services.documents import list_record_documents, load_master_documents_index
 from sfdump.viewer_app.services.paths import (
@@ -199,45 +200,6 @@ def _preview_file(export_root: Path, local_path: str) -> None:
             data=p.read_bytes(),
             file_name=p.name,
         )
-
-
-def _enrich_contentdocument_links_with_title(db_path: Path, df):
-    """
-    For ContentDocumentLink rows, add a 'DocumentTitle' column by looking up
-    ContentDocument.Title from the 'content_document' table in the viewer DB.
-
-    If anything goes wrong (no table, etc.), this falls back silently.
-    """
-    # Defensive: if the column isn't there, nothing to do
-    if "ContentDocumentId" not in df.columns:
-        return df
-
-    # Collect distinct non-empty IDs
-    doc_ids = {str(x) for x in df["ContentDocumentId"] if x}
-    if not doc_ids:
-        return df
-
-    try:
-        conn = sqlite3.connect(str(db_path))
-        try:
-            cur = conn.cursor()
-            placeholders = ", ".join("?" for _ in doc_ids)
-            sql = f'SELECT "Id", "Title" FROM "content_document" WHERE Id IN ({placeholders})'
-            cur.execute(sql, list(doc_ids))
-            rows = cur.fetchall()
-        finally:
-            conn.close()
-    except Exception:
-        # If the table doesn't exist or query fails, just return the original df
-        return df
-
-    # Build a mapping Id -> Title
-    id_to_title = {row[0]: row[1] for row in rows}
-
-    # Add a friendly column
-    df = df.copy()
-    df["DocumentTitle"] = df["ContentDocumentId"].map(id_to_title)
-    return df
 
 
 def _load_files_for_record(db_path: Path, parent_id: str) -> dict[str, list[dict[str, object]]]:
@@ -573,7 +535,7 @@ def main() -> None:
                             st.info("No rows.")
                         else:
                             if child_obj.api_name == "ContentDocumentLink":
-                                child_df = _enrich_contentdocument_links_with_title(
+                                child_df = enrich_contentdocument_links_with_title(
                                     db_path, child_df
                                 )
 
