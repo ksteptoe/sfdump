@@ -190,10 +190,6 @@ def _initial_db_path_from_argv() -> Optional[Path]:
     return None
 
 
-def _resolve_export_path(export_root: Path, rel_path: str) -> Path:
-    return resolve_export_path(export_root, rel_path)
-
-
 def main() -> None:
     st.set_page_config(page_title="SF Dump DB Viewer", layout="wide")
     st.markdown(
@@ -474,7 +470,7 @@ def main() -> None:
                         "This row has no local path. That usually means the file wasn’t downloaded into the export."
                     )
                 else:
-                    full_path = _resolve_export_path(export_root, rel_path)
+                    full_path = resolve_export_path(export_root, rel_path)
 
                     cols = st.columns([1, 3])
                     with cols[0]:
