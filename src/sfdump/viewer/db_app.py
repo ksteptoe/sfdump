@@ -215,6 +215,103 @@ def _collect_subtree_ids(
     return out
 
 
+def _pdf_preview_pdfjs(pdf_bytes: bytes, *, height: int = 750) -> None:
+    """
+    Render PDF inline using PDF.js (avoids Chrome blocking the built-in PDF viewer in iframes).
+    Requires internet access to load pdf.js from CDN.
+    """
+    b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+
+    html = f"""
+    <div style="width:100%; height:{height}px; overflow:auto; border:1px solid #ddd; border-radius:8px; padding:8px;">
+      <div style="margin-bottom:8px; display:flex; gap:8px; align-items:center;">
+        <button id="prev">Prev</button>
+        <button id="next">Next</button>
+        <span style="font-family: sans-serif; font-size: 13px;">
+          Page: <span id="page_num"></span> / <span id="page_count"></span>
+        </span>
+      </div>
+      <canvas id="the-canvas" style="width:100%;"></canvas>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.js"></script>
+    <script>
+      (function() {{
+        const b64 = "{b64}";
+        const binary = atob(b64);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {{
+          bytes[i] = binary.charCodeAt(i);
+        }}
+
+        const loadingTask = pdfjsLib.getDocument({{ data: bytes }});
+
+        let pdf = null;
+        let pageNum = 1;
+        let pageRendering = false;
+        let pageNumPending = null;
+
+        const canvas = document.getElementById("the-canvas");
+        const ctx = canvas.getContext("2d");
+
+        function renderPage(num) {{
+          pageRendering = true;
+          pdf.getPage(num).then(function(page) {{
+            const containerWidth = canvas.parentElement.clientWidth - 20;
+            const viewport0 = page.getViewport({{ scale: 1.0 }});
+            const scale = containerWidth / viewport0.width;
+            const viewport = page.getViewport({{ scale: scale }});
+
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            const renderTask = page.render({{ canvasContext: ctx, viewport: viewport }});
+            renderTask.promise.then(function() {{
+              pageRendering = false;
+              document.getElementById("page_num").textContent = pageNum;
+
+              if (pageNumPending !== null) {{
+                renderPage(pageNumPending);
+                pageNumPending = null;
+              }}
+            }});
+          }});
+        }}
+
+        function queueRenderPage(num) {{
+          if (pageRendering) {{
+            pageNumPending = num;
+          }} else {{
+            renderPage(num);
+          }}
+        }}
+
+        document.getElementById("prev").addEventListener("click", function() {{
+          if (pageNum <= 1) return;
+          pageNum--;
+          queueRenderPage(pageNum);
+        }});
+
+        document.getElementById("next").addEventListener("click", function() {{
+          if (pageNum >= pdf.numPages) return;
+          pageNum++;
+          queueRenderPage(pageNum);
+        }});
+
+        loadingTask.promise.then(function(loadedPdf) {{
+          pdf = loadedPdf;
+          document.getElementById("page_count").textContent = pdf.numPages;
+          document.getElementById("page_num").textContent = pageNum;
+          renderPage(pageNum);
+        }});
+      }})();
+    </script>
+    """
+
+    st.components.v1.html(html, height=height + 40, scrolling=True)
+
+
 def _pdf_iframe(path: Path, height: int = 750) -> None:
     pdf_bytes = path.read_bytes()
     b64 = base64.b64encode(pdf_bytes).decode("utf-8")
@@ -230,14 +327,26 @@ def _pdf_iframe(path: Path, height: int = 750) -> None:
 
 
 def _pdf_iframe_bytes(pdf_bytes: bytes, height: int = 750) -> None:
+    # Chrome often blocks data:application/pdf;base64,... in iframes.
+    # Workaround: create a Blob in JS and iframe the blob: URL instead.
     b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+
     html = f"""
-    <iframe
-        src="data:application/pdf;base64,{b64}"
-        width="100%"
-        height="{height}"
-        style="border:none;"
-    ></iframe>
+    <iframe id="pdf_frame" style="width:100%; height:{height}px; border:none;"></iframe>
+    <script>
+      (function() {{
+        const b64 = "{b64}";
+        const binary = atob(b64);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {{
+          bytes[i] = binary.charCodeAt(i);
+        }}
+        const blob = new Blob([bytes], {{ type: "application/pdf" }});
+        const url = URL.createObjectURL(blob);
+        document.getElementById("pdf_frame").src = url;
+      }})();
+    </script>
     """
     st.components.v1.html(html, height=height, scrolling=True)
 
@@ -796,7 +905,8 @@ def main() -> None:
 
                         if ext == ".pdf":
                             with st.expander("Preview PDF", expanded=True):
-                                _pdf_iframe_bytes(data, height=750)
+                                _pdf_preview_pdfjs(data, height=750)
+
                         elif str(mime).startswith("image/"):
                             with st.expander("Preview image", expanded=True):
                                 st.image(data, caption=download_name)
