@@ -104,12 +104,14 @@ def render_record_tabs(
 
             if opp_account_id or opp_account_name:
                 with st.expander("Invoices (via Account)", expanded=False):
-                    rows = list_invoices_for_account(
+                    rows, strategy = list_invoices_for_account(
                         db_path,
                         account_id=opp_account_id,
                         account_name=opp_account_name or None,
                         limit=200,
                     )
+                    if strategy not in ("none", "no-table"):
+                        st.caption(f"Invoice match: {strategy}")
                     if not rows:
                         st.info(
                             "No invoices found for the Opportunity's Account (or invoice table not present)."
