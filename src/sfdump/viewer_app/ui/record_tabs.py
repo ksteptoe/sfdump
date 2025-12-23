@@ -110,10 +110,13 @@ def render_record_tabs(
                                     "Open Opportunity",
                                     options=opts,
                                     index=0,
-                                    key=f"open_opp_{selected_id}",
+                                    key=f"open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}",
                                 )
                             with cols_open[1]:
-                                if st.button("Open", key=f"btn_open_opp_{selected_id}"):
+                                if st.button(
+                                    "Open",
+                                    key=f"btn_open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}",
+                                ):
                                     rid = choice.rsplit("[", 1)[-1].rstrip("]")
                                     label = choice.rsplit("[", 1)[0].strip()
                                     push("Opportunity", rid, label=label)
@@ -133,10 +136,13 @@ def render_record_tabs(
                                     "Open Opportunity",
                                     options=opts,
                                     index=0,
-                                    key=f"open_opp_{selected_id}",
+                                    key=f"open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}",
                                 )
                             with cols_open[1]:
-                                if st.button("Open", key=f"btn_open_opp_{selected_id}"):
+                                if st.button(
+                                    "Open",
+                                    key=f"btn_open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}",
+                                ):
                                     rid = choice.rsplit("[", 1)[-1].rstrip("]")
                                     label = choice.rsplit("[", 1)[0].strip()
                                     push("Opportunity", rid, label=label)
