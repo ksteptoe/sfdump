@@ -15,6 +15,7 @@ from sfdump.viewer_app.services.documents import (
     list_record_documents,
     load_master_documents_index,
 )
+from sfdump.viewer_app.services.invoices import list_invoices_for_account
 from sfdump.viewer_app.services.nav import push
 from sfdump.viewer_app.services.paths import infer_export_root, resolve_export_path
 from sfdump.viewer_app.services.traversal import collect_subtree_ids
@@ -92,6 +93,65 @@ def render_record_tabs(
                 parent_df = all_df[all_df["Field"].isin(important)] if important else all_df
 
             st.table(parent_df)
+
+        # Computed: invoices associated to this Opportunity's Account
+        if api_name == "Opportunity":
+            opp_account_id = str(parent.data.get("AccountId") or "")
+            opp_account_name = str(
+                parent.data.get("Account", "") or parent.data.get("AccountName", "") or ""
+            )
+
+            if opp_account_id or opp_account_name:
+                with st.expander("Invoices (via Account)", expanded=False):
+                    rows = list_invoices_for_account(
+                        db_path,
+                        account_id=opp_account_id,
+                        account_name=opp_account_name or None,
+                        limit=200,
+                    )
+                    if not rows:
+                        st.info(
+                            "No invoices found for the Opportunity's Account (or invoice table not present)."
+                        )
+                    else:
+                        inv_df = pd.DataFrame(rows)
+
+                        # Compact, user-facing columns
+                        wanted = [
+                            "Name",
+                            "c2g__InvoiceDate__c",
+                            "c2g__InvoiceStatus__c",
+                            "c2g__InvoiceTotal__c",
+                            "c2g__OutstandingValue__c",
+                            "CurrencyIsoCode",
+                        ]
+                        show = [c for c in wanted if c in inv_df.columns]
+                        st.dataframe(inv_df[show], width="stretch", hide_index=True, height=260)
+
+                        # Open invoice (drill-down)
+                        if "Id" in inv_df.columns:
+                            opts = []
+                            for _, r in inv_df.iterrows():
+                                rid = str(r.get("Id") or "")
+                                name = str(r.get("Name") or rid or "(invoice)")
+                                opts.append(f"{name} [{rid}]")
+
+                            cols_open = st.columns([4, 1])
+                            with cols_open[0]:
+                                choice = st.selectbox(
+                                    "Open invoice",
+                                    options=opts,
+                                    index=0,
+                                    key=f"open_invoice_for_opp_{selected_id}",
+                                )
+                            with cols_open[1]:
+                                if st.button("Open", key=f"btn_open_invoice_for_opp_{selected_id}"):
+                                    rid = choice.rsplit("[", 1)[-1].rstrip("]")
+                                    label = choice.rsplit("[", 1)[0].strip()
+                                    push("c2g__codaInvoice__c", rid, label=label)
+                                    st.rerun()
+            else:
+                st.caption("Opportunity has no AccountId; cannot resolve invoices.")
 
     with tab_children:
         if not record.children:
