@@ -70,7 +70,7 @@ def render_record_tabs(
         if not record.children:
             st.info("No child records found for this record.")
         else:
-            for coll in record.children:
+            for coll_idx, coll in enumerate(record.children):
                 child_obj = coll.sf_object
                 rel = coll.relationship
                 title = (
@@ -110,38 +110,12 @@ def render_record_tabs(
                                     "Open Opportunity",
                                     options=opts,
                                     index=0,
-                                    key=f"open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}",
+                                    key=f"open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}_{rel.child_field}_{coll_idx}",
                                 )
                             with cols_open[1]:
                                 if st.button(
                                     "Open",
-                                    key=f"btn_open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}",
-                                ):
-                                    rid = choice.rsplit("[", 1)[-1].rstrip("]")
-                                    label = choice.rsplit("[", 1)[0].strip()
-                                    push("Opportunity", rid, label=label)
-                                    st.rerun()
-
-                        # Option A drill-down (Open) for Opportunities
-                        if child_obj.api_name == "Opportunity" and "Id" in child_df.columns:
-                            opts = []
-                            for _, r in child_df.iterrows():
-                                rid = str(r.get("Id") or "")
-                                name = str(r.get("Name") or rid or "(no name)")
-                                opts.append(f"{name} [{rid}]")
-
-                            cols_open = st.columns([4, 1])
-                            with cols_open[0]:
-                                choice = st.selectbox(
-                                    "Open Opportunity",
-                                    options=opts,
-                                    index=0,
-                                    key=f"open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}",
-                                )
-                            with cols_open[1]:
-                                if st.button(
-                                    "Open",
-                                    key=f"btn_open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}",
+                                    key=f"btn_open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}_{rel.child_field}_{coll_idx}",
                                 ):
                                     rid = choice.rsplit("[", 1)[-1].rstrip("]")
                                     label = choice.rsplit("[", 1)[0].strip()
