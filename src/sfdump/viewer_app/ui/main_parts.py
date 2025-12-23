@@ -116,6 +116,7 @@ def render_record_list(
     regex_search: bool,
     limit: int,
     show_all_fields: bool,
+    show_ids: bool = False,
 ) -> tuple[list[dict[str, Any]], Optional[str]]:
     """Render the left record list area and return (rows, selected_id)."""
     where_clause = _build_where_clause(search_term, regex_search)
@@ -143,7 +144,7 @@ def render_record_list(
     import pandas as pd  # type: ignore[import-not-found]
 
     df = pd.DataFrame(rows)
-    display_cols = select_display_columns(api_name, df, show_all_fields, show_ids=False)
+    display_cols = select_display_columns(api_name, df, show_all_fields, show_ids=show_ids)
     st.dataframe(df[display_cols], height=260, hide_index=True, width="stretch")
 
     options = []

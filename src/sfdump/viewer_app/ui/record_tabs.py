@@ -27,6 +27,7 @@ def render_record_tabs(
     api_name: str,
     selected_id: str,
     show_all_fields: bool,
+    show_ids: bool = False,
 ) -> None:
     st.subheader("Record details & relationships")
 
@@ -174,7 +175,7 @@ def render_record_tabs(
                             child_df = enrich_contentdocument_links_with_title(db_path, child_df)
 
                         display_cols = select_display_columns(
-                            child_obj.api_name, child_df, show_all_fields, show_ids=False
+                            child_obj.api_name, child_df, show_all_fields, show_ids=show_ids
                         )
                         st.dataframe(
                             child_df[display_cols],
