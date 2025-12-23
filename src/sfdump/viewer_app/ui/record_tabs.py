@@ -45,6 +45,33 @@ def render_record_tabs(
 
     import pandas as pd  # type: ignore[import-not-found]
 
+    def _open_child_control(*, child_api: str, child_df: "pd.DataFrame", key_prefix: str) -> None:
+        # Needs an Id column to navigate
+        if "Id" not in child_df.columns or child_df.empty:
+            return
+
+        # Build options using Name if present, otherwise Id
+        opts: list[str] = []
+        for _, r in child_df.iterrows():
+            rid = str(r.get("Id") or "")
+            name = str(r.get("Name") or r.get("DocumentTitle") or rid or "(no name)")
+            opts.append(f"{name} [{rid}]")
+
+        cols_open = st.columns([4, 1])
+        with cols_open[0]:
+            choice = st.selectbox(
+                f"Open {child_api}",
+                options=opts,
+                index=0,
+                key=f"{key_prefix}_sel",
+            )
+        with cols_open[1]:
+            if st.button("Open", key=f"{key_prefix}_btn"):
+                rid = choice.rsplit("[", 1)[-1].rstrip("]")
+                label = choice.rsplit("[", 1)[0].strip()
+                push(child_api, rid, label=label)
+                st.rerun()
+
     tab_details, tab_children, tab_docs = st.tabs(["Details", "Children", "Documents"])
 
     with tab_details:
@@ -95,32 +122,12 @@ def render_record_tabs(
                             hide_index=True,
                             height=260,
                         )
-
-                        # Option A drill-down (Open) for Opportunities
-                        if child_obj.api_name == "Opportunity" and "Id" in child_df.columns:
-                            opts: list[str] = []
-                            for _, r in child_df.iterrows():
-                                rid = str(r.get("Id") or "")
-                                name = str(r.get("Name") or rid or "(no name)")
-                                opts.append(f"{name} [{rid}]")
-
-                            cols_open = st.columns([4, 1])
-                            with cols_open[0]:
-                                choice = st.selectbox(
-                                    "Open Opportunity",
-                                    options=opts,
-                                    index=0,
-                                    key=f"open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}_{rel.child_field}_{coll_idx}",
-                                )
-                            with cols_open[1]:
-                                if st.button(
-                                    "Open",
-                                    key=f"btn_open_opp_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}_{rel.child_field}_{coll_idx}",
-                                ):
-                                    rid = choice.rsplit("[", 1)[-1].rstrip("]")
-                                    label = choice.rsplit("[", 1)[0].strip()
-                                    push("Opportunity", rid, label=label)
-                                    st.rerun()
+                        # Drill-down (Open) for any child object
+                        _open_child_control(
+                            child_api=child_obj.api_name,
+                            child_df=child_df,
+                            key_prefix=f"open_child_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}_{rel.child_field}_{coll_idx}",
+                        )
 
     with tab_docs:
         export_root = infer_export_root(db_path)
