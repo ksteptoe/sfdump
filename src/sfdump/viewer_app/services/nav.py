@@ -21,9 +21,14 @@ def get_current_override() -> Optional[NavTarget]:
     stack = st.session_state.get(_STACK_KEY, [])
     if not stack:
         return None
+
     top = stack[-1]
     if isinstance(top, dict):
-        return NavTarget(**top)
+        return NavTarget(
+            api_name=str(top.get("api_name", "")),
+            record_id=str(top.get("record_id", "")),
+            label=str(top.get("label", "")),
+        )
     if isinstance(top, NavTarget):
         return top
     return None
@@ -50,13 +55,15 @@ def breadcrumb() -> str:
     stack = st.session_state.get(_STACK_KEY, [])
     if not stack:
         return ""
-    parts = []
+
+    parts: list[str] = []
     for item in stack:
         if isinstance(item, dict):
-            api = item.get("api_name", "")
-            label = item.get("label") or item.get("record_id") or ""
+            api = str(item.get("api_name", ""))
+            label = str(item.get("label") or item.get("record_id") or "")
         else:
-            api = getattr(item, "api_name", "")
-            label = getattr(item, "label", "") or getattr(item, "record_id", "")
+            api = str(getattr(item, "api_name", ""))
+            label = str(getattr(item, "label", "") or getattr(item, "record_id", ""))
         parts.append(f"{api}:{label}".strip(":"))
+
     return "  ›  ".join(parts)
