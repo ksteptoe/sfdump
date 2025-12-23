@@ -212,6 +212,30 @@ def render_record_tabs(
         else:
             docs_df = pd.DataFrame(docs)
 
+            # Status + filter: treat blank path/local_path as missing on disk
+            path_col = (
+                "path"
+                if "path" in docs_df.columns
+                else ("local_path" if "local_path" in docs_df.columns else "")
+            )
+            if path_col:
+                docs_df = docs_df.copy()
+                docs_df["status"] = docs_df[path_col].apply(
+                    lambda x: "Downloaded" if str(x or "").strip() else "Missing"
+                )
+                missing_count = int((docs_df["status"] == "Missing").sum())
+                st.caption(f"Documents: {len(docs_df)} (missing: {missing_count})")
+
+                hide_missing = st.checkbox(
+                    "Hide missing (no local path)",
+                    value=False,
+                    key=f"hide_missing_docs_{api_name}_{selected_id}",
+                )
+                if hide_missing:
+                    docs_df = docs_df[docs_df["status"] == "Downloaded"].copy()
+            else:
+                st.caption(f"Documents: {len(docs_df)}")
+
             # Make parent/attachment explicit in the table
             if (
                 "object_type" in docs_df.columns
@@ -231,6 +255,7 @@ def render_record_tabs(
             show_cols = [
                 c
                 for c in [
+                    "status",
                     "attached_to",
                     "file_source",
                     "file_id",
