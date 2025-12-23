@@ -149,9 +149,26 @@ def render_record_tabs(
         else:
             docs_df = pd.DataFrame(docs)
 
+            # Make parent/attachment explicit in the table
+            if (
+                "object_type" in docs_df.columns
+                and "record_name" in docs_df.columns
+                and "record_id" in docs_df.columns
+            ):
+                docs_df = docs_df.copy()
+                docs_df["attached_to"] = (
+                    docs_df["object_type"].astype(str)
+                    + " — "
+                    + docs_df["record_name"].astype(str)
+                    + " ["
+                    + docs_df["record_id"].astype(str)
+                    + "]"
+                )
+
             show_cols = [
                 c
                 for c in [
+                    "attached_to",
                     "file_source",
                     "file_id",
                     "file_name",
@@ -272,12 +289,28 @@ def render_record_tabs(
 
         sub_docs = docs_df[docs_df["record_id"].isin(list(all_ids))].copy()
 
+        # Make parent/attachment explicit for mixed subtree results
+        if (
+            "object_type" in sub_docs.columns
+            and "record_name" in sub_docs.columns
+            and "record_id" in sub_docs.columns
+        ):
+            sub_docs["attached_to"] = (
+                sub_docs["object_type"].astype(str)
+                + " — "
+                + sub_docs["record_name"].astype(str)
+                + " ["
+                + sub_docs["record_id"].astype(str)
+                + "]"
+            )
+
         st.write(f"Documents found: **{len(sub_docs)}**")
         if len(sub_docs) == 0:
             st.info("No documents attached to any record in the subtree.")
             st.stop()
 
         show_cols = [
+            "attached_to",
             "file_extension",
             "file_source",
             "file_name",
