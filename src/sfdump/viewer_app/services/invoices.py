@@ -243,3 +243,50 @@ def find_invoices_for_opportunity(
 
     finally:
         conn.close()
+
+
+def list_invoices_for_account(
+    db_path: Path, account_id: str, limit: int = 200
+) -> list[dict[str, Any]]:
+    """Best-effort: list invoices linked to an Account, if your schema exposes an Account FK."""
+    header_tables = [
+        "c2g__codaInvoice__c",
+        "fferpcore__BillingDocument__c",
+        "Invoice",
+    ]
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.cursor()
+        out: list[dict[str, Any]] = []
+
+        # common account FK names on invoice headers
+        candidate_fields = [
+            "AccountId",
+            "Account__c",
+            "c2g__Account__c",
+            "c2g__AccountName__c",
+            "fferpcore__Account__c",
+            "fferpcore__Customer__c",
+        ]
+
+        for table in header_tables:
+            if not _table_exists(cur, table):
+                continue
+            cols = _table_columns(cur, table)
+            for fk in [f for f in candidate_fields if f in cols]:
+                out.extend(_fetch_rows_by_fk(cur, table, fk, account_id, limit))
+
+        # de-dupe
+        seen: set[tuple[str, str]] = set()
+        uniq: list[dict[str, Any]] = []
+        for r in out:
+            rid = str(r.get("Id") or "")
+            ot = str(r.get("object_type") or "")
+            key = (ot, rid)
+            if rid and ot and key not in seen:
+                seen.add(key)
+                uniq.append(r)
+        return uniq
+    finally:
+        conn.close()
