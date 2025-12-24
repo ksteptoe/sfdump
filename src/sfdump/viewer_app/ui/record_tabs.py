@@ -170,7 +170,8 @@ def render_record_tabs(
                     st.caption("No invoices found (or invoice tables/fields not present).")
 
                 else:
-                    inv_df = pd.DataFrame(inv_rows)
+                    inv_rows_list = inv_rows[0] if isinstance(inv_rows, tuple) else inv_rows
+                    inv_df = pd.DataFrame(inv_rows_list)
 
                     show = [
                         c
@@ -197,7 +198,8 @@ def render_record_tabs(
                         height=220,
                     )
 
-                    for r in inv_rows[:50]:
+                    inv_rows_list = inv_rows[0] if isinstance(inv_rows, tuple) else inv_rows
+                    for r in (inv_rows_list or [])[:50]:
                         oid = str(r.get("Id") or "")
 
                         ot = str(r.get("object_type") or "")
