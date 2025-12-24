@@ -2,87 +2,244 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
+
+
+def _table_exists(cur: sqlite3.Cursor, table: str) -> bool:
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
+    return cur.fetchone() is not None
+
+
+def _table_columns(cur: sqlite3.Cursor, table: str) -> list[str]:
+    cur.execute(f'PRAGMA table_info("{table}")')
+    return [r[1] for r in cur.fetchall()]  # (cid, name, type, notnull, dflt_value, pk)
+
+
+def _candidate_fk_fields(cols: Iterable[str]) -> list[str]:
+    """
+    Heuristics: any column name that plausibly stores an Opportunity Id.
+    """
+    keys = []
+    for c in cols:
+        lc = c.lower()
+        if lc in ("opportunityid", "opportunity__c", "opportunity_id"):
+            keys.append(c)
+        elif "opportunity" in lc and (
+            lc.endswith("id") or lc.endswith("__c") or lc.endswith("_id")
+        ):
+            keys.append(c)
+    # stable order: prefer exact common names
+    pref = ["OpportunityId", "Opportunity__c", "opportunityid", "opportunity__c"]
+    keys = sorted(keys, key=lambda x: (x not in pref, x))
+    return keys
+
+
+def _select_existing(cols: list[str], wanted: list[str]) -> list[str]:
+    return [c for c in wanted if c in cols]
+
+
+def _fetch_rows_by_fk(
+    cur: sqlite3.Cursor,
+    table: str,
+    fk_field: str,
+    fk_value: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    cols = _table_columns(cur, table)
+    wanted = [
+        "Id",
+        "Name",
+        "CurrencyIsoCode",
+        # Coda invoice fields
+        "c2g__InvoiceDate__c",
+        "c2g__InvoiceStatus__c",
+        "c2g__InvoiceTotal__c",
+        "c2g__OutstandingValue__c",
+        # FinancialForce-ish
+        "fferpcore__InvoiceDate__c",
+        "fferpcore__Status__c",
+        "fferpcore__Total__c",
+        "fferpcore__Outstanding__c",
+        # Generic
+        "InvoiceDate",
+        "Status",
+        "TotalAmount",
+        "Balance",
+    ]
+    select_cols = _select_existing(cols, wanted)
+    if "Id" not in select_cols:
+        return []
+
+    select_sql = ", ".join([f'"{c}"' for c in select_cols])
+    sql = f'SELECT {select_sql} FROM "{table}" WHERE "{fk_field}" = ? LIMIT ?'
+    cur.execute(sql, (fk_value, int(limit)))
+    rows = [dict(zip(select_cols, r, strict=False)) for r in cur.fetchall()]
+    for r in rows:
+        r["object_type"] = table
+        r["_via"] = f"{table}.{fk_field}"
+    return rows
+
+
+def _fetch_invoice_headers_by_ids(
+    cur: sqlite3.Cursor,
+    table: str,
+    ids: list[str],
+    limit: int,
+) -> list[dict[str, Any]]:
+    if not ids:
+        return []
+    cols = _table_columns(cur, table)
+    wanted = [
+        "Id",
+        "Name",
+        "CurrencyIsoCode",
+        "c2g__InvoiceDate__c",
+        "c2g__InvoiceStatus__c",
+        "c2g__InvoiceTotal__c",
+        "c2g__OutstandingValue__c",
+        "fferpcore__InvoiceDate__c",
+        "fferpcore__Status__c",
+        "fferpcore__Total__c",
+        "fferpcore__Outstanding__c",
+        "InvoiceDate",
+        "Status",
+        "TotalAmount",
+        "Balance",
+    ]
+    select_cols = _select_existing(cols, wanted)
+    if "Id" not in select_cols:
+        return []
+
+    ids = ids[: int(limit)]
+    ph = ", ".join(["?"] * len(ids))
+    select_sql = ", ".join([f'"{c}"' for c in select_cols])
+    sql = f'SELECT {select_sql} FROM "{table}" WHERE "Id" IN ({ph})'
+    cur.execute(sql, ids)
+    rows = [dict(zip(select_cols, r, strict=False)) for r in cur.fetchall()]
+    for r in rows:
+        r["object_type"] = table
+    return rows
 
 
 def find_invoices_for_opportunity(
     db_path: Path, opportunity_id: str, limit: int = 200
 ) -> list[dict[str, Any]]:
     """
-    Best-effort invoice lookup for an Opportunity.
+    Best-effort invoice lookup for an Opportunity using:
+      1) schema-driven FK scan on likely invoice header tables
+      2) bridge fallback via invoice line tables -> invoice header Ids
 
-    We try common patterns:
-      - c2g__codaInvoice__c: opportunity reference fields if present
-      - fferpcore__BillingDocument__c: opportunity reference fields if present
-      - generic Invoice: OpportunityId if present
-
-    Returns rows with at least: object_type, Id, Name/number/date/amount where available.
+    Returns rows with object_type, Id, Name/date/amount fields when present.
     """
+    header_tables = [
+        "c2g__codaInvoice__c",
+        "fferpcore__BillingDocument__c",
+        "Invoice",
+    ]
+
+    # Known line-item tables that might carry the opportunity FK
+    line_tables = [
+        "c2g__codaInvoiceLineItem__c",
+        "fferpcore__BillingDocumentLine__c",
+        "InvoiceLine",
+    ]
+
     conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
     try:
         cur = conn.cursor()
 
-        candidates: list[tuple[str, list[str]]] = [
-            # (table, possible opportunity FK fields)
-            ("c2g__codaInvoice__c", ["Opportunity__c", "OpportunityId", "c2g__Opportunity__c"]),
-            (
-                "fferpcore__BillingDocument__c",
-                ["Opportunity__c", "OpportunityId", "fferpcore__Opportunity__c"],
-            ),
-            ("Invoice", ["OpportunityId", "Opportunity__c"]),
-        ]
-
         out: list[dict[str, Any]] = []
 
-        for table, fk_fields in candidates:
-            # Skip if table doesn't exist
-            try:
-                cur.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
-                )
-                if not cur.fetchone():
+        # 1) Direct: scan header tables for any Opportunity-ish FK field
+        for table in header_tables:
+            if not _table_exists(cur, table):
+                continue
+            cols = _table_columns(cur, table)
+            for fk in _candidate_fk_fields(cols):
+                out.extend(_fetch_rows_by_fk(cur, table, fk, opportunity_id, limit))
+
+        # If we already found headers, we're done
+        if out:
+            # De-dupe by (object_type, Id)
+            seen: set[tuple[str, str]] = set()
+            uniq: list[dict[str, Any]] = []
+            for r in out:
+                rid = str(r.get("Id") or "")
+                ot = str(r.get("object_type") or "")
+                key = (ot, rid)
+                if rid and ot and key not in seen:
+                    seen.add(key)
+                    uniq.append(r)
+            return uniq
+
+        # 2) Bridge: scan line tables for opportunity FK, then map to header Id
+        # Try to discover header-id column names on the line tables.
+        header_id_fields_by_line = {
+            "c2g__codaInvoiceLineItem__c": ["c2g__Invoice__c", "InvoiceId", "c2g__codaInvoice__c"],
+            "fferpcore__BillingDocumentLine__c": [
+                "fferpcore__BillingDocument__c",
+                "BillingDocumentId",
+            ],
+            "InvoiceLine": ["InvoiceId", "Invoice__c"],
+        }
+
+        collected: dict[str, set[str]] = {t: set() for t in header_tables}
+
+        for line_table in line_tables:
+            if not _table_exists(cur, line_table):
+                continue
+            cols = _table_columns(cur, line_table)
+
+            opp_fks = _candidate_fk_fields(cols)
+            if not opp_fks:
+                continue
+
+            header_fks = header_id_fields_by_line.get(line_table, [])
+            header_fk = next((f for f in header_fks if f in cols), None)
+            if not header_fk:
+                # also try generic "Invoice" / "BillingDocument" / "Parent" style
+                for c in cols:
+                    lc = c.lower()
+                    if ("invoice" in lc or "billingdocument" in lc) and (
+                        lc.endswith("__c") or lc.endswith("id")
+                    ):
+                        header_fk = c
+                        break
+            if not header_fk:
+                continue
+
+            # Pull header ids from matching lines
+            for opp_fk in opp_fks:
+                sql = f'SELECT "{header_fk}" FROM "{line_table}" WHERE "{opp_fk}" = ? LIMIT ?'
+                cur.execute(sql, (opportunity_id, int(limit)))
+                ids = [str(r[0]) for r in cur.fetchall() if r and r[0]]
+                if not ids:
                     continue
-            except Exception:
+
+                # Guess which header table these belong to based on prefix or known mapping
+                # If we can't tell, try all header tables.
+                for header_table in header_tables:
+                    if _table_exists(cur, header_table):
+                        for hid in ids:
+                            collected[header_table].add(hid)
+
+        bridged: list[dict[str, Any]] = []
+        for header_table, ids in collected.items():
+            if not ids or not _table_exists(cur, header_table):
                 continue
+            bridged.extend(_fetch_invoice_headers_by_ids(cur, header_table, sorted(ids), limit))
 
-            # Get columns so we can build a safe query
-            cur.execute(f'PRAGMA table_info("{table}")')
-            cols = [r["name"] for r in cur.fetchall()]
-            fk = next((f for f in fk_fields if f in cols), None)
-            if not fk:
-                continue
+        # De-dupe
+        seen2: set[tuple[str, str]] = set()
+        uniq2: list[dict[str, Any]] = []
+        for r in bridged:
+            rid = str(r.get("Id") or "")
+            ot = str(r.get("object_type") or "")
+            key = (ot, rid)
+            if rid and ot and key not in seen2:
+                seen2.add(key)
+                uniq2.append(r)
+        return uniq2
 
-            # Select a friendly set of columns that may exist
-            wanted = [
-                "Id",
-                "Name",
-                "CurrencyIsoCode",
-                "c2g__InvoiceDate__c",
-                "c2g__InvoiceStatus__c",
-                "c2g__InvoiceTotal__c",
-                "c2g__OutstandingValue__c",
-                "fferpcore__InvoiceDate__c",
-                "fferpcore__Status__c",
-                "fferpcore__Total__c",
-                "fferpcore__Outstanding__c",
-                "InvoiceDate",
-                "Status",
-                "TotalAmount",
-                "Balance",
-            ]
-            select_cols = [c for c in wanted if c in cols]
-            if "Id" not in select_cols:
-                continue
-
-            select_sql = ", ".join([f'"{c}"' for c in select_cols])
-            sql = f'SELECT {select_sql} FROM "{table}" WHERE "{fk}" = ? LIMIT ?'
-            cur.execute(sql, (opportunity_id, int(limit)))
-            rows = [dict(r) for r in cur.fetchall()]
-            for r in rows:
-                r["object_type"] = table
-            out.extend(rows)
-
-        return out
     finally:
         conn.close()
