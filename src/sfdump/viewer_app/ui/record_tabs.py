@@ -15,7 +15,10 @@ from sfdump.viewer_app.services.documents import (
     list_record_documents,
     load_master_documents_index,
 )
-from sfdump.viewer_app.services.invoices import list_invoices_for_account
+from sfdump.viewer_app.services.invoices import (
+    find_invoices_for_opportunity,
+    list_invoices_for_account,
+)
 from sfdump.viewer_app.services.nav import push
 from sfdump.viewer_app.services.paths import infer_export_root, resolve_export_path
 from sfdump.viewer_app.services.traversal import collect_subtree_ids
@@ -157,6 +160,57 @@ def render_record_tabs(
                 st.caption("Opportunity has no AccountId; cannot resolve invoices.")
 
     with tab_children:
+        # Opportunity -> Invoices traversal
+
+        if parent.sf_object.api_name == "Opportunity":
+            with st.expander("Invoices for this Opportunity", expanded=False):
+                inv_rows = find_invoices_for_opportunity(db_path, selected_id, limit=200)
+
+                if not inv_rows:
+                    st.caption("No invoices found (or invoice tables/fields not present).")
+
+                else:
+                    inv_df = pd.DataFrame(inv_rows)
+
+                    show = [
+                        c
+                        for c in [
+                            "object_type",
+                            "Name",
+                            "c2g__InvoiceDate__c",
+                            "InvoiceDate",
+                            "c2g__InvoiceStatus__c",
+                            "Status",
+                            "c2g__InvoiceTotal__c",
+                            "TotalAmount",
+                            "c2g__OutstandingValue__c",
+                            "Balance",
+                            "Id",
+                        ]
+                        if c in inv_df.columns
+                    ]
+
+                    st.dataframe(
+                        inv_df[show] if show else inv_df,
+                        width="stretch",
+                        hide_index=True,
+                        height=220,
+                    )
+
+                    for r in inv_rows[:50]:
+                        oid = str(r.get("Id") or "")
+
+                        ot = str(r.get("object_type") or "")
+
+                        nm = str(r.get("Name") or oid)
+
+                        if oid and ot:
+                            if st.button(
+                                f"Open invoice: {ot} {nm}", key=f"open_invoice_{ot}_{oid}"
+                            ):
+                                push(ot, oid)
+
+                                st.rerun()
         if not record.children:
             st.info("No child records found for this record.")
         else:
