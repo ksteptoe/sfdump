@@ -170,7 +170,7 @@ def find_invoices_for_opportunity(
                 if rid and ot and key not in seen:
                     seen.add(key)
                     uniq.append(r)
-            return uniq
+            return uniq, "account-fk"
 
         # 2) Bridge: scan line tables for opportunity FK, then map to header Id
         # Try to discover header-id column names on the line tables.
@@ -246,8 +246,12 @@ def find_invoices_for_opportunity(
 
 
 def list_invoices_for_account(
-    db_path: Path, account_id: str, limit: int = 200
-) -> list[dict[str, Any]]:
+    db_path: Path,
+    *,
+    account_id: str | None = None,
+    account_name: str | None = None,
+    limit: int = 200,
+) -> tuple[list[dict[str, Any]], str]:
     """Best-effort: list invoices linked to an Account, if your schema exposes an Account FK."""
     header_tables = [
         "c2g__codaInvoice__c",
@@ -287,6 +291,6 @@ def list_invoices_for_account(
             if rid and ot and key not in seen:
                 seen.add(key)
                 uniq.append(r)
-        return uniq
+        return uniq, "account-fk"
     finally:
         conn.close()
