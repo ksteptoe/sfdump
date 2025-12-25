@@ -1,27 +1,24 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import streamlit as st
 
-from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children
-from sfdump.viewer_app.preview.files import open_local_file, preview_file
-from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
+from sfdump.viewer_app.preview.files import preview_file
 from sfdump.viewer_app.services.content import enrich_contentdocument_links_with_title
 from sfdump.viewer_app.services.display import get_important_fields, select_display_columns
 from sfdump.viewer_app.services.documents import (
     list_record_documents,
-    load_master_documents_index,
+    resolve_local_path,
 )
 from sfdump.viewer_app.services.invoices import (
     find_invoices_for_opportunity,
     list_invoices_for_account,
 )
 from sfdump.viewer_app.services.nav import push
-from sfdump.viewer_app.services.paths import infer_export_root, resolve_export_path
-from sfdump.viewer_app.services.traversal import collect_subtree_ids
+from sfdump.viewer_app.services.paths import infer_export_root
 
 
 def render_record_tabs(
@@ -51,16 +48,37 @@ def render_record_tabs(
     import pandas as pd  # type: ignore[import-not-found]
 
     def _open_child_control(*, child_api: str, child_df: "pd.DataFrame", key_prefix: str) -> None:
-        # Needs an Id column to navigate
-        if "Id" not in child_df.columns or child_df.empty:
+        """Option A: drill-down navigation for a child relationship table."""
+        if child_df.empty or "Id" not in child_df.columns:
             return
 
-        # Build options using Name if present, otherwise Id
-        opts: list[str] = []
-        for _, r in child_df.iterrows():
-            rid = str(r.get("Id") or "")
-            name = str(r.get("Name") or r.get("DocumentTitle") or rid or "(no name)")
-            opts.append(f"{name} [{rid}]")
+        important = get_important_fields(child_api) or []
+
+        def _label_row(r: dict[str, Any]) -> str:
+            parts: list[str] = []
+            for c in important:
+                v = str(r.get(c, "") or "").strip()
+                if v:
+                    parts.append(v)
+
+            if not parts:
+                for c in ("Name", "Subject", "Title", "DocumentTitle"):
+                    v = str(r.get(c, "") or "").strip()
+                    if v:
+                        parts.append(v)
+                        break
+
+            if not parts:
+                parts.append(str(r.get("Id", "") or "").strip())
+
+            return " — ".join(parts)
+
+        opts = ["(select…)"]
+        for _, rr in child_df.head(200).iterrows():
+            rid = str(rr.get("Id", "") or "").strip()
+            if not rid:
+                continue
+            opts.append(f"{_label_row(dict(rr))} [{rid}]")
 
         cols_open = st.columns([4, 1])
         with cols_open[0]:
@@ -71,11 +89,17 @@ def render_record_tabs(
                 key=f"{key_prefix}_sel",
             )
         with cols_open[1]:
-            if st.button("Open", key=f"{key_prefix}_btn"):
-                rid = choice.rsplit("[", 1)[-1].rstrip("]")
-                label = choice.rsplit("[", 1)[0].strip()
-                push(child_api, rid, label=label)
-                st.rerun()
+            do_open = st.button(
+                "Open",
+                key=f"{key_prefix}_btn",
+                disabled=(choice == opts[0]),
+            )
+
+        if do_open and choice != opts[0]:
+            rid = choice.rsplit("[", 1)[-1].rstrip("]").strip()
+            label = choice.rsplit("[", 1)[0].strip()
+            push(child_api, rid, label=label)
+            st.rerun()
 
     tab_details, tab_children, tab_docs = st.tabs(["Details", "Children", "Documents"])
 
@@ -105,16 +129,16 @@ def render_record_tabs(
                 parent.data.get("Account", "") or parent.data.get("AccountName", "") or ""
             )
 
-            if opp_account_id or opp_account_name:
+            if opp_account_id:
                 with st.expander("Invoices (via Account)", expanded=False):
                     rows, strategy = list_invoices_for_account(
                         db_path,
                         account_id=opp_account_id,
-                        account_name=opp_account_name or None,
                         limit=200,
                     )
                     if strategy not in ("none", "no-table"):
                         st.caption(f"Invoice match: {strategy}")
+
                     if not rows:
                         st.info(
                             "No invoices found for the Opportunity's Account (or invoice table not present)."
@@ -122,7 +146,6 @@ def render_record_tabs(
                     else:
                         inv_df = pd.DataFrame(rows)
 
-                        # Compact, user-facing columns
                         wanted = [
                             "Name",
                             "c2g__InvoiceDate__c",
@@ -130,13 +153,18 @@ def render_record_tabs(
                             "c2g__InvoiceTotal__c",
                             "c2g__OutstandingValue__c",
                             "CurrencyIsoCode",
+                            "Id",
                         ]
                         show = [c for c in wanted if c in inv_df.columns]
-                        st.dataframe(inv_df[show], width="stretch", hide_index=True, height=260)
+                        st.dataframe(
+                            inv_df[show] if show else inv_df,
+                            width="stretch",
+                            hide_index=True,
+                            height=260,
+                        )
 
-                        # Open invoice (drill-down)
                         if "Id" in inv_df.columns:
-                            opts = []
+                            opts = ["(select…)"]
                             for _, r in inv_df.iterrows():
                                 rid = str(r.get("Id") or "")
                                 name = str(r.get("Name") or rid or "(invoice)")
@@ -151,26 +179,33 @@ def render_record_tabs(
                                     key=f"open_invoice_for_opp_{selected_id}",
                                 )
                             with cols_open[1]:
-                                if st.button("Open", key=f"btn_open_invoice_for_opp_{selected_id}"):
-                                    rid = choice.rsplit("[", 1)[-1].rstrip("]")
+                                if st.button(
+                                    "Open",
+                                    key=f"btn_open_invoice_for_opp_{selected_id}",
+                                    disabled=(choice == opts[0]),
+                                ):
+                                    rid = choice.rsplit("[", 1)[-1].rstrip("]").strip()
                                     label = choice.rsplit("[", 1)[0].strip()
                                     push("c2g__codaInvoice__c", rid, label=label)
                                     st.rerun()
             else:
-                st.caption("Opportunity has no AccountId; cannot resolve invoices.")
+                if opp_account_name:
+                    st.caption(
+                        "Opportunity has no AccountId; cannot resolve invoices via account reliably."
+                    )
+                else:
+                    st.caption("Opportunity has no AccountId; cannot resolve invoices.")
 
     with tab_children:
         # Opportunity -> Invoices traversal
-
         if parent.sf_object.api_name == "Opportunity":
             with st.expander("Invoices for this Opportunity", expanded=False):
                 inv_rows = find_invoices_for_opportunity(db_path, selected_id, limit=200)
 
-                if not inv_rows:
+                inv_rows_list = inv_rows[0] if isinstance(inv_rows, tuple) else inv_rows
+                if not inv_rows_list:
                     st.caption("No invoices found (or invoice tables/fields not present).")
-
                 else:
-                    inv_rows_list = inv_rows[0] if isinstance(inv_rows, tuple) else inv_rows
                     inv_df = pd.DataFrame(inv_rows_list)
 
                     show = [
@@ -198,55 +233,52 @@ def render_record_tabs(
                         height=220,
                     )
 
-                    inv_rows_list = inv_rows[0] if isinstance(inv_rows, tuple) else inv_rows
+                    # Open invoice buttons
                     for r in (inv_rows_list or [])[:50]:
                         oid = str(r.get("Id") or "")
-
                         ot = str(r.get("object_type") or "")
-
                         nm = str(r.get("Name") or oid)
-
                         if oid and ot:
                             if st.button(
                                 f"Open invoice: {ot} {nm}", key=f"open_invoice_{ot}_{oid}"
                             ):
-                                push(ot, oid)
-
+                                push(ot, oid, label=nm)
                                 st.rerun()
+
         if not record.children:
             st.info("No child records found for this record.")
-        else:
-            for coll_idx, coll in enumerate(record.children):
-                child_obj = coll.sf_object
-                rel = coll.relationship
-                title = (
-                    f"{child_obj.api_name} via {rel.child_field} "
-                    f"(relationship: {rel.name}, {len(coll.records)} record(s))"
+            return
+
+        for coll_idx, coll in enumerate(record.children):
+            child_obj = coll.sf_object
+            rel = coll.relationship
+            title = (
+                f"{child_obj.api_name} via {rel.child_field} "
+                f"(relationship: {rel.name}, {len(coll.records)} record(s))"
+            )
+
+            with st.expander(title, expanded=False):
+                child_df = pd.DataFrame(coll.records)
+
+                if child_df.empty:
+                    st.info("No rows.")
+                    continue
+
+                # Special handling for ContentDocumentLink to show titles
+                if child_obj.api_name == "ContentDocumentLink":
+                    child_df = enrich_contentdocument_links_with_title(db_path, child_df)
+
+                display_cols = select_display_columns(
+                    child_obj.api_name, child_df, show_all_fields, show_ids=show_ids
                 )
-                with st.expander(title, expanded=False):
-                    child_df = pd.DataFrame(coll.records)
+                st.dataframe(child_df[display_cols], width="stretch", hide_index=True, height=260)
 
-                    if child_df.empty:
-                        st.info("No rows.")
-                    else:
-                        if child_obj.api_name == "ContentDocumentLink":
-                            child_df = enrich_contentdocument_links_with_title(db_path, child_df)
-
-                        display_cols = select_display_columns(
-                            child_obj.api_name, child_df, show_all_fields, show_ids=show_ids
-                        )
-                        st.dataframe(
-                            child_df[display_cols],
-                            width="stretch",
-                            hide_index=True,
-                            height=260,
-                        )
-                        # Drill-down (Open) for any child object
-                        _open_child_control(
-                            child_api=child_obj.api_name,
-                            child_df=child_df,
-                            key_prefix=f"open_child_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}_{rel.child_field}_{coll_idx}",
-                        )
+                # Option A (single implementation): drill-down open
+                _open_child_control(
+                    child_api=child_obj.api_name,
+                    child_df=child_df,
+                    key_prefix=f"open_child_{api_name}_{selected_id}_{child_obj.api_name}_{rel.name}_{coll_idx}",
+                )
 
     with tab_docs:
         export_root = infer_export_root(db_path)
@@ -265,222 +297,144 @@ def render_record_tabs(
 
         if not docs:
             st.info("No documents indexed for this record.")
-        else:
-            docs_df = pd.DataFrame(docs)
+            return
 
-            # Status + filter: treat blank path/local_path as missing on disk
-            path_col = (
-                "path"
-                if "path" in docs_df.columns
-                else ("local_path" if "local_path" in docs_df.columns else "")
-            )
-            if path_col:
-                docs_df = docs_df.copy()
-                docs_df["status"] = docs_df[path_col].apply(
-                    lambda x: "Downloaded" if str(x or "").strip() else "Missing"
-                )
-                missing_count = int((docs_df["status"] == "Missing").sum())
-                st.caption(f"Documents: {len(docs_df)} (missing: {missing_count})")
+        docs_df = pd.DataFrame(docs)
 
-                hide_missing = st.checkbox(
-                    "Hide missing (no local path)",
-                    value=False,
-                    key=f"hide_missing_docs_{api_name}_{selected_id}",
-                )
-                if hide_missing:
-                    docs_df = docs_df[docs_df["status"] == "Downloaded"].copy()
-            else:
-                st.caption(f"Documents: {len(docs_df)}")
-
-            # Make parent/attachment explicit in the table
-            if (
-                "object_type" in docs_df.columns
-                and "record_name" in docs_df.columns
-                and "record_id" in docs_df.columns
-            ):
-                docs_df = docs_df.copy()
-                docs_df["attached_to"] = (
-                    docs_df["object_type"].astype(str)
-                    + " — "
-                    + docs_df["record_name"].astype(str)
-                    + " ["
-                    + docs_df["record_id"].astype(str)
-                    + "]"
-                )
-
-            show_cols = [
-                c
-                for c in [
-                    "status",
-                    "attached_to",
-                    "file_source",
-                    "file_id",
-                    "file_name",
-                    "file_extension",
-                    "path",
-                    "size_bytes",
-                    "content_type",
-                ]
-                if c in docs_df.columns
-            ]
-            st.dataframe(docs_df[show_cols], width="stretch", hide_index=True, height=260)
-
-            def _label(row: dict[str, Any]) -> str:
-                name = row.get("file_name") or "(no name)"
-                fid = row.get("file_id") or ""
-                return f"{name} [{fid}]"
-
-            options = [_label(r) for r in docs]
-            choice = st.selectbox("Select a document", options, index=0)
-
-            chosen = docs[options.index(choice)]
-            rel_path = str(chosen.get("path") or "")
-            if not rel_path:
-                st.warning(
-                    "This row has no local path. That usually means the file wasn’t downloaded into the export."
-                )
-            else:
-                full_path = resolve_export_path(export_root, rel_path)
-
-                cols = st.columns([1, 3])
-                with cols[0]:
-                    if st.button("Open"):
-                        if full_path.exists():
-                            open_local_file(full_path)
-                            st.success("Opened locally.")
-                        else:
-                            st.error(f"File not found on disk: {full_path}")
-
-                with cols[1]:
-                    st.caption(str(full_path))
-
-                if full_path.exists():
-                    data = full_path.read_bytes()
-                    download_name = full_path.name
-                    mime = chosen.get("content_type") or "application/octet-stream"
-                    ext = full_path.suffix.lower()
-
-                    if ext == ".pdf":
-                        with st.expander("Preview PDF", expanded=True):
-                            preview_pdf_bytes(data, height=750)
-                    elif str(mime).startswith("image/"):
-                        with st.expander("Preview image", expanded=True):
-                            st.image(data, caption=download_name)
-
-                    st.download_button(
-                        "Download",
-                        data=data,
-                        file_name=download_name,
-                        mime=str(mime),
-                    )
-                else:
-                    st.error(f"File not found on disk: {full_path}")
-
-    with st.expander("Recursive documents (subtree)", expanded=True):
-        export_root = infer_export_root(db_path)
-        if export_root is None:
-            st.warning(
-                "Could not infer EXPORT_ROOT from DB path. "
-                "Expected EXPORT_ROOT/meta/sfdata.db layout."
-            )
-            st.stop()
-
-        st.caption(f"Export root inferred as: {export_root}")
-
-        max_depth = st.slider("Max traversal depth", 1, 6, 3, 1)
-        max_children = st.slider("Max children per relationship", 10, 500, 100, 10)
-
-        allow_filter = st.checkbox("Filter to specific object types", value=False)
-        allow_objects: Optional[set[str]] = None
-        if allow_filter:
-            all_api_names = sorted(OBJECTS.keys())
-            selected = st.multiselect(
-                "Allowed objects",
-                options=all_api_names,
-                default=[
-                    "Opportunity",
-                    "c2g__codaInvoice__c",
-                    "fferpcore__BillingDocument__c",
-                ],
-            )
-            allow_objects = set(selected)
-
-        subtree = collect_subtree_ids(
-            db_path=db_path,
-            root_api=api_name,
-            root_id=selected_id,
-            max_depth=int(max_depth),
-            max_children_per_rel=int(max_children),
-            allow_objects=allow_objects,
+        # Best-effort: if local_path is blank but the file has been downloaded,
+        # try to resolve it from disk using file_id (works for both 069* and 068* ids).
+        lp_col = (
+            "local_path"
+            if "local_path" in docs_df.columns
+            else ("path" if "path" in docs_df.columns else "")
         )
+        if lp_col:
+            docs_df[lp_col] = docs_df[lp_col].fillna("").astype(str)
+            docs_df.loc[docs_df[lp_col].str.lower().eq("nan"), lp_col] = ""
 
-        total_records = sum(len(v) for v in subtree.values())
-        st.write(f"Records in subtree: **{total_records}** across **{len(subtree)}** object types.")
-        st.write({k: len(v) for k, v in sorted(subtree.items(), key=lambda x: -len(x[1]))})
-
-        docs_df = load_master_documents_index(export_root)
-        if docs_df is None:
-            st.error(
-                "meta/master_documents_index.csv not found. "
-                "Run: `sfdump docs-index --export-root <EXPORT_ROOT>` "
-                "(or `make -f Makefile.export export-doc-index`)."
+            fid_col = (
+                "file_id"
+                if "file_id" in docs_df.columns
+                else ("Id" if "Id" in docs_df.columns else "")
             )
-            st.stop()
+            if fid_col:
+                docs_df[fid_col] = docs_df[fid_col].fillna("").astype(str)
 
-        all_ids: set[str] = set()
-        for ids in subtree.values():
-            all_ids.update(ids)
+                mask = docs_df[lp_col].eq("") & docs_df[fid_col].ne("")
+                if mask.any():
 
-        sub_docs = docs_df[docs_df["record_id"].isin(list(all_ids))].copy()
+                    def _fill_local_path(row: "pd.Series") -> str:
+                        fid = str(row.get(fid_col, "")).strip()
+                        if not fid:
+                            return ""
+                        found = resolve_local_path(export_root, fid)
+                        return str(found or "")
 
-        # Make parent/attachment explicit for mixed subtree results
-        if (
-            "object_type" in sub_docs.columns
-            and "record_name" in sub_docs.columns
-            and "record_id" in sub_docs.columns
-        ):
-            sub_docs["attached_to"] = (
-                sub_docs["object_type"].astype(str)
+                    docs_df.loc[mask, lp_col] = docs_df.loc[mask].apply(_fill_local_path, axis=1)
+
+        # Status + filter: treat blank path/local_path as missing on disk
+        path_col = (
+            "path"
+            if "path" in docs_df.columns
+            else ("local_path" if "local_path" in docs_df.columns else "")
+        )
+        if path_col:
+            docs_df = docs_df.copy()
+            docs_df["status"] = docs_df[path_col].apply(
+                lambda x: "Downloaded" if str(x or "").strip() else "Missing"
+            )
+            missing_count = int((docs_df["status"] == "Missing").sum())
+            st.caption(f"Documents: {len(docs_df)} (missing: {missing_count})")
+
+            hide_missing = st.checkbox(
+                "Hide missing (no local path)",
+                value=False,
+                key=f"hide_missing_docs_{api_name}_{selected_id}",
+            )
+            if hide_missing:
+                docs_df = docs_df[docs_df["status"] == "Downloaded"].copy()
+        else:
+            st.caption(f"Documents: {len(docs_df)}")
+
+        # Make parent/attachment explicit in the table
+        if {"object_type", "record_name", "record_id"}.issubset(set(docs_df.columns)):
+            docs_df = docs_df.copy()
+            docs_df["attached_to"] = (
+                docs_df["object_type"].astype(str)
                 + " — "
-                + sub_docs["record_name"].astype(str)
+                + docs_df["record_name"].astype(str)
                 + " ["
-                + sub_docs["record_id"].astype(str)
+                + docs_df["record_id"].astype(str)
                 + "]"
             )
 
-        st.write(f"Documents found: **{len(sub_docs)}**")
-        if len(sub_docs) == 0:
-            st.info("No documents attached to any record in the subtree.")
-            st.stop()
-
         show_cols = [
-            "attached_to",
-            "file_extension",
-            "file_source",
-            "file_name",
-            "local_path",
-            "object_type",
-            "record_name",
-            "account_name",
-            "opp_name",
-            "opp_stage",
-            "opp_amount",
-            "opp_close_date",
+            c
+            for c in [
+                "status",
+                "attached_to",
+                "file_source",
+                "file_id",
+                "file_name",
+                "file_extension",
+                "path",
+                "local_path",
+                "size_bytes",
+                "content_type",
+            ]
+            if c in docs_df.columns
         ]
-        show_cols = [c for c in show_cols if c in sub_docs.columns]
-        st.dataframe(sub_docs[show_cols], height=260, hide_index=True, width="stretch")
+        st.dataframe(docs_df[show_cols], width="stretch", hide_index=True, height=260)
 
-        choices = []
-        for _, r in sub_docs.iterrows():
-            lp = r.get("local_path", "")
-            fn = r.get("file_name", "")
-            rn = r.get("record_name", "")
-            ot = r.get("object_type", "")
-            rid = r.get("record_id", "")
-            label = f"{fn} — {ot}:{rn} [{rid}] :: {lp}"
-            choices.append(label)
+        # Build preview choices (single source of truth)
+        choices = ["-- Select --"]
+        lp_col2 = (
+            "local_path"
+            if "local_path" in docs_df.columns
+            else ("path" if "path" in docs_df.columns else "")
+        )
+        for _, r in docs_df.iterrows():
+            name = str(r.get("file_name", "") or "")
+            ext = str(r.get("file_extension", "") or "")
+            fid = str(r.get("file_id", "") or "")
+            attached = str(r.get("attached_to", "") or "")
 
-        selected_doc = st.selectbox("Preview a document", choices, index=0)
-        local_path = selected_doc.rsplit("::", 1)[-1].strip()
+            title = name + ("." + ext if ext and not name.endswith("." + ext) else "")
+            prefix = title
+            if attached:
+                prefix = prefix + " — " + attached
+
+            lp = str(r.get(lp_col2, "") or "") if lp_col2 else ""
+            if lp:
+                choices.append(prefix + " :: " + lp)
+            elif fid:
+                choices.append(prefix + " [" + fid + "]")
+            else:
+                choices.append(prefix)
+
+        selected_doc = st.selectbox(
+            "Preview a document",
+            choices,
+            index=0,
+            key=f"doc_preview_{api_name}_{selected_id}",
+        )
+
+        local_path = ""
+        file_id = ""
+
+        # selected_doc format: '<label> :: <local_path>' OR '<label> [<file_id>]'
+        if "::" in selected_doc:
+            local_path = selected_doc.rsplit("::", 1)[-1].strip()
+        elif selected_doc.endswith("]") and "[" in selected_doc:
+            file_id = selected_doc.rsplit("[", 1)[-1][:-1].strip()
+            found = resolve_local_path(export_root, file_id)
+            if found:
+                local_path = str(found)
+
         if local_path:
             preview_file(export_root, local_path)
+        elif selected_doc != "-- Select --":
+            st.info(
+                "No local file path is available for this document. "
+                "Try running `sfdump files-backfill` to download missing Files into the export."
+            )

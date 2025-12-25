@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
+from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 
 def list_record_documents(db_path: Path, object_type: str, record_id: str) -> list[dict[str, Any]]:
@@ -112,3 +113,32 @@ def enrich_documents_with_local_path(
         out.append(dd)
 
     return out
+
+
+@lru_cache(maxsize=8192)
+def resolve_local_path(export_root: Path, file_id: str) -> Optional[str]:
+    """
+    Best-effort: locate an already-downloaded Salesforce File blob on disk.
+
+    Returns a POSIX-style path relative to export_root (e.g. "files/06/<id>_name.pdf"),
+    or None if not found.
+    """
+    if not file_id:
+        return None
+
+    for folder in ("files", "files_legacy"):
+        root = export_root / folder
+        if not root.exists():
+            continue
+
+        # downloader convention: <id>_<filename> under a 2-digit shard folder
+        matches = sorted(root.glob(f"**/{file_id}_*"))
+        if matches:
+            try:
+                rel = matches[0].relative_to(export_root)
+            except Exception:
+                # fallback: return absolute if relative fails for any reason
+                return matches[0].as_posix()
+            return rel.as_posix()
+
+    return None
