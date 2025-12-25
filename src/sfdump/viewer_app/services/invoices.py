@@ -16,10 +16,8 @@ def _table_columns(cur: sqlite3.Cursor, table: str) -> list[str]:
 
 
 def _candidate_fk_fields(cols: Iterable[str]) -> list[str]:
-    """
-    Heuristics: any column name that plausibly stores an Opportunity Id.
-    """
-    keys = []
+    """Heuristics: any column name that plausibly stores an Opportunity Id."""
+    keys: list[str] = []
     for c in cols:
         lc = c.lower()
         if lc in ("opportunityid", "opportunity__c", "opportunity_id"):
@@ -28,14 +26,20 @@ def _candidate_fk_fields(cols: Iterable[str]) -> list[str]:
             lc.endswith("id") or lc.endswith("__c") or lc.endswith("_id")
         ):
             keys.append(c)
+
     # stable order: prefer exact common names
-    pref = ["OpportunityId", "Opportunity__c", "opportunityid", "opportunity__c"]
+    pref = {"OpportunityId", "Opportunity__c", "opportunityid", "opportunity__c"}
     keys = sorted(keys, key=lambda x: (x not in pref, x))
     return keys
 
 
 def _select_existing(cols: list[str], wanted: list[str]) -> list[str]:
     return [c for c in wanted if c in cols]
+
+
+def _looks_like_name_field(field: str) -> bool:
+    lf = field.lower()
+    return "name" in lf and not lf.endswith("id")
 
 
 def _fetch_rows_by_fk(
@@ -46,6 +50,7 @@ def _fetch_rows_by_fk(
     limit: int,
 ) -> list[dict[str, Any]]:
     cols = _table_columns(cur, table)
+
     wanted = [
         "Id",
         "Name",
@@ -73,6 +78,7 @@ def _fetch_rows_by_fk(
     select_sql = ", ".join([f'"{c}"' for c in select_cols])
     sql = f'SELECT {select_sql} FROM "{table}" WHERE "{fk_field}" = ? LIMIT ?'
     cur.execute(sql, (fk_value, int(limit)))
+
     rows = [dict(zip(select_cols, r, strict=False)) for r in cur.fetchall()]
     for r in rows:
         r["object_type"] = table
@@ -88,6 +94,7 @@ def _fetch_invoice_headers_by_ids(
 ) -> list[dict[str, Any]]:
     if not ids:
         return []
+
     cols = _table_columns(cur, table)
     wanted = [
         "Id",
@@ -115,6 +122,7 @@ def _fetch_invoice_headers_by_ids(
     select_sql = ", ".join([f'"{c}"' for c in select_cols])
     sql = f'SELECT {select_sql} FROM "{table}" WHERE "Id" IN ({ph})'
     cur.execute(sql, ids)
+
     rows = [dict(zip(select_cols, r, strict=False)) for r in cur.fetchall()]
     for r in rows:
         r["object_type"] = table
@@ -123,13 +131,14 @@ def _fetch_invoice_headers_by_ids(
 
 def find_invoices_for_opportunity(
     db_path: Path, opportunity_id: str, limit: int = 200
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], str]:
     """
     Best-effort invoice lookup for an Opportunity using:
       1) schema-driven FK scan on likely invoice header tables
       2) bridge fallback via invoice line tables -> invoice header Ids
 
-    Returns rows with object_type, Id, Name/date/amount fields when present.
+    Returns: (rows, strategy)
+      strategy: "opp-fk" | "line-bridge" | "none" | "no-table"
     """
     header_tables = [
         "c2g__codaInvoice__c",
@@ -137,7 +146,6 @@ def find_invoices_for_opportunity(
         "Invoice",
     ]
 
-    # Known line-item tables that might carry the opportunity FK
     line_tables = [
         "c2g__codaInvoiceLineItem__c",
         "fferpcore__BillingDocumentLine__c",
@@ -147,6 +155,10 @@ def find_invoices_for_opportunity(
     conn = sqlite3.connect(str(db_path))
     try:
         cur = conn.cursor()
+
+        # 0) If none of the header tables exist, bail early
+        if not any(_table_exists(cur, t) for t in header_tables):
+            return ([], "no-table")
 
         out: list[dict[str, Any]] = []
 
@@ -158,7 +170,6 @@ def find_invoices_for_opportunity(
             for fk in _candidate_fk_fields(cols):
                 out.extend(_fetch_rows_by_fk(cur, table, fk, opportunity_id, limit))
 
-        # If we already found headers, we're done
         if out:
             # De-dupe by (object_type, Id)
             seen: set[tuple[str, str]] = set()
@@ -170,11 +181,10 @@ def find_invoices_for_opportunity(
                 if rid and ot and key not in seen:
                     seen.add(key)
                     uniq.append(r)
-            return uniq, "account-fk"
+            return (uniq, "opp-fk")
 
         # 2) Bridge: scan line tables for opportunity FK, then map to header Id
-        # Try to discover header-id column names on the line tables.
-        header_id_fields_by_line = {
+        header_id_fields_by_line: dict[str, list[str]] = {
             "c2g__codaInvoiceLineItem__c": ["c2g__Invoice__c", "InvoiceId", "c2g__codaInvoice__c"],
             "fferpcore__BillingDocumentLine__c": [
                 "fferpcore__BillingDocument__c",
@@ -196,8 +206,9 @@ def find_invoices_for_opportunity(
 
             header_fks = header_id_fields_by_line.get(line_table, [])
             header_fk = next((f for f in header_fks if f in cols), None)
+
             if not header_fk:
-                # also try generic "Invoice" / "BillingDocument" / "Parent" style
+                # fallback: guess a header-id-ish column
                 for c in cols:
                     lc = c.lower()
                     if ("invoice" in lc or "billingdocument" in lc) and (
@@ -205,10 +216,10 @@ def find_invoices_for_opportunity(
                     ):
                         header_fk = c
                         break
+
             if not header_fk:
                 continue
 
-            # Pull header ids from matching lines
             for opp_fk in opp_fks:
                 sql = f'SELECT "{header_fk}" FROM "{line_table}" WHERE "{opp_fk}" = ? LIMIT ?'
                 cur.execute(sql, (opportunity_id, int(limit)))
@@ -216,12 +227,9 @@ def find_invoices_for_opportunity(
                 if not ids:
                     continue
 
-                # Guess which header table these belong to based on prefix or known mapping
-                # If we can't tell, try all header tables.
                 for header_table in header_tables:
                     if _table_exists(cur, header_table):
-                        for hid in ids:
-                            collected[header_table].add(hid)
+                        collected[header_table].update(ids)
 
         bridged: list[dict[str, Any]] = []
         for header_table, ids in collected.items():
@@ -239,8 +247,11 @@ def find_invoices_for_opportunity(
             if rid and ot and key not in seen2:
                 seen2.add(key)
                 uniq2.append(r)
-        return uniq2
 
+        if uniq2:
+            return (uniq2, "line-bridge")
+
+        return ([], "none")
     finally:
         conn.close()
 
@@ -252,34 +263,57 @@ def list_invoices_for_account(
     account_name: str | None = None,
     limit: int = 200,
 ) -> tuple[list[dict[str, Any]], str]:
-    """Best-effort: list invoices linked to an Account, if your schema exposes an Account FK."""
+    """
+    Best-effort: list invoices linked to an Account.
+
+    Returns: (rows, strategy)
+      strategy: "account-fk" | "none" | "no-table"
+    """
     header_tables = [
         "c2g__codaInvoice__c",
         "fferpcore__BillingDocument__c",
         "Invoice",
     ]
 
+    # common account FK names on invoice headers
+    candidate_fields = [
+        "AccountId",
+        "Account__c",
+        "c2g__Account__c",
+        "c2g__AccountName__c",
+        "fferpcore__Account__c",
+        "fferpcore__Customer__c",
+    ]
+
     conn = sqlite3.connect(str(db_path))
     try:
         cur = conn.cursor()
-        out: list[dict[str, Any]] = []
 
-        # common account FK names on invoice headers
-        candidate_fields = [
-            "AccountId",
-            "Account__c",
-            "c2g__Account__c",
-            "c2g__AccountName__c",
-            "fferpcore__Account__c",
-            "fferpcore__Customer__c",
-        ]
+        if not any(_table_exists(cur, t) for t in header_tables):
+            return ([], "no-table")
+
+        if not (account_id or account_name):
+            return ([], "none")
+
+        out: list[dict[str, Any]] = []
 
         for table in header_tables:
             if not _table_exists(cur, table):
                 continue
+
             cols = _table_columns(cur, table)
             for fk in [f for f in candidate_fields if f in cols]:
-                out.extend(_fetch_rows_by_fk(cur, table, fk, account_id, limit))
+                # Use name only for name-like columns; otherwise use id.
+                if _looks_like_name_field(fk):
+                    if not account_name:
+                        continue
+                    val = account_name
+                else:
+                    if not account_id:
+                        continue
+                    val = account_id
+
+                out.extend(_fetch_rows_by_fk(cur, table, fk, val, limit))
 
         # de-dupe
         seen: set[tuple[str, str]] = set()
@@ -291,6 +325,7 @@ def list_invoices_for_account(
             if rid and ot and key not in seen:
                 seen.add(key)
                 uniq.append(r)
-        return uniq, "account-fk"
+
+        return (uniq, "account-fk" if uniq else "none")
     finally:
         conn.close()
