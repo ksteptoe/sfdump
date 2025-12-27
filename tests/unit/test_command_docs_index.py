@@ -35,7 +35,7 @@ def test_build_master_index_happy_path(tmp_path: Path) -> None:
     """
     export_root = tmp_path / "export-2025-11-16"
     csv_dir = export_root / "csv"
-    links_dir = export_root / "files" / "links"
+    links_dir = export_root / "links"
 
     # 1) Per-object index: Opportunity_files_index.csv
     _write_csv(
@@ -128,7 +128,7 @@ def test_docs_index_cli_builds_master_index(tmp_path: Path) -> None:
     """CLI 'sfdump docs-index' builds master_documents_index.csv in EXPORT_ROOT."""
     export_root = tmp_path / "export-2025-11-16"
     csv_dir = export_root / "csv"
-    links_dir = export_root / "files" / "links"
+    links_dir = export_root / "links"
 
     # Minimal data: just enough to produce one row
     _write_csv(

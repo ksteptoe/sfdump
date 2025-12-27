@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import logging
-import os
+import shutil
 from pathlib import Path
 from typing import Dict, Iterable, List
 
@@ -32,12 +32,9 @@ except Exception:
 # For building human-readable indexes linking files to parent records.
 # Default is 'Name', but some objects use different label fields.
 INDEX_LABEL_FIELDS: dict[str, str] = {
-    # key = SObject API name, value = field to use as label in the index
     "SalesforceInvoice": "InvoiceNumber",
     "SalesforceContract": "BillingCompany",
     "SalesforceQuote": "SalesforceContractId",
-    # Add more special cases here if needed, e.g.:
-    # "ffps_po__PurchaseOrder__c": "Name__c",
 }
 
 
@@ -45,6 +42,16 @@ def _chunk(seq: List[str], size: int) -> Iterable[List[str]]:
     """Yield fixed-size chunks from a list."""
     for i in range(0, len(seq), size):
         yield seq[i : i + size]
+
+
+def _links_dir_for_out(out_dir: str) -> Path:
+    """Canonical location for file indexes + metadata CSVs."""
+    return Path(out_dir) / "files" / "links"
+
+
+def _legacy_links_dir_for_out(out_dir: str) -> Path:
+    """Legacy location used by older builds/tests."""
+    return Path(out_dir) / "links"
 
 
 def build_files_index(
@@ -57,28 +64,25 @@ def build_files_index(
 ) -> None:
     """Build a CSV index linking one sObject type to its Attachments and Files.
 
-    The CSV will be written to: <out_dir>/links/<index_object>_files_index.csv
+    Canonical output:
+      <out_dir>/files/links/<index_object>_files_index.csv
 
-    Columns:
-        object_type, record_id, record_name,
-        file_source, file_id, file_link_id, file_name, file_extension
+    Backwards-compat mirror:
+      <out_dir>/links/<index_object>_files_index.csv
     """
     object_name = index_object.strip()
     if not object_name:
         _logger.warning("No index object provided, skipping index generation.")
         return
 
-    base = Path(out_dir)
-    links_dir = base / "links"
-    links_dir.mkdir(parents=True, exist_ok=True)
-    csv_path = links_dir / f"{object_name}_files_index.csv"
+    canonical_links_dir = _links_dir_for_out(out_dir)
+    canonical_links_dir.mkdir(parents=True, exist_ok=True)
+    canonical_csv_path = canonical_links_dir / f"{object_name}_files_index.csv"
 
-    _logger.info("Building files index for %s into %s", object_name, csv_path)
+    _logger.info("Building files index for %s into %s", object_name, canonical_csv_path)
 
-    # Decide which field to use as the human-readable label
     label_field = INDEX_LABEL_FIELDS.get(object_name, "Name")
 
-    # 1) Fetch all records of the given object (Id + label field)
     soql_records = f"SELECT Id, {label_field} FROM {object_name}"
     records: Dict[str, str] = {}
 
@@ -90,7 +94,6 @@ def build_files_index(
     )
 
     try:
-        # Assumes SalesforceAPI has an iter_query(soql: str) generator
         for rec in api.iter_query(soql_records):
             rec_id = rec.get("Id")
             if not rec_id:
@@ -98,7 +101,6 @@ def build_files_index(
             rec_name = rec.get(label_field) or ""
             records[rec_id] = rec_name
     except requests.exceptions.HTTPError as exc:
-        # Pull the detailed Salesforce error message from the HTTP response
         sf_msg = ""
         resp = getattr(exc, "response", None)
         if resp is not None:
@@ -139,8 +141,6 @@ def build_files_index(
                 "       make -f Makefile.export EXPORT_DATE=YYYY-MM-DD export-files-index-only",
             ]
             raise click.ClickException("\n".join(hint_lines)) from exc
-
-        # For any other error, just re-raise and let the caller handle it
         raise
 
     if not records:
@@ -161,11 +161,10 @@ def build_files_index(
         "file_extension",
     ]
 
-    with csv_path.open("w", newline="", encoding="utf-8") as f:
+    with canonical_csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
 
-        # 2) Attachments: ParentId -> record
         if include_attachments:
             for batch in _chunk(record_ids, max_batch_size):
                 ids_str = ",".join(f"'{i}'" for i in batch)
@@ -188,13 +187,12 @@ def build_files_index(
                             "record_name": rec_name,
                             "file_source": "Attachment",
                             "file_id": att.get("Id") or "",
-                            "file_link_id": "",  # not applicable to legacy Attachment
+                            "file_link_id": "",
                             "file_name": name,
                             "file_extension": ext,
                         }
                     )
 
-        # 3) Files (ContentDocumentLink): LinkedEntityId -> record
         if include_content:
             for batch in _chunk(record_ids, max_batch_size):
                 ids_str = ",".join(f"'{i}'" for i in batch)
@@ -232,7 +230,15 @@ def build_files_index(
                         }
                     )
 
-    _logger.info("Files index written to %s", csv_path)
+    _logger.info("Files index written to %s", canonical_csv_path)
+
+    # Backwards-compat mirror for older tooling/tests: <out_dir>/links/
+    legacy_dir = _legacy_links_dir_for_out(out_dir)
+    if legacy_dir != canonical_links_dir:
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        legacy_csv_path = legacy_dir / canonical_csv_path.name
+        shutil.copyfile(canonical_csv_path, legacy_csv_path)
+        _logger.debug("Mirrored index CSV to legacy location: %s", legacy_csv_path)
 
 
 @click.command("files")
@@ -245,20 +251,10 @@ def build_files_index(
 )
 @click.option("--no-content", is_flag=True, help="Skip ContentVersion downloads.")
 @click.option("--no-attachments", is_flag=True, help="Skip legacy Attachment downloads.")
+@click.option("--content-where", help="Extra AND filter for ContentVersion (without WHERE).")
+@click.option("--attachments-where", help="WHERE clause for Attachment (without WHERE).")
 @click.option(
-    "--content-where",
-    help="Extra AND filter for ContentVersion (without WHERE).",
-)
-@click.option(
-    "--attachments-where",
-    help="WHERE clause for Attachment (without WHERE).",
-)
-@click.option(
-    "--max-workers",
-    type=int,
-    default=8,
-    show_default=True,
-    help="Parallel download workers.",
+    "--max-workers", type=int, default=8, show_default=True, help="Parallel download workers."
 )
 @click.option(
     "--estimate-only",
@@ -269,7 +265,7 @@ def build_files_index(
     "--index-by",
     "index_by",
     metavar="SOBJECT",
-    multiple=True,  # allow repeated flags
+    multiple=True,
     help=(
         "Also build CSV index(es) mapping SOBJECT records to their related "
         "Attachments and Files (e.g. Opportunity, Account). "
@@ -295,12 +291,7 @@ def files_cmd(
     index_by: tuple[str, ...],
     index_only: bool,
 ) -> None:
-    """Download Salesforce files (ContentVersion & Attachment) and/or build file indexes.
-
-    - Normal mode: download ContentVersion and/or Attachment, then optionally build indexes.
-    - --estimate-only: no downloads, just size/count estimates.
-    - --index-only: no downloads, only (re)build indexes (requires previous full download).
-    """
+    """Download Salesforce files (ContentVersion & Attachment) and/or build file indexes."""
     if estimate_only and index_only:
         raise click.ClickException("--index-only cannot be combined with --estimate-only.")
 
@@ -319,58 +310,31 @@ def files_cmd(
     results: list[dict] = []
 
     if estimate_only:
-        # Estimation mode: no filesystem writes for file bodies.
         if not no_content:
-            results.append(
-                estimate_content_versions(
-                    api,
-                    where=content_where,
-                )
-            )
+            results.append(estimate_content_versions(api, where=content_where))
         if not no_attachments:
-            results.append(
-                estimate_attachments(
-                    api,
-                    where=attachments_where,
-                )
-            )
+            results.append(estimate_attachments(api, where=attachments_where))
     elif index_only:
-        # Index-only mode: assume files already exist in out_dir; do not download again.
         ensure_dir(out_dir)
-        # No entries added to results – we only care about index_by below.
     else:
-        # Real download mode.
         ensure_dir(out_dir)
         try:
             if not no_content:
                 results.append(
                     dump_content_versions(
-                        api,
-                        out_dir,
-                        where=content_where,
-                        max_workers=max_workers,
+                        api, out_dir, where=content_where, max_workers=max_workers
                     )
                 )
-
             if not no_attachments:
                 results.append(
-                    dump_attachments(
-                        api,
-                        out_dir,
-                        where=attachments_where,
-                        max_workers=max_workers,
-                    )
+                    dump_attachments(api, out_dir, where=attachments_where, max_workers=max_workers)
                 )
         except KeyboardInterrupt as exc:
-            # Graceful abort on Ctrl+C
             click.echo(
                 f"\nAborted by user (Ctrl+C). Partial output may remain in: {out_dir}",
                 err=True,
             )
             raise click.Abort() from exc
-
-    # Optional: build index CSVs mapping <index_by> records to Attachments/Files
-    empty_indexes: list[str] = []
 
     if index_by:
         for obj in index_by:
@@ -383,26 +347,20 @@ def files_cmd(
                     include_attachments=not no_attachments,
                 )
             except click.ClickException as exc:
-                # build_files_index has already crafted a clear, user-facing message
                 raise exc
-            except Exception as exc:  # pragma: no cover - defensive
+            except Exception as exc:  # pragma: no cover
                 _logger.exception(
                     "Unexpected error while building files index for %s: %s", obj, exc
                 )
                 raise click.ClickException(f"Failed to build files index for {obj}: {exc}") from exc
 
-    if empty_indexes:
-        click.echo("Note: no records found for index objects: " + ", ".join(sorted(empty_indexes)))
-
     if not results and not index_by:
-        # We didn't estimate, download, or index anything – bail out.
         raise click.ClickException(
             "Nothing to do: both ContentVersion and Attachment were disabled, "
             "and no --index-by objects were specified."
         )
 
     def _format_bytes(num: float) -> str:
-        """Human-readable byte format, like du -h."""
         units = ("B", "KB", "MB", "GB", "TB", "PB")
         value = num
         for unit in units:
@@ -411,7 +369,6 @@ def files_cmd(
             value /= 1024.0
         return f"{value:,.1f} PB"
 
-    # short human summary per kind
     def line(r: dict) -> str:
         bytes_val = int(r.get("bytes") or 0)
         human = _format_bytes(float(bytes_val))
@@ -421,10 +378,16 @@ def files_cmd(
     total_bytes = 0
 
     if results:
+        for r in results:
+            total_files += int(r.get("count") or 0)
+            total_bytes += int(r.get("bytes") or 0)
+
         total_human = _format_bytes(float(total_bytes))
         click.echo("")
         click.echo("=== File export summary ===")
         for r in results:
             click.echo("  " + line(r))
         click.echo(f"  Total: {total_files} files, {total_human} ({total_bytes:,.0f} bytes)")
-        click.echo(f"  Metadata CSVs are under: {os.path.join(out_dir, 'links')}")
+
+    # Keep legacy phrase for tests/backwards-compat
+    click.echo(f"  Metadata CSVs are under: {_links_dir_for_out(out_dir)}")

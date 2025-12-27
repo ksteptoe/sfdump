@@ -21,13 +21,17 @@ from .command_cfo import cfo_generate_docs, cfo_report
 from .command_csv import csv_cmd
 from .command_db_info import db_info_command
 from .command_db_viewer import db_viewer_command
+from .command_docs_for import docs_for_cmd
 from .command_docs_index import docs_index_cmd
 from .command_files import files_cmd
 from .command_list_records import list_records_command
 from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
+from .command_probe import probe_cmd
+from .command_rels import rels_cmd
 from .command_report_missing import report_missing_cmd
 from .command_retry_missing import retry_missing_cmd
+from .command_schema import schema_cmd
 from .command_verify import verify_files_cmd
 from .command_view_record import view_record_command
 from .command_viewer import viewer_cmd
@@ -120,10 +124,24 @@ cli.add_command(cast(Command, build_db_command))
 cli.add_command(cast(Command, db_info_command))
 cli.add_command(cast(Command, view_record_command))
 cli.add_command(cast(Command, list_records_command))
-cli.add_command(cast(Command, list_records_command))
 cli.add_command(cast(Command, db_viewer_command))
+cli.add_command(cast(Command, schema_cmd), "schema")
+cli.add_command(cast(Command, rels_cmd))
+cli.add_command(cast(Command, docs_for_cmd))
+cli.add_command(cast(Command, probe_cmd))
+
 
 # Keep the original name (probably "cfo-generate-docs")
 cli.add_command(cast(Command, cfo_report))
 # Also expose it under the friendlier alias "cfo-report"
 cli.add_command(cast(Command, cfo_report), name="cfo-report")
+
+
+def main() -> None:
+    """Entry point for `python -m sfdump.cli`."""
+    # Let Click handle argv and exit codes
+    cli()
+
+
+if __name__ == "__main__":
+    main()

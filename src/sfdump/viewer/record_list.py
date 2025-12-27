@@ -24,6 +24,22 @@ class ListResult:
 _VALID_ORDER_BY = re.compile(r"^[A-Za-z0-9_]+$")
 
 
+def _regexp(pattern: str, value: Any) -> int:
+    """SQLite REGEXP implementation using Python's re.search.
+
+    Returns 1 if the value matches the pattern, else 0.
+    Invalid regex patterns are treated as 'no match'.
+    """
+    if value is None:
+        return 0
+    text = str(value)
+    try:
+        return 1 if re.search(pattern, text) else 0
+    except re.error:
+        # Invalid regex → treat as no match rather than blowing up the query
+        return 0
+
+
 def list_records(
     db_path: Path | str,
     api_name: str,
@@ -74,6 +90,10 @@ def list_records(
 
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
+
+    # Register REGEXP for this connection so WHERE ... REGEXP ... works
+    conn.create_function("REGEXP", 2, _regexp)
+
     try:
         cur = conn.cursor()
         cur.execute(sql)

@@ -34,6 +34,12 @@ ALWAYS_INCLUDE_FIELDS = {
     # "Case": ["AccountId"],
 }
 
+# Some Salesforce objects have "implementation restrictions" and must be
+# queried with an explicit WHERE on Id / ContentDocumentId / LinkedEntityId.
+IMPLEMENTATION_RESTRICTED_OBJECTS = {
+    "ContentDocumentLink",
+}
+
 
 @click.command("csv")
 @click.option("--object", "object_name", required=True, help="sObject name (e.g. Account).")
@@ -46,16 +52,33 @@ ALWAYS_INCLUDE_FIELDS = {
 )
 @click.option(
     "--fields",
-    help="Comma-separated field list; default: all queryable non-relationship fields.",
+    help=(
+        "Comma-separated field list; if omitted, auto-resolve fields from describe(). "
+        "Auto mode always includes reference Id fields (e.g. OwnerId, AccountId)."
+    ),
 )
-@click.option("--where", help="Optional SOQL WHERE clause (without the 'WHERE').")
+@click.option(
+    "--where",
+    help=(
+        "Optional SOQL WHERE clause (without the 'WHERE'). "
+        "For some objects (e.g. ContentDocumentLink) this is required due to "
+        "Salesforce implementation restrictions."
+    ),
+)
 @click.option("--limit", type=int, help="Optional row limit (client-side stop).")
+@click.option(
+    "--relationships/--no-relationships",
+    default=True,
+    show_default=True,
+    help="Also include relationship display fields like Owner.Name, Account.Name (non-polymorphic only).",
+)
 def csv_cmd(
     object_name: str,
     out_dir: str,
     fields: Optional[str],
     where: Optional[str],
     limit: Optional[int],
+    relationships: bool,
 ) -> None:
     """Dump a single sObject to CSV."""
     api = SalesforceAPI(SFConfig.from_env())
@@ -80,18 +103,41 @@ def csv_cmd(
     else:
         # Auto-resolve fields from object description.
         try:
-            resolved_fields = fieldnames_for_object(api, object_name)
+            try:
+                resolved_fields = fieldnames_for_object(
+                    api,
+                    object_name,
+                    include_relationship_fields=relationships,
+                    relationship_subfields=["Name"],
+                )
+            except TypeError as e:
+                if "unexpected keyword argument" not in str(e):
+                    raise
+                resolved_fields = fieldnames_for_object(api, object_name)
         except Exception as err:
             raise click.ClickException(f"Failed to describe object '{object_name}'.") from err
 
-        # --- Minimal addition: force-include key fields for some objects ---
+        # Force-include key fields for some objects
         extra = ALWAYS_INCLUDE_FIELDS.get(object_name, [])
         if extra:
             existing = set(resolved_fields or [])
             for f in extra:
                 if f not in existing:
                     resolved_fields.append(f)
-        # -------------------------------------------------------------------
+
+    # Apply WHERE clause
+    effective_where = where
+
+    # For implementation-restricted objects, force the user to provide a WHERE
+    if object_name in IMPLEMENTATION_RESTRICTED_OBJECTS and not effective_where:
+        raise click.ClickException(
+            "ContentDocumentLink has a Salesforce implementation restriction and "
+            "must be queried with an explicit WHERE clause on Id, LinkedEntityId "
+            "or ContentDocumentId.\n\n"
+            "Example:\n"
+            "  sfdump csv --out ./exports/... --object ContentDocumentLink \\\n"
+            "      --where \"LinkedEntityId = '001xxxxxxxxxxxxAAA'\""
+        )
 
     try:
         csv_path, n = dump_object_to_csv(
@@ -99,7 +145,7 @@ def csv_cmd(
             object_name=object_name,
             out_dir=os.path.join(out_dir, "csv"),
             fields=resolved_fields,
-            where=where,
+            where=effective_where,
             limit=limit,
         )
     except Exception as err:

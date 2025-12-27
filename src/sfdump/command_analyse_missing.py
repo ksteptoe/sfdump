@@ -16,6 +16,7 @@ _logger = logging.getLogger(__name__)
 
 @click.command(name="analyse-missing")
 @click.option(
+    "-d",
     "--export-dir",
     required=True,
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
