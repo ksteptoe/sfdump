@@ -3,32 +3,50 @@ from __future__ import annotations
 import base64
 
 import streamlit as st
+import streamlit.components.v1 as components
+
+# Data-URL embedding can silently fail for large files in some browsers.
+# Keep this conservative; you can bump later if it works well for you.
+_MAX_INLINE_BYTES = 6_000_000  # ~6 MB
 
 
-def preview_pdf_bytes(pdf_bytes: bytes, *, height: int = 750) -> None:
+def preview_pdf_bytes(data: bytes, *, height: int = 900) -> None:
     """
-    Render a PDF inline in Streamlit using a Blob URL.
+    Inline PDF preview.
 
-    Avoids Chrome blocking data:application/pdf;base64,... in iframes,
-    and avoids requiring internet access (unlike PDF.js CDN).
+    Strategy:
+      - Always provide a download button.
+      - For "small enough" PDFs, embed via iframe(data: URL) + provide an "Open in tab" link.
+      - For large PDFs, skip inline (common to show a blank/white frame) and tell the user.
     """
-    b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+    if not data:
+        st.warning("No PDF data to preview.")
+        return
 
-    html = f"""
-    <iframe id="pdf_frame" style="width:100%; height:{height}px; border:none;"></iframe>
-    <script>
-      (function() {{
-        const b64 = "{b64}";
-        const binary = atob(b64);
-        const len = binary.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {{
-          bytes[i] = binary.charCodeAt(i);
-        }}
-        const blob = new Blob([bytes], {{ type: "application/pdf" }});
-        const url = URL.createObjectURL(blob);
-        document.getElementById("pdf_frame").src = url;
-      }})();
-    </script>
-    """
-    st.components.v1.html(html, height=height, scrolling=True)
+    # Always provide a reliable fallback
+    st.download_button(
+        "Download PDF",
+        data=data,
+        file_name="document.pdf",
+        mime="application/pdf",
+        key=f"download_pdf_{len(data)}",
+    )
+
+    if len(data) > _MAX_INLINE_BYTES:
+        st.info(
+            f"PDF is {len(data)/1_000_000:.1f}MB; skipping inline preview (often fails/blank in browsers). "
+            "Use Download/Open locally."
+        )
+        return
+
+    b64 = base64.b64encode(data).decode("ascii")
+    data_url = f"data:application/pdf;base64,{b64}"
+
+    # 1) Try Streamlit's iframe helper (often more reliable)
+    try:
+        components.iframe(data_url, height=int(height), scrolling=True)
+    except Exception as exc:  # noqa: BLE001
+        st.warning(f"Inline iframe preview failed: {exc}")
+
+    # 2) Offer "open in browser tab" – sometimes works even when iframe is blank
+    st.markdown(f"[Open PDF in a new tab]({data_url})")

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import streamlit as st
 
@@ -48,37 +47,16 @@ def render_record_tabs(
     import pandas as pd  # type: ignore[import-not-found]
 
     def _open_child_control(*, child_api: str, child_df: "pd.DataFrame", key_prefix: str) -> None:
-        """Option A: drill-down navigation for a child relationship table."""
-        if child_df.empty or "Id" not in child_df.columns:
+        if child_df is None or child_df.empty or "Id" not in child_df.columns:
             return
 
-        important = get_important_fields(child_api) or []
-
-        def _label_row(r: dict[str, Any]) -> str:
-            parts: list[str] = []
-            for c in important:
-                v = str(r.get(c, "") or "").strip()
-                if v:
-                    parts.append(v)
-
-            if not parts:
-                for c in ("Name", "Subject", "Title", "DocumentTitle"):
-                    v = str(r.get(c, "") or "").strip()
-                    if v:
-                        parts.append(v)
-                        break
-
-            if not parts:
-                parts.append(str(r.get("Id", "") or "").strip())
-
-            return " — ".join(parts)
-
         opts = ["(select…)"]
-        for _, rr in child_df.head(200).iterrows():
-            rid = str(rr.get("Id", "") or "").strip()
+        for _, r in child_df.head(200).iterrows():
+            rid = str(r.get("Id") or "").strip()
             if not rid:
                 continue
-            opts.append(f"{_label_row(dict(rr))} [{rid}]")
+            name = str(r.get("Name") or r.get("Title") or r.get("Subject") or rid).strip()
+            opts.append(f"{name} [{rid}]")
 
         cols_open = st.columns([4, 1])
         with cols_open[0]:
@@ -129,13 +107,16 @@ def render_record_tabs(
                 parent.data.get("Account", "") or parent.data.get("AccountName", "") or ""
             )
 
-            if opp_account_id:
+            # We can try by AccountId, and (optionally) by Account name if schema stores customer name
+            if opp_account_id or opp_account_name:
                 with st.expander("Invoices (via Account)", expanded=False):
                     rows, strategy = list_invoices_for_account(
                         db_path,
-                        account_id=opp_account_id,
+                        account_id=opp_account_id or None,
+                        account_name=opp_account_name or None,
                         limit=200,
                     )
+
                     if strategy not in ("none", "no-table"):
                         st.caption(f"Invoice match: {strategy}")
 
@@ -154,6 +135,7 @@ def render_record_tabs(
                             "c2g__OutstandingValue__c",
                             "CurrencyIsoCode",
                             "Id",
+                            "_via",
                         ]
                         show = [c for c in wanted if c in inv_df.columns]
                         st.dataframe(
@@ -163,51 +145,27 @@ def render_record_tabs(
                             height=260,
                         )
 
-                        if "Id" in inv_df.columns:
-                            opts = ["(select…)"]
-                            for _, r in inv_df.iterrows():
-                                rid = str(r.get("Id") or "")
-                                name = str(r.get("Name") or rid or "(invoice)")
-                                opts.append(f"{name} [{rid}]")
-
-                            cols_open = st.columns([4, 1])
-                            with cols_open[0]:
-                                choice = st.selectbox(
-                                    "Open invoice",
-                                    options=opts,
-                                    index=0,
-                                    key=f"open_invoice_for_opp_{selected_id}",
-                                )
-                            with cols_open[1]:
-                                if st.button(
-                                    "Open",
-                                    key=f"btn_open_invoice_for_opp_{selected_id}",
-                                    disabled=(choice == opts[0]),
-                                ):
-                                    rid = choice.rsplit("[", 1)[-1].rstrip("]").strip()
-                                    label = choice.rsplit("[", 1)[0].strip()
-                                    push("c2g__codaInvoice__c", rid, label=label)
-                                    st.rerun()
+                        # Drill-down (Open) using the shared control
+                        _open_child_control(
+                            child_api="c2g__codaInvoice__c",
+                            child_df=inv_df,
+                            key_prefix=f"open_invoice_for_opp_{selected_id}",
+                        )
             else:
-                if opp_account_name:
-                    st.caption(
-                        "Opportunity has no AccountId; cannot resolve invoices via account reliably."
-                    )
-                else:
-                    st.caption("Opportunity has no AccountId; cannot resolve invoices.")
+                st.caption("Opportunity has no AccountId; cannot resolve invoices.")
 
     with tab_children:
         # Opportunity -> Invoices traversal
         if parent.sf_object.api_name == "Opportunity":
             with st.expander("Invoices for this Opportunity", expanded=False):
-                inv_rows = find_invoices_for_opportunity(db_path, selected_id, limit=200)
+                rows, strategy = find_invoices_for_opportunity(db_path, selected_id, limit=200)
+                if strategy not in ("none", "no-table"):
+                    st.caption(f"Invoice match: {strategy}")
 
-                inv_rows_list = inv_rows[0] if isinstance(inv_rows, tuple) else inv_rows
-                if not inv_rows_list:
+                if not rows:
                     st.caption("No invoices found (or invoice tables/fields not present).")
                 else:
-                    inv_df = pd.DataFrame(inv_rows_list)
-
+                    inv_df = pd.DataFrame(rows)
                     show = [
                         c
                         for c in [
@@ -222,6 +180,7 @@ def render_record_tabs(
                             "c2g__OutstandingValue__c",
                             "Balance",
                             "Id",
+                            "_via",
                         ]
                         if c in inv_df.columns
                     ]
@@ -233,17 +192,41 @@ def render_record_tabs(
                         height=220,
                     )
 
-                    # Open invoice buttons
-                    for r in (inv_rows_list or [])[:50]:
-                        oid = str(r.get("Id") or "")
-                        ot = str(r.get("object_type") or "")
-                        nm = str(r.get("Name") or oid)
-                        if oid and ot:
-                            if st.button(
-                                f"Open invoice: {ot} {nm}", key=f"open_invoice_{ot}_{oid}"
-                            ):
-                                push(ot, oid, label=nm)
-                                st.rerun()
+                    # Drill-down to an invoice record (generic opener)
+                    # Drill-down to an invoice record (open the correct object_type per row)
+                    if {"Id", "object_type"}.issubset(set(inv_df.columns)) and not inv_df.empty:
+                        opts = ["(select…)"]
+                        for _, r in inv_df.head(200).iterrows():
+                            oid = str(r.get("Id") or "").strip()
+                            ot = str(r.get("object_type") or "").strip()
+                            nm = str(r.get("Name") or oid or "(invoice)").strip()
+                            if oid and ot:
+                                opts.append(f"{ot} — {nm} [{oid}]")
+
+                        cols_open = st.columns([4, 1])
+                        with cols_open[0]:
+                            choice = st.selectbox(
+                                "Open invoice",
+                                options=opts,
+                                index=0,
+                                key=f"open_invoice_from_opp_{selected_id}_sel",
+                            )
+                        with cols_open[1]:
+                            do_open = st.button(
+                                "Open",
+                                key=f"open_invoice_from_opp_{selected_id}_btn",
+                                disabled=(choice == opts[0]),
+                            )
+
+                        if do_open and choice != opts[0]:
+                            oid = choice.rsplit("[", 1)[-1].rstrip("]").strip()
+                            left = choice.rsplit("[", 1)[0].strip()
+                            ot = left.split("—", 1)[0].strip()  # "<object_type> — <name>"
+                            label = left.split("—", 1)[-1].strip()
+                            push(ot, oid, label=label)
+                            st.rerun()
+                    else:
+                        st.caption("Invoices table has no Id/object_type columns to drill into.")
 
         if not record.children:
             st.info("No child records found for this record.")
