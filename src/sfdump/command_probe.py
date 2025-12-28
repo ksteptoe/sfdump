@@ -160,7 +160,7 @@ def probe_cmd(
     except MissingCredentialsError as e:
         missing = ", ".join(e.missing)
         raise click.ClickException(
-            f"Missing Salesforce credentials: {missing}\nSet env vars or .env and re-run."
+            f"Missing Salesforce credentials: {missing}\n" "Set env vars or .env and re-run."
         ) from e
 
     meta_dir = Path(out_dir) / "meta"
@@ -190,6 +190,15 @@ def probe_cmd(
     sobjects = gd.get("sobjects", []) or []
     report["counts"]["sobjects_total"] = len(sobjects)
     report["counts"]["sobjects_queryable"] = sum(1 for o in sobjects if o.get("queryable") is True)
+
+    # Build a quick lookup so we can skip non-queryable objects WITHOUT triggering 400s
+    sobj_by_name: Dict[str, Dict[str, Any]] = {
+        o.get("name"): o for o in sobjects if isinstance(o, dict) and o.get("name")
+    }
+
+    def _is_queryable(name: str) -> bool:
+        o = sobj_by_name.get(name)
+        return bool(o and o.get("queryable") is True)
 
     # ------------------------------------------------------------
     # Optional: heavy downloads using your proven pipeline
@@ -229,7 +238,6 @@ def probe_cmd(
     report["counts"]["ContentVersion_unique_ContentDocumentId"] = len(doc_ids)
 
     # 2) ContentDocumentLink seeded by ContentDocumentId IN (...)
-    # (works around the org restriction that forbids unfiltered CDL queries)
     cdl_seeded: List[Dict[str, Any]] = []
     if doc_ids:
         _logger.info("Probe: ContentDocumentLink seeded by ContentDocumentId (IN batches)…")
@@ -259,17 +267,19 @@ def probe_cmd(
         [{"ContentDocumentId": d} for d in missing_latest],
     )
 
-    # 3) CombinedAttachment (skip quietly if not queryable in this org)
-    _logger.info("Probe: CombinedAttachment (if accessible)…")
-    ca_rows, err = _try_query_all(
-        api,
-        "SELECT Id, ParentId, Name, ContentType, BodyLength, CreatedDate, LastModifiedDate "
-        "FROM CombinedAttachment",
-    )
-    if err and ("INVALID_TYPE_FOR_OPERATION" in err or "does not support query" in err):
-        report["notes"].append("CombinedAttachment is not queryable in this org; skipped.")
+    # 3) CombinedAttachment (skip entirely if global describe says not queryable)
+    if not _is_queryable("CombinedAttachment"):
+        report["notes"].append(
+            "CombinedAttachment is not queryable (per global describe); skipped."
+        )
         report["counts"]["CombinedAttachment"] = 0
     else:
+        _logger.info("Probe: CombinedAttachment (queryable)…")
+        ca_rows, err = _try_query_all(
+            api,
+            "SELECT Id, ParentId, Name, ContentType, BodyLength, CreatedDate, LastModifiedDate "
+            "FROM CombinedAttachment",
+        )
         if err:
             report["errors"]["CombinedAttachment"] = err
         report["counts"]["CombinedAttachment"] = len(ca_rows)
@@ -321,7 +331,7 @@ def probe_cmd(
     report["counts"]["EmailMessage_Attachments_via_Attachment"] = len(em_att_rows)
     _write_jsonl(links_dir / "probe_email_attachments_via_attachment.jsonl", em_att_rows)
 
-    # Files linked to EmailMessage (this query is valid because it filters by LinkedEntityId IN)
+    # Files linked to EmailMessage (valid because it filters by LinkedEntityId IN)
     em_file_links: List[Dict[str, Any]] = []
     if email_ids_with_att:
         _logger.info("Probe: ContentDocumentLink WHERE LinkedEntityId IN (EmailMessage)…")
