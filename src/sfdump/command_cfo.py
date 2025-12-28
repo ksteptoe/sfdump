@@ -12,6 +12,7 @@ from .verify import build_cfo_report
 
 @click.command(name="cfo-generate-docs")
 @click.option(
+    "-d",
     "--export-dir",
     type=click.Path(exists=True, file_okay=False),
     required=True,
