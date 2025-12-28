@@ -34,7 +34,7 @@ def preview_pdf_bytes(data: bytes, *, height: int = 900) -> None:
 
     if len(data) > _MAX_INLINE_BYTES:
         st.info(
-            f"PDF is {len(data)/1_000_000:.1f}MB; skipping inline preview (often fails/blank in browsers). "
+            f"PDF is {len(data) / 1_000_000:.1f}MB; skipping inline preview (often fails/blank in browsers). "
             "Use Download/Open locally."
         )
         return

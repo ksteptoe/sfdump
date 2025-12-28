@@ -134,7 +134,7 @@ def probe_cmd(
     except MissingCredentialsError as e:
         missing = ", ".join(e.missing)
         raise click.ClickException(
-            f"Missing Salesforce credentials: {missing}\n" "Set env vars or .env and re-run."
+            f"Missing Salesforce credentials: {missing}\nSet env vars or .env and re-run."
         ) from e
 
     meta_dir = Path(out_dir) / "meta"
