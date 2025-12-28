@@ -14,6 +14,7 @@ from .exceptions import MissingCredentialsError
 from .files import dump_attachments, dump_content_versions
 from .manifest import Manifest, scan_files, scan_objects
 from .manifest import write_manifest as write_manifest_file
+from .probe_summary import write_probe_summary
 from .utils import ensure_dir
 
 _logger = logging.getLogger(__name__)
@@ -125,6 +126,12 @@ def _try_query_all(api: SalesforceAPI, soql: str) -> Tuple[List[Dict[str, Any]],
     show_default=True,
     help="Write manifest.json after probe (recommended).",
 )
+@click.option(
+    "--summary/--no-summary",
+    default=True,
+    show_default=True,
+    help="Write meta/probe_summary.(json|md) with PASS/WARN/FAIL checks.",
+)
 def probe_cmd(
     out_dir: str,
     no_download: bool,
@@ -135,6 +142,7 @@ def probe_cmd(
     max_workers: int,
     email_bodies: bool,
     write_manifest: bool,
+    summary: bool,
 ) -> None:
     """
     Org-wide “odd-angle” probe that complements `files`.
@@ -385,6 +393,10 @@ def probe_cmd(
     # --- write probe report
     _write_json(meta_dir / "probe_report.json", report)
     click.echo(f"✅ Probe report → {meta_dir / 'probe_report.json'}")
+
+    if summary:
+        write_probe_summary(meta_dir, report)
+        click.echo(f"✅ Wrote probe summary → {meta_dir / 'probe_summary.md'}")
 
     # ------------------------------------------------------------
     # Optional: write manifest.json after probe
