@@ -75,11 +75,10 @@ source = ["sfdump"]
 omit = [
   "tests/*",
 
-  # entrypoints / interactive apps (don’t unit test in CI)
-  "*/__main__.py",
-  "*/viewer/*_app.py",
-  "*\\__main__.py",
-  "*\\viewer\\*_app.py",
+  # ignore entrypoints / interactive Streamlit apps
+  "*sfdump*__main__.py",
+  "*sfdump*viewer*db_app.py",
+  "*sfdump*viewer*files_app.py",
 ]
 
 [tool.coverage.report]
