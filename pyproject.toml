@@ -74,9 +74,12 @@ branch = true
 source = ["sfdump"]
 omit = [
   "tests/*",
-  "src/sfdump/__main__.py",
-  "src/sfdump/viewer/db_app.py",
-  "src/sfdump/viewer/files_app.py",
+
+  # entrypoints / interactive apps (don’t unit test in CI)
+  "*/__main__.py",
+  "*/viewer/*_app.py",
+  "*\\__main__.py",
+  "*\\viewer\\*_app.py",
 ]
 
 [tool.coverage.report]
