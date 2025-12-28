@@ -27,6 +27,7 @@ from .command_files import files_cmd
 from .command_list_records import list_records_command
 from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
+from .command_probe import probe_cmd
 from .command_rels import rels_cmd
 from .command_report_missing import report_missing_cmd
 from .command_retry_missing import retry_missing_cmd
@@ -128,6 +129,7 @@ cli.add_command(cast(Command, db_viewer_command))
 cli.add_command(cast(Command, schema_cmd), "schema")
 cli.add_command(cast(Command, rels_cmd))
 cli.add_command(cast(Command, docs_for_cmd))
+cli.add_command(cast(Command, probe_cmd))
 
 
 # Keep the original name (probably "cfo-generate-docs")
