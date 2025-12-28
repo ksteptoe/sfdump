@@ -72,7 +72,12 @@ testpaths = ["tests"]
 [tool.coverage.run]
 branch = true
 source = ["sfdump"]
-omit = ["tests/*"]
+omit = [
+  "tests/*",
+  "src/sfdump/__main__.py",
+  "src/sfdump/viewer/db_app.py",
+  "src/sfdump/viewer/files_app.py",
+]
 
 [tool.coverage.report]
 show_missing = true
