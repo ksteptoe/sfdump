@@ -2,7 +2,10 @@
 [run]
 branch = True
 source = sfdump
-# omit = bad_file.py
+omit =
+    */__main__.py
+    src/sfdump/viewer/*
+    src/sfdump/viewer_app/*
 
 [paths]
 source =
