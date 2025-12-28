@@ -12,18 +12,22 @@ import click
 from .api import SalesforceAPI, SFConfig
 from .exceptions import MissingCredentialsError
 from .files import dump_attachments, dump_content_versions
-from .manifest import Manifest, scan_files, scan_objects, write_manifest
+from .manifest import Manifest, scan_files, scan_objects
+from .manifest import write_manifest as write_manifest_file
 from .utils import ensure_dir
 
 _logger = logging.getLogger(__name__)
 
 
+# -----------------------------
+# Small utilities
+# -----------------------------
 def _utc_now() -> str:
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _links_dir_for_out(out_dir: str) -> Path:
-    # same convention as command_files.py
+    # must match command_files canonical location
     return Path(out_dir) / "files" / "links"
 
 
@@ -61,18 +65,26 @@ def _write_csv(
             w.writerow(r)
 
 
+def _chunk(seq: List[str], size: int) -> Iterable[List[str]]:
+    for i in range(0, len(seq), size):
+        yield seq[i : i + size]
+
+
 def _try_query_all(api: SalesforceAPI, soql: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """
+    Resilient query wrapper:
+      - returns (rows, None) on success
+      - returns ([], "Type: message") on any exception
+    """
     try:
         return list(api.query_all_iter(soql)), None
     except Exception as e:
         return [], f"{type(e).__name__}: {e}"
 
 
-def _chunk(seq: List[str], size: int) -> Iterable[List[str]]:
-    for i in range(0, len(seq), size):
-        yield seq[i : i + size]
-
-
+# -----------------------------
+# Command
+# -----------------------------
 @click.command("probe")
 @click.option(
     "--out",
@@ -84,12 +96,22 @@ def _chunk(seq: List[str], size: int) -> Iterable[List[str]]:
 @click.option(
     "--no-download", is_flag=True, help="Skip ContentVersion/Attachment downloads; probes only."
 )
-@click.option("--no-content", is_flag=True, help="Skip ContentVersion downloads.")
-@click.option("--no-attachments", is_flag=True, help="Skip legacy Attachment downloads.")
+@click.option(
+    "--no-content", is_flag=True, help="Skip ContentVersion downloads (if downloads are enabled)."
+)
+@click.option(
+    "--no-attachments",
+    is_flag=True,
+    help="Skip legacy Attachment downloads (if downloads are enabled).",
+)
 @click.option("--content-where", help="Extra AND filter for ContentVersion (without WHERE).")
 @click.option("--attachments-where", help="WHERE clause for Attachment (without WHERE).")
 @click.option(
-    "--max-workers", type=int, default=8, show_default=True, help="Parallel download workers."
+    "--max-workers",
+    type=int,
+    default=8,
+    show_default=True,
+    help="Parallel download workers (if downloads are enabled).",
 )
 @click.option(
     "--email-bodies/--no-email-bodies",
@@ -112,19 +134,23 @@ def probe_cmd(
     attachments_where: str | None,
     max_workers: int,
     email_bodies: bool,
-    write_manifest_flag: bool,
+    write_manifest: bool,
 ) -> None:
     """
-    Org-wide “odd-angle” probe that complements `files`:
-      - ContentDocumentLink (ALL)
-      - CombinedAttachment (if accessible)
-      - EmailMessage (+ attachment cross-check probes)
-      - Note + ContentNote (if accessible)
-      - FeedAttachment (if accessible)
-    plus optional downloads via existing dump_content_versions/dump_attachments.
+    Org-wide “odd-angle” probe that complements `files`.
 
-    Writes probe artefacts under: <out>/files/links/
-    Writes a summary report under: <out>/meta/probe_report.json
+    Important Salesforce restriction:
+      ContentDocumentLink cannot be queried without filtering by either:
+        - ContentDocumentId = '...'
+        - LinkedEntityId = '...'
+      or IN(...) variants.
+    So we *seed* ContentDocumentLink queries using ContentDocumentIds from ContentVersion.
+
+    Outputs:
+      <out>/meta/probe_report.json
+      <out>/meta/global_describe.json
+      <out>/files/links/probe_*.jsonl
+      <out>/files/links/probe_*.csv
     """
     ensure_dir(out_dir)
 
@@ -148,6 +174,7 @@ def probe_cmd(
         "whoami": {},
         "counts": {},
         "errors": {},
+        "notes": [],
     }
 
     # --- identity snapshot
@@ -165,7 +192,7 @@ def probe_cmd(
     report["counts"]["sobjects_queryable"] = sum(1 for o in sobjects if o.get("queryable") is True)
 
     # ------------------------------------------------------------
-    # Optional: do the heavy downloads using your proven code
+    # Optional: heavy downloads using your proven pipeline
     # ------------------------------------------------------------
     if not no_download:
         if not no_content:
@@ -185,24 +212,7 @@ def probe_cmd(
     # Probes: “odd angles”
     # ------------------------------------------------------------
 
-    # 1) ContentDocumentLink ALL (links-first view of Files)
-    _logger.info("Probe: ContentDocumentLink (ALL)…")
-    cdl_rows, err = _try_query_all(
-        api,
-        "SELECT Id, ContentDocumentId, LinkedEntityId, ShareType, Visibility, SystemModstamp "
-        "FROM ContentDocumentLink",
-    )
-    if err:
-        report["errors"]["ContentDocumentLink"] = err
-    report["counts"]["ContentDocumentLink"] = len(cdl_rows)
-    _write_jsonl(links_dir / "probe_content_document_links.jsonl", cdl_rows)
-
-    linked_doc_ids = sorted(
-        {r.get("ContentDocumentId") for r in cdl_rows if r.get("ContentDocumentId")}
-    )
-    report["counts"]["ContentDocumentLink_unique_ContentDocumentId"] = len(linked_doc_ids)
-
-    # 2) Latest ContentVersion list (for reconciliation; downloads handled elsewhere)
+    # 1) Latest ContentVersion list (seed set + reconciliation)
     _logger.info("Probe: ContentVersion (IsLatest=true)…")
     cv_rows, err = _try_query_all(
         api,
@@ -215,25 +225,55 @@ def probe_cmd(
     report["counts"]["ContentVersion_latest"] = len(cv_rows)
     _write_jsonl(links_dir / "probe_content_versions_latest.jsonl", cv_rows)
 
-    cv_doc_ids = {r.get("ContentDocumentId") for r in cv_rows if r.get("ContentDocumentId")}
-    missing_latest = [d for d in linked_doc_ids if d not in cv_doc_ids]
+    doc_ids = sorted({r.get("ContentDocumentId") for r in cv_rows if r.get("ContentDocumentId")})
+    report["counts"]["ContentVersion_unique_ContentDocumentId"] = len(doc_ids)
+
+    # 2) ContentDocumentLink seeded by ContentDocumentId IN (...)
+    # (works around the org restriction that forbids unfiltered CDL queries)
+    cdl_seeded: List[Dict[str, Any]] = []
+    if doc_ids:
+        _logger.info("Probe: ContentDocumentLink seeded by ContentDocumentId (IN batches)…")
+        for chunk in _chunk(doc_ids, 500):
+            in_list = ",".join(f"'{x}'" for x in chunk)
+            rows, e = _try_query_all(
+                api,
+                "SELECT Id, ContentDocumentId, LinkedEntityId, ShareType, Visibility, SystemModstamp "
+                f"FROM ContentDocumentLink WHERE ContentDocumentId IN ({in_list})",
+            )
+            if e:
+                report.setdefault("errors", {}).setdefault("ContentDocumentLink_seeded", []).append(
+                    e
+                )
+            cdl_seeded.extend(rows)
+
+    report["counts"]["ContentDocumentLink_seeded"] = len(cdl_seeded)
+    _write_jsonl(links_dir / "probe_content_document_links_seeded.jsonl", cdl_seeded)
+
+    linked_doc_ids = sorted(
+        {r.get("ContentDocumentId") for r in cdl_seeded if r.get("ContentDocumentId")}
+    )
+    missing_latest = [d for d in linked_doc_ids if d not in set(doc_ids)]
     report["counts"]["ContentDocumentId_missing_latest"] = len(missing_latest)
     _write_csv(
         links_dir / "probe_missing_latest_contentversion.csv",
         [{"ContentDocumentId": d} for d in missing_latest],
     )
 
-    # 3) CombinedAttachment (great “catch-all” if available)
+    # 3) CombinedAttachment (skip quietly if not queryable in this org)
     _logger.info("Probe: CombinedAttachment (if accessible)…")
     ca_rows, err = _try_query_all(
         api,
         "SELECT Id, ParentId, Name, ContentType, BodyLength, CreatedDate, LastModifiedDate "
         "FROM CombinedAttachment",
     )
-    if err:
-        report["errors"]["CombinedAttachment"] = err
-    report["counts"]["CombinedAttachment"] = len(ca_rows)
-    _write_jsonl(links_dir / "probe_combined_attachments.jsonl", ca_rows)
+    if err and ("INVALID_TYPE_FOR_OPERATION" in err or "does not support query" in err):
+        report["notes"].append("CombinedAttachment is not queryable in this org; skipped.")
+        report["counts"]["CombinedAttachment"] = 0
+    else:
+        if err:
+            report["errors"]["CombinedAttachment"] = err
+        report["counts"]["CombinedAttachment"] = len(ca_rows)
+        _write_jsonl(links_dir / "probe_combined_attachments.jsonl", ca_rows)
 
     # 4) EmailMessage (+ two attachment pathways)
     _logger.info("Probe: EmailMessage…")
@@ -281,7 +321,7 @@ def probe_cmd(
     report["counts"]["EmailMessage_Attachments_via_Attachment"] = len(em_att_rows)
     _write_jsonl(links_dir / "probe_email_attachments_via_attachment.jsonl", em_att_rows)
 
-    # Files linked to EmailMessage
+    # Files linked to EmailMessage (this query is valid because it filters by LinkedEntityId IN)
     em_file_links: List[Dict[str, Any]] = []
     if email_ids_with_att:
         _logger.info("Probe: ContentDocumentLink WHERE LinkedEntityId IN (EmailMessage)…")
@@ -300,7 +340,7 @@ def probe_cmd(
     report["counts"]["EmailMessage_Attachments_via_FilesLinks"] = len(em_file_links)
     _write_jsonl(links_dir / "probe_email_attachments_via_files_links.jsonl", em_file_links)
 
-    # 5) Notes (classic + enhanced where accessible)
+    # 5) Notes (classic + enhanced)
     _logger.info("Probe: Note (classic)…")
     note_rows, err = _try_query_all(
         api,
@@ -321,7 +361,7 @@ def probe_cmd(
     report["counts"]["ContentNote"] = len(cn_rows)
     _write_jsonl(links_dir / "probe_notes_contentnote.jsonl", cn_rows)
 
-    # 6) Chatter feed attachments (odd angle)
+    # 6) Chatter feed attachments
     _logger.info("Probe: FeedAttachment (if accessible)…")
     fa_rows, err = _try_query_all(
         api,
@@ -337,9 +377,9 @@ def probe_cmd(
     click.echo(f"✅ Probe report → {meta_dir / 'probe_report.json'}")
 
     # ------------------------------------------------------------
-    # Optional: write manifest.json after probe (recommended)
+    # Optional: write manifest.json after probe
     # ------------------------------------------------------------
-    if write_manifest_flag:
+    if write_manifest:
         org_id = username = instance_url = api_version = ""
         try:
             who = api.whoami()
@@ -348,7 +388,6 @@ def probe_cmd(
             instance_url = api.instance_url or ""
             api_version = api.api_version or ""
         except Exception:
-            # keep going; manifest can still be written offline-ish
             pass
 
         csv_root = str(Path(out_dir) / "csv")
@@ -365,5 +404,5 @@ def probe_cmd(
             objects=objects,
         )
         path = str(Path(out_dir) / "manifest.json")
-        write_manifest(path, m)
+        write_manifest_file(path, m)
         click.echo(f"✅ Wrote manifest → {Path(path).resolve()}")
