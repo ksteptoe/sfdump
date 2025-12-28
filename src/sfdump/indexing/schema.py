@@ -1,5 +1,4 @@
 """Central description of Salesforce objects and their relationships.
-
 This module is deliberately *data-only* (no I/O) so it can be used by:
 - index builders
 - SQL/SQLite schema generators
@@ -79,6 +78,11 @@ OBJECTS: Dict[str, SFObject] = {
         label="Opportunity",
         table_name="opportunity",
     ),
+    "OpportunityLineItem": SFObject(
+        api_name="OpportunityLineItem",
+        label="Opportunity Line Item",
+        table_name="OpportunityLineItem",
+    ),
     "Contact": SFObject(
         api_name="Contact",
         label="Contact",
@@ -106,25 +110,30 @@ OBJECTS: Dict[str, SFObject] = {
         table_name="attachment",
     ),
     # Finance objects
-    "Invoice": SFObject(
-        api_name="Invoice",
+    "c2g__codaInvoice__c": SFObject(
+        api_name="c2g__codaInvoice__c",
         label="Invoice",
-        table_name="invoice",
+        table_name="c2g__codaInvoice__c",
     ),
-    "InvoiceLine": SFObject(
-        api_name="InvoiceLine",
-        label="Invoice Line",
-        table_name="invoice_line",
+    "c2g__codaInvoiceLineItem__c": SFObject(
+        api_name="c2g__codaInvoiceLineItem__c",
+        label="Invoice Line Item",
+        table_name="c2g__codaInvoiceLineItem__c",
     ),
-    "CreditNote": SFObject(
-        api_name="CreditNote",
-        label="Credit Note",
-        table_name="credit_note",
+    "c2g__codaTransaction__c": SFObject(
+        api_name="c2g__codaTransaction__c",
+        label="Transaction",
+        table_name="c2g__codaTransaction__c",
     ),
-    "CreditNoteLine": SFObject(
-        api_name="CreditNoteLine",
-        label="Credit Note Line",
-        table_name="credit_note_line",
+    "c2g__codaJournal__c": SFObject(
+        api_name="c2g__codaJournal__c",
+        label="Journal",
+        table_name="c2g__codaJournal__c",
+    ),
+    "c2g__codaJournalLineItem__c": SFObject(
+        api_name="c2g__codaJournalLineItem__c",
+        label="Journal Line Item",
+        table_name="c2g__codaJournalLineItem__c",
     ),
     # Add further exported objects here as we need them
 }
@@ -147,6 +156,12 @@ RELATIONSHIPS: List[SFRelationship] = [
         parent="Account",
         child="Contact",
         child_field="AccountId",
+    ),
+    SFRelationship(
+        name="Opportunity_OpportunityLineItem",
+        parent="Opportunity",
+        child="OpportunityLineItem",
+        child_field="OpportunityId",
     ),
     # Files / attachments relationships
     SFRelationship(
@@ -175,29 +190,47 @@ RELATIONSHIPS: List[SFRelationship] = [
         child_field="ParentId",
     ),
     # Finance relationships
+    # Invoice Line Item and Invoice
     SFRelationship(
-        name="Account_Invoice",
+        name="InvoiceLineItem",
+        parent="c2g__codaInvoice__c",
+        child="c2g__codaInvoiceLineItem__c",
+        child_field="c2g__Invoice__c",
+    ),
+    # Account -> Invoice (Invoice has c2g__Account__c)
+    SFRelationship(
+        name="Account_CodaInvoice",
         parent="Account",
-        child="Invoice",
-        child_field="AccountId",
+        child="c2g__codaInvoice__c",
+        child_field="c2g__Account__c",
     ),
+    # Opportunity -> Invoice (Invoice has c2g__Opportunity__c)
     SFRelationship(
-        name="Invoice_InvoiceLine",
-        parent="Invoice",
-        child="InvoiceLine",
-        child_field="InvoiceId",
+        name="Opportunity_CodaInvoice",
+        parent="Opportunity",
+        child="c2g__codaInvoice__c",
+        child_field="c2g__Opportunity__c",
     ),
+    # Transaction -> Invoice (Invoice has c2g__Transaction__c)
     SFRelationship(
-        name="Account_CreditNote",
-        parent="Account",
-        child="CreditNote",
-        child_field="AccountId",
+        name="CodaTransaction_CodaInvoice",
+        parent="c2g__codaTransaction__c",
+        child="c2g__codaInvoice__c",
+        child_field="c2g__Transaction__c",
     ),
+    # Journal -> Transaction (Transaction has c2g__Journal__c)
     SFRelationship(
-        name="CreditNote_CreditNoteLine",
-        parent="CreditNote",
-        child="CreditNoteLine",
-        child_field="CreditNoteId",
+        name="CodaJournal_CodaTransaction",
+        parent="c2g__codaJournal__c",
+        child="c2g__codaTransaction__c",
+        child_field="c2g__Journal__c",
+    ),
+    # Journal -> Journal Line Items
+    SFRelationship(
+        name="CodaJournal_JournalLineItem",
+        parent="c2g__codaJournal__c",
+        child="c2g__codaJournalLineItem__c",
+        child_field="c2g__Journal__c",
     ),
 ]
 

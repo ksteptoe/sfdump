@@ -12,6 +12,7 @@ from sfdump.viewer import list_records
 
 @click.command(name="list-records")
 @click.option(
+    "-d",
     "--export-dir",
     "export_dir",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
@@ -41,7 +42,7 @@ from sfdump.viewer import list_records
     "--where",
     "where_clause",
     required=False,
-    help=("Optional SQL WHERE clause fragment (without 'WHERE'), " "e.g. \"Name LIKE '%Acme%'\"."),
+    help=("Optional SQL WHERE clause fragment (without 'WHERE'), e.g. \"Name LIKE '%Acme%'\"."),
 )
 @click.option(
     "--order-by",

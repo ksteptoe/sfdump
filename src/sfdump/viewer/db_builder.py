@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from sfdump.indexing import SFObject, iter_objects
+from sfdump.indexing.build_record_documents import build_record_documents
 
 from .sqlite_schema import (
     SqliteIndexConfig,
@@ -234,8 +235,7 @@ def build_sqlite_from_export(
             cols_sql = ", ".join(f'"{c}"' for c in idx.columns)
             unique_sql = "UNIQUE " if idx.unique else ""
             create_idx_sql = (
-                f'CREATE {unique_sql}INDEX IF NOT EXISTS "{idx.name}" '
-                f'ON "{idx.table}" ({cols_sql})'
+                f'CREATE {unique_sql}INDEX IF NOT EXISTS "{idx.name}" ON "{idx.table}" ({cols_sql})'
             )
             log.info("Ensuring index %s on %s(%s)", idx.name, idx.table, cols_sql)
             cur.execute(create_idx_sql)
@@ -243,6 +243,8 @@ def build_sqlite_from_export(
         conn.commit()
     finally:
         conn.close()
+
+    build_record_documents(db_path=db_path, export_root=export_dir)
 
     log.info("SQLite database built successfully at %s", db_path)
     return db_path

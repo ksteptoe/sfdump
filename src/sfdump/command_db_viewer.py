@@ -15,6 +15,7 @@ import click
 
 @click.command(name="db-viewer")
 @click.option(
+    "-d",
     "--export-dir",
     "export_dir",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
@@ -56,10 +57,10 @@ def db_viewer_command(export_dir: Optional[Path], db_path: Optional[Path]) -> No
 
     # Resolve the path to the Streamlit app script inside the installed package
     try:
-        mod = importlib.import_module("sfdump.web.db_viewer_app")
+        mod = importlib.import_module("sfdump.viewer.db_app")
     except ImportError as exc:  # pragma: no cover - packaging issue
         raise click.ClickException(
-            "Could not import sfdump.web.db_viewer_app; is sfdump installed correctly?"
+            "Could not import sfdump.viewer.db_app; is sfdump installed correctly?"
         ) from exc
 
     script_path = Path(inspect.getfile(mod))

@@ -88,3 +88,6 @@ sfdump_missing_report*.pdf
 
 docs/_generated/
 /CFO_Report.md
+*.coverage_target
+*.tar
+*.gz
