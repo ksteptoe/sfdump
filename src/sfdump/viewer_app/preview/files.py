@@ -22,57 +22,36 @@ def open_local_file(path: Path) -> None:
 
 def preview_file(export_root: Path, local_path: str) -> None:
     """
-    Preview PDFs inline (best-effort); ALWAYS provide Download/Open fallbacks.
+    Preview PDFs inline; otherwise offer a download button.
 
-    local_path should be relative to export_root, e.g. files/... or files_legacy/...
-    Absolute paths are also tolerated.
+    local_path must be relative to export_root, e.g. files/... or files_legacy/...
     """
-    raw = (local_path or "").strip()
-    disp = raw.replace("\\", "/")
-
-    p = Path(disp)
+    # Accept accidental absolute paths but prefer relative-to-export-root.
+    p = Path(local_path)
     if not p.is_absolute():
-        p = export_root / p
-
-    try:
-        p = p.resolve()
-    except Exception:
-        # resolve() can fail on odd paths; still try the raw join
-        pass
+        p = (export_root / local_path).resolve()
 
     if not p.exists():
-        st.error(f"File not found on disk: `{p}`")
+        st.error(f"File not found: {p}")
         return
 
-    try:
-        size = p.stat().st_size
-    except Exception:
-        size = None
-
-    if size is not None:
-        st.caption(f"File: `{disp}`  •  {size:,} bytes")
-    else:
-        st.caption(f"File: `{disp}`")
-
-    col_a, col_b, _ = st.columns([1, 1, 2])
-
-    # Always: download
-    with col_a:
+    # Convenient "open locally" for desktop usage (optional)
+    cols = st.columns([1, 1, 6])
+    with cols[0]:
+        if st.button("Open locally", key=f"open_local_{p.as_posix()}"):
+            open_local_file(p)
+    with cols[1]:
         st.download_button(
             "Download",
             data=p.read_bytes(),
             file_name=p.name,
-            key=f"dl_{p.name}_{size or 0}",
+            key=f"download_{p.as_posix()}",
         )
 
-    # Always: open locally (helps when inline PDF fails)
-    with col_b:
-        if st.button("Open locally", key=f"open_{p.name}_{size or 0}"):
-            open_local_file(p)
-
-    # Best-effort inline PDF preview
+    # Inline PDF preview
     if p.suffix.lower() == ".pdf":
-        try:
-            preview_pdf_bytes(p.read_bytes(), height=900)
-        except Exception as exc:  # noqa: BLE001
-            st.warning(f"Inline PDF preview failed: {exc}")
+        data = p.read_bytes()
+        preview_pdf_bytes(data, height=900, filename=p.name)
+        return
+
+    st.info("Inline preview is available for PDFs. Use Download/Open for other file types.")

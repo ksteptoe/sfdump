@@ -6,42 +6,34 @@ from typing import Optional
 
 def infer_export_root(db_path: Path) -> Optional[Path]:
     """
-    Best-effort: infer EXPORT_ROOT from db_path.
-    Typical layout: EXPORT_ROOT/meta/sfdata.db
+    Infer EXPORT_ROOT from a DB path that looks like:
+      EXPORT_ROOT/meta/sfdata.db
+
+    Returns EXPORT_ROOT or None if it can't infer safely.
+    """
+    p = Path(db_path).expanduser().resolve()
+    # Expect .../<export_root>/meta/sfdata.db
+    if p.name.lower() != "sfdata.db":
+        return None
+    if p.parent.name.lower() != "meta":
+        return None
+    export_root = p.parent.parent
+    return export_root if export_root.exists() else None
+
+
+def safe_relpath(path: Path, start: Path) -> str:
+    """
+    Return a POSIX-ish relative path if possible, else absolute POSIX path.
     """
     try:
-        if db_path.name.lower() == "sfdata.db" and db_path.parent.name.lower() == "meta":
-            return db_path.parent.parent
+        rel = path.resolve().relative_to(start.resolve())
+        return rel.as_posix()
     except Exception:
-        pass
-
-    # fallback: walk up a few levels looking for a folder that contains csv/ and meta/
-    p = db_path.resolve()
-    for _ in range(6):
-        if (p / "csv").exists() and (p / "meta").exists():
-            return p
-        p = p.parent
-    return None
+        return path.resolve().as_posix()
 
 
-def export_root_for_db(db_path: Path) -> Path:
+def to_posix_relpath(p: str) -> str:
     """
-    Return an export root for this db_path.
-
-    Keeps legacy behavior (db_path.parent.parent) if inference fails,
-    but prefers the more robust infer_export_root().
+    Normalize a relative path string to POSIX style for consistent display.
     """
-    root = infer_export_root(db_path)
-    if root is not None:
-        return root
-    return db_path.parent.parent
-
-
-def resolve_export_path(export_root: Path, rel_path: str) -> Path:
-    """
-    Resolve a path from the export root.
-
-    Paths in your CSV/DB may use Windows backslashes like files_legacy\\00\\...
-    """
-    rel_path = (rel_path or "").replace("\\", "/")
-    return export_root / rel_path
+    return p.replace("\\", "/")

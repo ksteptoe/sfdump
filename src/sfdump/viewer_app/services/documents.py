@@ -59,19 +59,15 @@ def load_master_documents_index(export_root: Path):
 
 
 def enrich_documents_with_local_path(
-    export_root: Path, docs: list[dict[str, object]]
-) -> list[dict[str, object]]:
-    """Fill missing doc local paths by looking up meta/master_documents_index.csv.
+    export_root: Path, docs: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """
+    Fill missing doc local paths by looking up meta/master_documents_index.csv.
 
     Some DB rows (record_documents) can have blank path/local_path even if the file was
     downloaded later. This function enriches those rows from the master index.
     """
     if not docs:
-        return docs
-
-    try:
-        pass  # type: ignore[import-not-found]
-    except Exception:
         return docs
 
     df = load_master_documents_index(export_root)
@@ -80,36 +76,37 @@ def enrich_documents_with_local_path(
 
     # The index may contain either local_path or path
     path_col = (
-        "local_path" if "local_path" in df.columns else ("path" if "path" in df.columns else None)
+        "local_path" if "local_path" in df.columns else ("path" if "path" in df.columns else "")
     )
-    if path_col is None or "file_id" not in df.columns:
+    if not path_col or "file_id" not in df.columns:
         return docs
 
     # Map file_id -> local path (first non-empty wins)
     subset = df[["file_id", path_col]].copy()
     subset = subset[(subset["file_id"].astype(str) != "") & (subset[path_col].astype(str) != "")]
     id_to_path: dict[str, str] = {}
-    for fid, lp in zip(
-        subset["file_id"].astype(str).tolist(), subset[path_col].astype(str).tolist(), strict=False
-    ):
+    for fid, lp in zip(subset["file_id"].astype(str), subset[path_col].astype(str), strict=False):
         if fid and lp and fid not in id_to_path:
             id_to_path[fid] = lp
 
     if not id_to_path:
         return docs
 
-    out: list[dict[str, object]] = []
+    out: list[dict[str, Any]] = []
     for d in docs:
         dd = dict(d)
-        fid = str(dd.get("file_id") or "")
-        # viewer uses 'path' when opening; keep both for clarity
+        fid = str(dd.get("file_id") or "").strip()
+
         has_path = bool(str(dd.get("path") or "").strip())
         has_local = bool(str(dd.get("local_path") or "").strip())
+
         if fid and (not has_path and not has_local):
             lp = id_to_path.get(fid, "")
             if lp:
+                # viewer uses 'path' when opening; keep both for clarity
                 dd["local_path"] = lp
                 dd["path"] = lp
+
         out.append(dd)
 
     return out
@@ -131,14 +128,13 @@ def resolve_local_path(export_root: Path, file_id: str) -> Optional[str]:
         if not root.exists():
             continue
 
-        # downloader convention: <id>_<filename> under a 2-digit shard folder
+        # downloader convention: <id>_<filename> under a sharded folder
         matches = sorted(root.glob(f"**/{file_id}_*"))
         if matches:
             try:
                 rel = matches[0].relative_to(export_root)
+                return rel.as_posix()
             except Exception:
-                # fallback: return absolute if relative fails for any reason
                 return matches[0].as_posix()
-            return rel.as_posix()
 
     return None

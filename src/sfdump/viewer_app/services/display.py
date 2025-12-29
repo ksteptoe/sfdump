@@ -1,96 +1,119 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Iterable
 
+import pandas as pd  # type: ignore[import-not-found]
+
+# Pragmatic defaults – keep these small and user-friendly.
 IMPORTANT_FIELDS: dict[str, list[str]] = {
-    # Core CRM
-    "Account": ["Name", "Type"],
-    "Opportunity": ["Name", "StageName", "CloseDate", "Amount"],
-    "Contact": ["Name", "Email", "Phone", "Title"],
-    # Content / files
-    "ContentDocument": ["Title", "LatestPublishedVersionId"],
-    "ContentVersion": ["Title", "VersionNumber", "CreatedDate"],
-    "ContentDocumentLink": ["DocumentTitle", "ShareType", "Visibility", "LinkedEntityId"],
-    # Legacy attachments
-    "Attachment": ["Name", "ContentType", "BodyLength", "ParentId"],
-    # Finance (generic)
-    "Invoice": ["InvoiceNumber", "InvoiceDate", "Status", "TotalAmount", "Balance"],
-    "InvoiceLine": ["LineNumber", "ProductName", "Description", "Quantity", "UnitPrice", "Amount"],
-    "CreditNote": ["CreditNoteNumber", "CreditNoteDate", "Status", "TotalAmount", "Balance"],
-    "CreditNoteLine": ["LineNumber", "Description", "Quantity", "UnitPrice", "Amount"],
-    # Coda / FinancialForce (from your export)
+    "Account": ["Name", "Type", "Industry", "BillingCountry", "BillingCity", "Website"],
+    "Opportunity": [
+        "Name",
+        "StageName",
+        "CloseDate",
+        "Amount",
+        "CurrencyIsoCode",
+        "AccountId",
+        "AccountName",
+    ],
+    "Contact": ["Name", "FirstName", "LastName", "Email", "Phone", "AccountId"],
+    "Case": ["CaseNumber", "Subject", "Status", "Priority", "AccountId", "ContactId"],
+    "ContentDocumentLink": ["ContentDocumentId", "LinkedEntityId", "ShareType", "Visibility"],
+    "ContentVersion": ["Title", "FileExtension", "ContentSize", "VersionNumber", "CreatedDate"],
+    "Attachment": ["Name", "ContentType", "BodyLength", "ParentId", "CreatedDate"],
+    # Common Finance / FFA-ish
     "c2g__codaInvoice__c": [
         "Name",
-        "CurrencyIsoCode",
         "c2g__InvoiceDate__c",
-        "c2g__DueDate__c",
         "c2g__InvoiceStatus__c",
-        "c2g__PaymentStatus__c",
         "c2g__InvoiceTotal__c",
         "c2g__OutstandingValue__c",
-        "c2g__TaxTotal__c",
-        "Days_Overdue__c",
-        "c2g__AccountName__c",
-        "c2g__CompanyReference__c",
+        "CurrencyIsoCode",
     ],
-    "c2g__codaInvoiceLineItem__c": [
-        "c2g__LineNumber__c",
-        "c2g__LineDescription__c",
-        "c2g__Quantity__c",
-        "c2g__UnitPrice__c",
-        "c2g__NetValue__c",
-        "c2g__TaxValueTotal__c",
-        "c2g__ProductCode__c",
-        "c2g__ProductReference__c",
+    "fferpcore__BillingDocument__c": [
+        "Name",
+        "fferpcore__InvoiceDate__c",
+        "fferpcore__Status__c",
+        "fferpcore__Total__c",
+        "fferpcore__Outstanding__c",
+        "CurrencyIsoCode",
     ],
-    "OpportunityLineItem": ["Quantity", "UnitPrice", "TotalPrice", "Description"],
 }
 
 
+# Common “good to show if present” for any object
+GENERIC_PREFERRED: list[str] = [
+    "Name",
+    "Subject",
+    "Title",
+    "DocumentTitle",
+    "StageName",
+    "Status",
+    "CloseDate",
+    "Amount",
+    "TotalAmount",
+    "Balance",
+    "CurrencyIsoCode",
+    "CreatedDate",
+    "LastModifiedDate",
+]
+
+
 def get_important_fields(api_name: str) -> list[str]:
-    """Return configured 'important' fields for this object, if any."""
-    return IMPORTANT_FIELDS.get(api_name, [])
+    """Return a small ordered list of fields that are typically meaningful for this object."""
+    return IMPORTANT_FIELDS.get(api_name, []).copy()
 
 
-def _drop_id_column(cols: list[str], *, show_ids: bool) -> list[str]:
-    if show_ids:
-        return cols
-    return [c for c in cols if c != "Id"]
+def _stable_unique(seq: Iterable[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for s in seq:
+        if s and s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
 
 
 def select_display_columns(
-    api_name: str, df: Any, show_all: bool, *, show_ids: bool = False
+    api_name: str,
+    df: "pd.DataFrame",
+    show_all_fields: bool,
+    *,
+    show_ids: bool = False,
+    max_cols: int = 25,
 ) -> list[str]:
     """
-    Decide which columns to show for a given object + DataFrame.
+    Decide which columns to show in a relationship table.
 
-    - If show_all: return all columns (except Id unless show_ids=True).
-    - Else: use IMPORTANT_FIELDS if present.
-    - Else: fall back to a simple heuristic.
+    Rules:
+      - if show_all_fields: show everything (but keep Id optional)
+      - else: show important fields + a few generic preferred + Id optional
+      - preserve original df column ordering where possible
     """
-    cols = list(getattr(df, "columns", []))
+    cols = list(df.columns)
 
-    if show_all:
-        out = cols
-        out = _drop_id_column(out, show_ids=show_ids)
-        return out
+    if show_all_fields:
+        if show_ids:
+            return cols
+        return [c for c in cols if c != "Id"]
 
     important = get_important_fields(api_name)
-    out: list[str] = [c for c in important if c in cols]
+    wanted = _stable_unique(important + GENERIC_PREFERRED)
 
-    if not out:
-        # Generic heuristic
-        for c in ("Name",):
-            if c in cols and c not in out:
-                out.append(c)
-        for c in ("Type", "StageName", "CloseDate", "Amount", "Email", "Title", "Phone"):
-            if c in cols and c not in out:
-                out.append(c)
+    # Add Id at end if requested and present
+    if show_ids and "Id" in cols and "Id" not in wanted:
+        wanted.append("Id")
 
-    out = _drop_id_column(out, show_ids=show_ids)
+    # Filter to those actually present, preserving the df order
+    present = set(cols)
+    ordered = [c for c in cols if c in wanted and c in present]
 
-    if not out:
-        # Fallback: first few columns, still respecting hide-Id default
-        out = _drop_id_column(cols, show_ids=show_ids)[:5]
+    # If we got nothing, fall back to "everything but maybe Id"
+    if not ordered:
+        ordered = cols if show_ids else [c for c in cols if c != "Id"]
 
-    return out
+    # Cap for usability
+    if len(ordered) > max_cols:
+        ordered = ordered[:max_cols]
+
+    return ordered

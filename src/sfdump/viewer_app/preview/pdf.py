@@ -1,52 +1,58 @@
 from __future__ import annotations
 
 import base64
+import uuid
 
 import streamlit as st
 import streamlit.components.v1 as components
 
-# Data-URL embedding can silently fail for large files in some browsers.
-# Keep this conservative; you can bump later if it works well for you.
-_MAX_INLINE_BYTES = 6_000_000  # ~6 MB
 
-
-def preview_pdf_bytes(data: bytes, *, height: int = 900) -> None:
+def preview_pdf_bytes(data: bytes, *, height: int = 900, filename: str = "document.pdf") -> None:
     """
-    Inline PDF preview.
+    Preview PDF bytes in the Streamlit app.
 
-    Strategy:
-      - Always provide a download button.
-      - For "small enough" PDFs, embed via iframe(data: URL) + provide an "Open in tab" link.
-      - For large PDFs, skip inline (common to show a blank/white frame) and tell the user.
+    Some browsers refuse to render PDFs inside iframes when src is a data: URL,
+    resulting in a blank white frame. Using a blob: URL is far more reliable.
     """
     if not data:
         st.warning("No PDF data to preview.")
         return
 
-    # Always provide a reliable fallback
+    # Always keep a download fallback
     st.download_button(
         "Download PDF",
         data=data,
-        file_name="document.pdf",
+        file_name=filename,
         mime="application/pdf",
-        key=f"download_pdf_{len(data)}",
+        key=f"dl_pdf_{uuid.uuid4().hex}",
     )
 
-    if len(data) > _MAX_INLINE_BYTES:
-        st.info(
-            f"PDF is {len(data) / 1_000_000:.1f}MB; skipping inline preview (often fails/blank in browsers). "
-            "Use Download/Open locally."
-        )
-        return
-
+    # "Open in new tab" fallback via data URL
     b64 = base64.b64encode(data).decode("ascii")
-    data_url = f"data:application/pdf;base64,{b64}"
+    st.markdown(f"[Open PDF in a new tab](data:application/pdf;base64,{b64})")
 
-    # 1) Try Streamlit's iframe helper (often more reliable)
-    try:
-        components.iframe(data_url, height=int(height), scrolling=True)
-    except Exception as exc:  # noqa: BLE001
-        st.warning(f"Inline iframe preview failed: {exc}")
+    # Inline render via blob URL
+    host_id = f"pdf_{uuid.uuid4().hex}"
+    components.html(
+        f"""
+        <div id="{host_id}" style="width: 100%; height: {int(height)}px;"></div>
+        <script>
+        (function() {{
+          const bytes = Uint8Array.from(atob("{b64}"), c => c.charCodeAt(0));
+          const blob = new Blob([bytes], {{ type: "application/pdf" }});
+          const url = URL.createObjectURL(blob);
 
-    # 2) Offer "open in browser tab" – sometimes works even when iframe is blank
-    st.markdown(f"[Open PDF in a new tab]({data_url})")
+          const el = document.getElementById("{host_id}");
+          el.innerHTML = `
+            <iframe
+              src="${{url}}"
+              width="100%"
+              height="{int(height)}"
+              style="border: 1px solid #ddd; border-radius: 6px;"
+            ></iframe>
+          `;
+        }})();
+        </script>
+        """,
+        height=int(height) + 20,
+    )
