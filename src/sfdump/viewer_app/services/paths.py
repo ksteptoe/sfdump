@@ -1,43 +1,24 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 
-def infer_export_root(db_path: Path) -> Optional[Path]:
+def infer_export_root(db_path: Path) -> Path:
     """
-    Given .../exports/export-YYYY-MM-DD/meta/sfdata.db, return .../exports/export-YYYY-MM-DD
+    Given <export_root>/meta/sfdata.db, return <export_root>.
+    Fallback to parent if the structure is unexpected.
     """
     p = Path(db_path)
-    if not p.exists():
-        # still try to infer by shape
-        pass
-
-    # Most common: export_root/meta/sfdata.db
-    if p.name.lower() == "sfdata.db" and p.parent.name.lower() == "meta":
+    if p.name.lower().endswith(".db") and p.parent.name.lower() == "meta":
         return p.parent.parent
-
-    # Fallback: if someone passed the meta dir, etc.
-    if p.is_dir() and p.name.lower() == "meta":
-        return p.parent
-
-    return None
+    return p.parent
 
 
-def resolve_export_path(export_root: Path, rel_path: str | Path) -> Path:
+def resolve_export_path(export_root: Path, local_path: str) -> Path:
     """
-    Resolve a (possibly Windows-backslash) relative path against export_root.
-    If rel_path is already absolute, return it as a Path.
+    Resolve a relative path from the export root.
+
+    Handles both Windows-style backslashes and forward slashes.
     """
-    if isinstance(rel_path, Path):
-        rp = rel_path
-    else:
-        rp = Path(str(rel_path).strip().replace("\\", "/"))
-
-    if not str(rp):
-        return Path("")
-
-    if rp.is_absolute():
-        return rp
-
-    return Path(export_root) / rp
+    lp = (local_path or "").replace("\\", "/").lstrip("/")
+    return (Path(export_root) / lp).resolve()

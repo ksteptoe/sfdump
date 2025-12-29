@@ -1,69 +1,115 @@
 from __future__ import annotations
 
-import pandas as pd
+from typing import Any, Dict, List, Sequence
 
-# Per-object “good defaults” for list/preview display.
-IMPORTANT_FIELDS: dict[str, list[str]] = {
-    "Account": ["Name", "Type", "BillingCountry"],
-    "Opportunity": ["Name", "StageName", "Amount", "CloseDate"],
-    "OpportunityLineItem": ["Name", "Quantity", "UnitPrice", "TotalPrice"],
-    "Contact": ["Name", "Email", "Phone", "Title"],
-    "c2g__codaInvoice__c": [
-        "Name",
-        "c2g__InvoiceNumber__c",
-        "c2g__Account__c",
-        "c2g__InvoiceDate__c",
-    ],
-    "c2g__codaInvoiceLineItem__c": ["Name", "c2g__NetValue__c", "c2g__Product__c"],
-}
+try:
+    import pandas as pd  # type: ignore
+except Exception:  # pragma: no cover
+    pd = None  # type: ignore
 
 
-COMMON_LABEL_FIELDS = ["Name", "Subject", "Title", "DocumentTitle"]
-
-
-def get_important_fields(api_name: str) -> list[str]:
-    return IMPORTANT_FIELDS.get(api_name, []).copy()
-
-
-def select_display_columns(api_name: str, df: pd.DataFrame, show_all_fields: bool) -> list[str]:
+def get_important_fields(api_name: str) -> List[str]:
     """
-    Decide which columns to show for a record DataFrame in the UI.
+    Fields to prefer when building labels / compact displays.
+    Keep conservative: only include fields that tend to exist.
     """
-    if df is None or df.empty:
+    base = ["Name", "Subject", "Title", "DocumentTitle"]
+    extra: Dict[str, List[str]] = {
+        "Opportunity": ["StageName", "Amount", "CloseDate"],
+        "Account": ["BillingCountry", "BillingCity"],
+        "Contact": ["Email"],
+    }
+    return extra.get(api_name, []) + base
+
+
+def _cols_from_any(data: Any) -> List[str]:
+    # pandas DataFrame
+    if pd is not None:
+        try:
+            if isinstance(data, pd.DataFrame):
+                return [str(c) for c in list(data.columns)]
+        except Exception:
+            pass
+
+    # list[dict]
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        return [str(c) for c in list(data[0].keys())]
+
+    # generic
+    return []
+
+
+def _default_cols(cols: Sequence[str], *, show_all_fields: bool, show_ids: bool) -> List[str]:
+    cols = list(cols)
+    if not cols:
         return []
 
-    cols = list(df.columns)
+    # Id-ish fields
+    id_cols = [c for c in cols if c.lower() == "id" or c.lower().endswith("id")]
+    non_id = [c for c in cols if c not in id_cols]
+
+    if not show_ids:
+        non_id = [c for c in non_id if not (c.lower() == "id" or c.lower().endswith("id"))]
+        id_cols = []
 
     if show_all_fields:
-        return cols
+        return id_cols + non_id
 
-    wanted: list[str] = []
+    preferred = [
+        "Name",
+        "Title",
+        "Subject",
+        "StageName",
+        "Amount",
+        "CloseDate",
+        "Email",
+        "CreatedDate",
+    ]
+    chosen: List[str] = []
 
-    # Always prefer Id if present (but not necessarily show it first)
-    if "Id" in cols:
-        wanted.append("Id")
+    if show_ids and "Id" in cols:
+        chosen.append("Id")
 
-    # Important fields first
-    for c in get_important_fields(api_name):
-        if c in cols and c not in wanted:
-            wanted.append(c)
+    for c in preferred:
+        if c in cols and c not in chosen:
+            chosen.append(c)
 
-    # Then common label-ish fields
-    for c in COMMON_LABEL_FIELDS:
-        if c in cols and c not in wanted:
-            wanted.append(c)
+    # Fallback: first N cols (after Id handling)
+    if not chosen:
+        chosen = (id_cols + non_id)[:12]
 
-    # Then a few time-ish fields
-    for c in ["CreatedDate", "LastModifiedDate"]:
-        if c in cols and c not in wanted:
-            wanted.append(c)
+    return chosen
 
-    # If we still have almost nothing, just take the first N columns
-    if len(wanted) < 3:
-        for c in cols:
-            if c not in wanted:
-                wanted.append(c)
-            if len(wanted) >= 12:
-                break
 
-    return wanted
+def select_display_columns(*args: Any, **kwargs: Any) -> List[str]:
+    """
+    Backwards-compatible helper.
+
+    Supports BOTH call shapes:
+
+      1) OLD (used by db_app.py):
+         select_display_columns(api_name: str, df_or_rows, show_all_fields: bool)
+
+      2) NEW:
+         select_display_columns(rows_or_df, show_all_fields=..., show_ids=...)
+
+    Returns a list of column names to display.
+    """
+    show_ids = bool(kwargs.get("show_ids", False))
+
+    # OLD signature: (api_name, data, show_all_fields)
+    if len(args) >= 3 and isinstance(args[0], str) and isinstance(args[2], (bool, int)):
+        _api_name = args[0]  # unused currently but kept for compatibility
+        data = args[1]
+        show_all_fields = bool(args[2])
+        cols = _cols_from_any(data)
+        return _default_cols(cols, show_all_fields=show_all_fields, show_ids=show_ids)
+
+    # NEW signature: (data, *, show_all_fields=..., show_ids=...)
+    if len(args) >= 1:
+        data = args[0]
+        show_all_fields = bool(kwargs.get("show_all_fields", False))
+        cols = _cols_from_any(data)
+        return _default_cols(cols, show_all_fields=show_all_fields, show_ids=show_ids)
+
+    return []
