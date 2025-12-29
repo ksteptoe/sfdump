@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
 import streamlit as st
 
-NAV_STATE_KEY = "sfdump_nav_stack"
+_NAV_KEY = "_sfdump_nav_stack"
 
 
 @dataclass(frozen=True)
@@ -15,65 +15,35 @@ class NavItem:
     label: str = ""
 
 
-def _stack() -> List[NavItem]:
-    if NAV_STATE_KEY not in st.session_state:
-        st.session_state[NAV_STATE_KEY] = []
-    return st.session_state[NAV_STATE_KEY]
+def _stack() -> list[NavItem]:
+    if _NAV_KEY not in st.session_state:
+        st.session_state[_NAV_KEY] = []
+    return st.session_state[_NAV_KEY]
 
 
-def push(api_name: str, record_id: str, *, label: str = "") -> None:
-    """Push a record onto the navigation stack."""
-    if not api_name or not record_id:
-        return
-    _stack().append(NavItem(api_name=api_name, record_id=record_id, label=label))
+def reset() -> None:
+    st.session_state[_NAV_KEY] = []
+
+
+def push(api_name: str, record_id: str, label: Optional[str] = None) -> None:
+    s = _stack()
+    s.append(NavItem(api_name=api_name, record_id=record_id, label=label or ""))
 
 
 def pop() -> Optional[NavItem]:
-    """Pop the current record (if any) and return it."""
     s = _stack()
     if not s:
         return None
     return s.pop()
 
 
-def clear() -> None:
-    """Clear the navigation stack."""
-    st.session_state[NAV_STATE_KEY] = []
-
-
-def current() -> Optional[NavItem]:
-    """Return the current record (top of stack) if any."""
+def peek() -> Optional[NavItem]:
     s = _stack()
     return s[-1] if s else None
 
 
-def breadcrumbs() -> str:
-    """Human readable breadcrumb string."""
+def breadcrumbs(max_items: int = 6) -> list[NavItem]:
     s = _stack()
-    if not s:
-        return ""
-    parts = []
-    for it in s:
-        lab = it.label or it.record_id
-        parts.append(f"{it.api_name}:{lab}")
-    return "  →  ".join(parts)
-
-
-def nav_sidebar() -> None:
-    """
-    Optional: render a sidebar navigation control.
-    Doesn't change state automatically (except back/clear buttons).
-    """
-    st.sidebar.subheader("Navigation")
-    bc = breadcrumbs()
-    if bc:
-        st.sidebar.caption(bc)
-    cols = st.sidebar.columns([1, 1])
-    with cols[0]:
-        if st.button("Back", key="nav_back", disabled=(len(_stack()) <= 1)):
-            pop()
-            st.rerun()
-    with cols[1]:
-        if st.button("Clear", key="nav_clear", disabled=(len(_stack()) == 0)):
-            clear()
-            st.rerun()
+    if len(s) <= max_items:
+        return s[:]
+    return s[-max_items:]

@@ -6,34 +6,38 @@ from typing import Optional
 
 def infer_export_root(db_path: Path) -> Optional[Path]:
     """
-    Infer EXPORT_ROOT from a DB path that looks like:
-      EXPORT_ROOT/meta/sfdata.db
-
-    Returns EXPORT_ROOT or None if it can't infer safely.
+    Given .../exports/export-YYYY-MM-DD/meta/sfdata.db, return .../exports/export-YYYY-MM-DD
     """
-    p = Path(db_path).expanduser().resolve()
-    # Expect .../<export_root>/meta/sfdata.db
-    if p.name.lower() != "sfdata.db":
-        return None
-    if p.parent.name.lower() != "meta":
-        return None
-    export_root = p.parent.parent
-    return export_root if export_root.exists() else None
+    p = Path(db_path)
+    if not p.exists():
+        # still try to infer by shape
+        pass
 
+    # Most common: export_root/meta/sfdata.db
+    if p.name.lower() == "sfdata.db" and p.parent.name.lower() == "meta":
+        return p.parent.parent
 
-def safe_relpath(path: Path, start: Path) -> str:
-    """
-    Return a POSIX-ish relative path if possible, else absolute POSIX path.
-    """
-    try:
-        rel = path.resolve().relative_to(start.resolve())
-        return rel.as_posix()
-    except Exception:
-        return path.resolve().as_posix()
+    # Fallback: if someone passed the meta dir, etc.
+    if p.is_dir() and p.name.lower() == "meta":
+        return p.parent
+
+    return None
 
 
-def to_posix_relpath(p: str) -> str:
+def resolve_export_path(export_root: Path, rel_path: str | Path) -> Path:
     """
-    Normalize a relative path string to POSIX style for consistent display.
+    Resolve a (possibly Windows-backslash) relative path against export_root.
+    If rel_path is already absolute, return it as a Path.
     """
-    return p.replace("\\", "/")
+    if isinstance(rel_path, Path):
+        rp = rel_path
+    else:
+        rp = Path(str(rel_path).strip().replace("\\", "/"))
+
+    if not str(rp):
+        return Path("")
+
+    if rp.is_absolute():
+        return rp
+
+    return Path(export_root) / rp

@@ -91,3 +91,4 @@ docs/_generated/
 *.coverage_target
 *.tar
 *.gz
+/viewer-snapshot.tgz

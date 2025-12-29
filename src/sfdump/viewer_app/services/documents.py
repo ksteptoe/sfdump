@@ -1,140 +1,133 @@
 from __future__ import annotations
 
 import sqlite3
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
 
+import pandas as pd
 
-def list_record_documents(db_path: Path, object_type: str, record_id: str) -> list[dict[str, Any]]:
-    """
-    Return documents for a given (object_type, record_id) from the viewer DB table `record_documents`.
+from sfdump.viewer_app.services.paths import resolve_export_path
 
-    Expected columns (from your build-db/docs-index pipeline):
-      object_type, record_id, record_name,
-      file_source, file_id, file_link_id,
-      file_name, file_extension,
-      path, content_type, size_bytes, sha256
+
+def _table_cols(cur: sqlite3.Cursor, table: str) -> list[str]:
+    cur.execute(f'PRAGMA table_info("{table}")')
+    return [r[1] for r in cur.fetchall()]
+
+
+def _pick_col(cols: list[str], candidates: list[str]) -> Optional[str]:
+    low = {c.lower(): c for c in cols}
+    for cand in candidates:
+        if cand in cols:
+            return cand
+        if cand.lower() in low:
+            return low[cand.lower()]
+    return None
+
+
+def list_record_documents(
+    *,
+    db_path: Path,
+    record_id: str,
+    object_type: Optional[str] = None,
+    api_name: Optional[str] = None,
+    record_api: Optional[str] = None,
+    limit: int = 1000,
+) -> list[dict[str, Any]]:
     """
+    Query the SQLite table "record_documents" for a given record.
+    Works even if your schema uses object_type vs record_api, etc.
+    """
+    effective_api = object_type or api_name or record_api
+
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
         cur = conn.cursor()
+        # Ensure table exists
         cur.execute(
-            """
-            SELECT
-              object_type, record_id, record_name,
-              file_source, file_id, file_link_id,
-              file_name, file_extension,
-              path, content_type, size_bytes, sha256
-            FROM record_documents
-            WHERE object_type = ? AND record_id = ?
-            ORDER BY lower(file_extension), file_name
-            """,
-            (object_type, record_id),
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            ("record_documents",),
         )
+        if cur.fetchone() is None:
+            return []
+
+        cols = _table_cols(cur, "record_documents")
+        rec_id_col = _pick_col(
+            cols, ["record_id", "RecordId", "linked_entity_id", "LinkedEntityId"]
+        )
+        obj_col = _pick_col(cols, ["object_type", "record_api", "record_type", "api_name"])
+
+        if rec_id_col is None:
+            # can't filter sanely
+            sql = 'SELECT * FROM "record_documents" LIMIT ?'
+            cur.execute(sql, (int(limit),))
+            return [dict(r) for r in cur.fetchall()]
+
+        where = [f'"{rec_id_col}" = ?']
+        params: list[Any] = [record_id]
+
+        if effective_api and obj_col:
+            where.append(f'"{obj_col}" = ?')
+            params.append(effective_api)
+
+        sql = f'SELECT * FROM "record_documents" WHERE {" AND ".join(where)} LIMIT ?'
+        params.append(int(limit))
+        cur.execute(sql, params)
         return [dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
 
 
-def load_master_documents_index(export_root: Path):
+def load_master_documents_index(export_root: Path) -> Optional[pd.DataFrame]:
     """
-    Load meta/master_documents_index.csv (built by `sfdump docs-index`).
-    Returns pandas.DataFrame or None if pandas is unavailable or file missing/unreadable.
+    Load export_root/meta/master_documents_index.csv and normalize columns
+    so db_app can rely on:
+      record_id, object_type, record_name, file_name, file_extension, file_source, local_path
     """
-    try:
-        import pandas as pd  # type: ignore[import-not-found]
-    except Exception:
+    export_root = Path(export_root)
+    p = export_root / "meta" / "master_documents_index.csv"
+    if not p.exists():
         return None
 
-    path = export_root / "meta" / "master_documents_index.csv"
-    if not path.exists():
+    df = pd.read_csv(p, dtype=str).fillna("")
+
+    # Column normalization (case-insensitive)
+    cols_l = {c.lower(): c for c in df.columns}
+
+    def col(*names: str) -> Optional[str]:
+        for n in names:
+            if n in df.columns:
+                return n
+            if n.lower() in cols_l:
+                return cols_l[n.lower()]
         return None
 
-    try:
-        return pd.read_csv(path, dtype=str).fillna("")
-    except Exception:
-        return None
+    record_id_c = col("record_id", "RecordId", "LinkedEntityId", "linked_entity_id")
+    object_c = col("object_type", "ObjectType", "record_api", "api_name", "RecordType")
+    record_name_c = col("record_name", "RecordName", "parent_name", "ParentName", "name")
+    file_name_c = col("file_name", "FileName", "title", "Title", "DocumentTitle", "document_title")
+    ext_c = col("file_extension", "FileExtension", "ext", "Extension")
+    src_c = col("file_source", "FileSource", "source", "Source")
+    path_c = col("local_path", "LocalPath", "path", "Path", "rel_path", "RelPath", "relative_path")
 
+    out = pd.DataFrame()
+    out["record_id"] = df[record_id_c] if record_id_c else ""
+    out["object_type"] = df[object_c] if object_c else ""
+    out["record_name"] = df[record_name_c] if record_name_c else ""
+    out["file_name"] = df[file_name_c] if file_name_c else ""
+    out["file_extension"] = df[ext_c] if ext_c else ""
+    out["file_source"] = df[src_c] if src_c else ""
+    out["local_path"] = df[path_c] if path_c else ""
 
-def enrich_documents_with_local_path(
-    export_root: Path, docs: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    """
-    Fill missing doc local paths by looking up meta/master_documents_index.csv.
-
-    Some DB rows (record_documents) can have blank path/local_path even if the file was
-    downloaded later. This function enriches those rows from the master index.
-    """
-    if not docs:
-        return docs
-
-    df = load_master_documents_index(export_root)
-    if df is None or df.empty:
-        return docs
-
-    # The index may contain either local_path or path
-    path_col = (
-        "local_path" if "local_path" in df.columns else ("path" if "path" in df.columns else "")
-    )
-    if not path_col or "file_id" not in df.columns:
-        return docs
-
-    # Map file_id -> local path (first non-empty wins)
-    subset = df[["file_id", path_col]].copy()
-    subset = subset[(subset["file_id"].astype(str) != "") & (subset[path_col].astype(str) != "")]
-    id_to_path: dict[str, str] = {}
-    for fid, lp in zip(subset["file_id"].astype(str), subset[path_col].astype(str), strict=False):
-        if fid and lp and fid not in id_to_path:
-            id_to_path[fid] = lp
-
-    if not id_to_path:
-        return docs
-
-    out: list[dict[str, Any]] = []
-    for d in docs:
-        dd = dict(d)
-        fid = str(dd.get("file_id") or "").strip()
-
-        has_path = bool(str(dd.get("path") or "").strip())
-        has_local = bool(str(dd.get("local_path") or "").strip())
-
-        if fid and (not has_path and not has_local):
-            lp = id_to_path.get(fid, "")
-            if lp:
-                # viewer uses 'path' when opening; keep both for clarity
-                dd["local_path"] = lp
-                dd["path"] = lp
-
-        out.append(dd)
+    # If local_path looks like an absolute path, keep it. If it's relative, keep relative.
+    # (db_app will resolve it via resolve_export_path)
+    out = out.fillna("")
 
     return out
 
 
-@lru_cache(maxsize=8192)
-def resolve_local_path(export_root: Path, file_id: str) -> Optional[str]:
+def resolve_document_path(export_root: Path, local_path: str) -> Path:
     """
-    Best-effort: locate an already-downloaded Salesforce File blob on disk.
-
-    Returns a POSIX-style path relative to export_root (e.g. "files/06/<id>_name.pdf"),
-    or None if not found.
+    Convenience for turning a docs index local_path into a full filesystem path.
     """
-    if not file_id:
-        return None
-
-    for folder in ("files", "files_legacy"):
-        root = export_root / folder
-        if not root.exists():
-            continue
-
-        # downloader convention: <id>_<filename> under a sharded folder
-        matches = sorted(root.glob(f"**/{file_id}_*"))
-        if matches:
-            try:
-                rel = matches[0].relative_to(export_root)
-                return rel.as_posix()
-            except Exception:
-                return matches[0].as_posix()
-
-    return None
+    return resolve_export_path(Path(export_root), local_path)

@@ -7,51 +7,88 @@ from pathlib import Path
 
 import streamlit as st
 
-from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
+from .pdf import render_pdf_path
 
 
 def open_local_file(path: Path) -> None:
-    """Open a file on the machine running Streamlit."""
-    if sys.platform.startswith("win"):
-        os.startfile(str(path))  # type: ignore[attr-defined]
-    elif sys.platform == "darwin":
-        subprocess.Popen(["open", str(path)])
-    else:
-        subprocess.Popen(["xdg-open", str(path)])
-
-
-def preview_file(export_root: Path, local_path: str) -> None:
     """
-    Preview PDFs inline; otherwise offer a download button.
-
-    local_path must be relative to export_root, e.g. files/... or files_legacy/...
+    Best-effort "open in default app".
+    Windows: os.startfile
+    macOS: open
+    Linux: xdg-open
     """
-    # Accept accidental absolute paths but prefer relative-to-export-root.
-    p = Path(local_path)
-    if not p.is_absolute():
-        p = (export_root / local_path).resolve()
-
+    p = Path(path)
     if not p.exists():
         st.error(f"File not found: {p}")
         return
 
-    # Convenient "open locally" for desktop usage (optional)
-    cols = st.columns([1, 1, 6])
-    with cols[0]:
-        if st.button("Open locally", key=f"open_local_{p.as_posix()}"):
-            open_local_file(p)
-    with cols[1]:
-        st.download_button(
-            "Download",
-            data=p.read_bytes(),
-            file_name=p.name,
-            key=f"download_{p.as_posix()}",
-        )
+    try:
+        if os.name == "nt":
+            os.startfile(str(p))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.run(["open", str(p)], check=False)
+        else:
+            subprocess.run(["xdg-open", str(p)], check=False)
+    except Exception as e:
+        st.error(f"Could not open file: {p}\n\n{e}")
 
-    # Inline PDF preview
-    if p.suffix.lower() == ".pdf":
-        data = p.read_bytes()
-        preview_pdf_bytes(data, height=900, filename=p.name)
+
+def _render_text_preview(path: Path, *, max_chars: int = 50_000) -> None:
+    try:
+        txt = path.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        st.error(f"Failed reading text: {path}\n\n{e}")
         return
 
-    st.info("Inline preview is available for PDFs. Use Download/Open for other file types.")
+    if len(txt) > max_chars:
+        txt = txt[:max_chars] + "\n\n…(truncated)…"
+    st.code(txt)
+
+
+def preview_file(path: Path, *, label: str = "", height: int = 900) -> None:
+    """
+    Render a preview for common file types. Always provides a download fallback.
+    """
+    p = Path(path)
+
+    if label:
+        st.subheader(label)
+
+    if not p.exists():
+        st.warning(f"Preview unavailable (missing file): {p}")
+        return
+
+    # Always provide "open locally" + download
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        if st.button("Open locally", key=f"open_{p.name}"):
+            open_local_file(p)
+    with col_b:
+        try:
+            data = p.read_bytes()
+            st.download_button(
+                "Download",
+                data=data,
+                file_name=p.name,
+                key=f"dl_{p.name}",
+            )
+        except Exception:
+            # If we can’t read bytes, still allow preview attempts below if possible
+            pass
+
+    ext = p.suffix.lower().lstrip(".")
+
+    if ext == "pdf":
+        render_pdf_path(p, height=height)
+        return
+
+    if ext in {"png", "jpg", "jpeg", "gif", "webp"}:
+        st.image(str(p), use_container_width=True)
+        return
+
+    if ext in {"txt", "md", "csv", "log", "json", "yaml", "yml"}:
+        _render_text_preview(p)
+        return
+
+    # Not previewable types (docx/msg/xlsx/etc.)
+    st.info(f"No inline preview available for .{ext}. Use **Open locally** or **Download**.")
