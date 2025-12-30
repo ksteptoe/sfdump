@@ -9,7 +9,7 @@ from typing import Any, Optional
 import streamlit as st
 
 from sfdump.viewer_app.services.display import get_important_fields
-from sfdump.viewer_app.services.nav import breadcrumbs, peek, pop, push, reset
+from sfdump.viewer_app.services.nav import breadcrumbs, goto, peek, pop, reset
 
 
 @dataclass
@@ -116,7 +116,7 @@ def render_sidebar(
         for i, item in enumerate(bc):
             label = item.label or item.record_id
             if st.sidebar.button(f"{item.api_name}: {label}", key=f"nav_jump_{i}"):
-                push(item.api_name, item.record_id, label=item.label)
+                goto(i)
                 st.rerun()
 
         cols = st.sidebar.columns(2)

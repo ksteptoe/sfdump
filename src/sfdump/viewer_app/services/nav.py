@@ -47,3 +47,17 @@ def breadcrumbs(max_items: int = 6) -> list[NavItem]:
     if len(s) <= max_items:
         return s[:]
     return s[-max_items:]
+
+
+def goto(index: int) -> Optional[NavItem]:
+    """
+    Jump to a breadcrumb position by truncating the stack to index+1.
+    Returns the new current item.
+    """
+    s = _stack()
+    if not s:
+        return None
+    if index < 0 or index >= len(s):
+        return peek()
+    st.session_state[_NAV_KEY] = s[: index + 1]
+    return peek()
