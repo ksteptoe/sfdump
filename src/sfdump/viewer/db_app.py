@@ -10,8 +10,7 @@ from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children
 from sfdump.viewer_app.preview.files import open_local_file, preview_file
 from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
-from sfdump.viewer_app.services.content import enrich_contentdocument_links_with_title
-from sfdump.viewer_app.services.display import get_important_fields, select_display_columns
+from sfdump.viewer_app.services.display import get_important_fields
 from sfdump.viewer_app.services.documents import list_record_documents, load_master_documents_index
 from sfdump.viewer_app.services.paths import (
     infer_export_root,
@@ -19,6 +18,7 @@ from sfdump.viewer_app.services.paths import (
 )
 from sfdump.viewer_app.services.traversal import collect_subtree_ids
 from sfdump.viewer_app.ui.main_parts import render_record_list, render_sidebar_controls
+from sfdump.viewer_app.ui.record_tabs import render_children_with_navigation
 
 
 def _export_root_from_db_path(db_path: Path) -> Optional[Path]:
@@ -80,6 +80,7 @@ def main() -> None:
     show_all_fields = state.show_all_fields
 
     col_left, col_right = st.columns([2, 3])
+
     with col_left:
         rows, selected_id = render_record_list(
             db_path=db_path,
@@ -136,36 +137,11 @@ def main() -> None:
                 st.table(parent_df)
 
         with tab_children:
-            if not record.children:
-                st.info("No child records found for this record.")
-            else:
-                for coll in record.children:
-                    child_obj = coll.sf_object
-                    rel = coll.relationship
-                    title = (
-                        f"{child_obj.api_name} via {rel.child_field} "
-                        f"(relationship: {rel.name}, {len(coll.records)} record(s))"
-                    )
-                    with st.expander(title, expanded=False):
-                        child_df = pd.DataFrame(coll.records)
-
-                        if child_df.empty:
-                            st.info("No rows.")
-                        else:
-                            if child_obj.api_name == "ContentDocumentLink":
-                                child_df = enrich_contentdocument_links_with_title(
-                                    db_path, child_df
-                                )
-
-                            display_cols = select_display_columns(
-                                child_obj.api_name, child_df, show_all_fields
-                            )
-                            st.dataframe(
-                                child_df[display_cols],
-                                width="stretch",
-                                hide_index=True,
-                                height=260,
-                            )
+            render_children_with_navigation(
+                record=record,
+                show_all_fields=show_all_fields,
+                show_ids=state.show_ids,
+            )
 
         with tab_docs:
             export_root = _export_root_from_db_path(db_path)

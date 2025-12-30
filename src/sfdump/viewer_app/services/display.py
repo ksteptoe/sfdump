@@ -4,8 +4,7 @@ from typing import Iterable
 
 import pandas as pd
 
-# A small, opinionated set of "important" fields for common objects.
-# Falls back to heuristics if object not present.
+# A small curated set per object. You can extend this over time.
 IMPORTANT_FIELDS: dict[str, list[str]] = {
     "Account": [
         "Name",
@@ -16,111 +15,90 @@ IMPORTANT_FIELDS: dict[str, list[str]] = {
         "Website",
         "Phone",
         "OwnerId",
-        "CreatedDate",
-        "LastModifiedDate",
-        "Id",
     ],
-    "Opportunity": [
+    "Opportunity": ["Name", "StageName", "Amount", "CloseDate", "AccountId", "OwnerId"],
+    "Contact": ["Name", "FirstName", "LastName", "Email", "Phone", "AccountId", "OwnerId"],
+    "Case": ["CaseNumber", "Subject", "Status", "Priority", "AccountId", "ContactId", "OwnerId"],
+    # Common FF / custom-ish:
+    "c2g__codaInvoice__c": [
         "Name",
-        "StageName",
-        "Amount",
-        "CloseDate",
-        "AccountId",
-        "OwnerId",
-        "Probability",
-        "CreatedDate",
-        "LastModifiedDate",
-        "Id",
+        "c2g__Account__c",
+        "c2g__InvoiceDate__c",
+        "c2g__DueDate__c",
+        "c2g__Total__c",
     ],
-    "Contact": [
+    "fferpcore__BillingDocument__c": [
         "Name",
-        "Email",
-        "Phone",
-        "AccountId",
-        "Title",
-        "OwnerId",
-        "CreatedDate",
-        "LastModifiedDate",
-        "Id",
+        "fferpcore__Account__c",
+        "fferpcore__Status__c",
+        "fferpcore__Total__c",
     ],
-    "ContentDocumentLink": [
-        "ContentDocumentId",
-        "LinkedEntityId",
-        "ShareType",
-        "Visibility",
-        "Id",
-    ],
+    "ContentDocumentLink": ["LinkedEntityId", "ContentDocumentId", "ShareType", "Visibility"],
 }
 
 
 def get_important_fields(api_name: str) -> list[str]:
     """
-    Return a preferred field order for an object.
+    Return the "important" field list for an object. If unknown, return [].
     """
-    return IMPORTANT_FIELDS.get(
-        api_name, ["Name", "Title", "Subject", "CreatedDate", "LastModifiedDate", "Id"]
-    )
+    return IMPORTANT_FIELDS.get(api_name, [])
 
 
-def _dedupe(seq: Iterable[str]) -> list[str]:
-    out: list[str] = []
-    seen: set[str] = set()
-    for s in seq:
-        if s and s not in seen:
-            out.append(s)
-            seen.add(s)
-    return out
+def _ensure_list(x: Iterable[str] | None) -> list[str]:
+    return list(x) if x else []
 
 
 def select_display_columns(
-    api_name: str | pd.DataFrame,
-    df: pd.DataFrame | None = None,
+    api_name: str,
+    df: pd.DataFrame,
     show_all_fields: bool = False,
     *,
-    max_cols: int = 14,
+    show_ids: bool = False,
 ) -> list[str]:
     """
-    Choose a reasonable subset of columns to display in child tables.
+    Decide which columns to show for a child dataframe / list view.
 
-    Supports two call styles:
-      - select_display_columns(api_name, df, show_all_fields)
-      - select_display_columns(df)  (back-compat)
+    Signature matches db_app usage:
+        select_display_columns(api_name, df, show_all_fields)
+
+    If show_all_fields is True: show everything (optionally hiding Id columns unless show_ids).
+    Otherwise: show important fields if present, falling back to common label columns.
     """
-    if isinstance(api_name, pd.DataFrame):
-        # back-compat: first arg was df
-        df = api_name
-        api = ""
-        # show_all = bool(df is not None and False)  # keep lint happy
-        # caller didn't supply show_all_fields in this mode
-        show_all_fields = False
-    else:
-        api = api_name
+    cols = _ensure_list(getattr(df, "columns", []))
 
-    if df is None or df.empty:
+    if not cols:
         return []
 
-    cols = list(df.columns)
-
     if show_all_fields:
-        return cols
+        if show_ids:
+            return cols
+        return [c for c in cols if c.lower() != "id" and not c.lower().endswith("id")]
 
-    preferred = get_important_fields(api)
+    important = [c for c in get_important_fields(api_name) if c in cols]
 
-    # Heuristics: keep Id-ish things and a couple of obvious labels
-    always = [c for c in cols if c.lower() in {"id", "name", "title", "subject"}]
-    preferred_present = [c for c in preferred if c in cols]
+    # Fallback label-ish columns
+    label_candidates = ["Name", "Subject", "Title", "DocumentTitle", "StageName", "Status"]
+    label_cols = [c for c in label_candidates if c in cols]
 
-    # plus: common foreign keys (AccountId, OpportunityId, etc.)
-    fk = [c for c in cols if c.endswith("Id") and c != "Id"]
+    # Always try to include Id for navigation (even if we hide it visually later)
+    base = []
+    if "Id" in cols:
+        base.append("Id")
 
-    chosen = _dedupe(always + preferred_present + fk)
+    chosen = base + important
+    for c in label_cols:
+        if c not in chosen:
+            chosen.append(c)
 
-    # If still too few, add remaining columns up to max_cols
-    if len(chosen) < min(max_cols, len(cols)):
-        for c in cols:
-            if c not in chosen:
-                chosen.append(c)
-            if len(chosen) >= max_cols:
-                break
+    # Keep it bounded but useful
+    chosen = chosen[:12] if len(chosen) > 12 else chosen
 
-    return chosen[:max_cols]
+    # If user doesn't want Id columns shown, drop them from the final display set
+    if not show_ids:
+        chosen = [c for c in chosen if c.lower() != "id" and not c.lower().endswith("id")]
+
+    # Guarantee we show something
+    if not chosen:
+        chosen = cols[:8]
+
+    return chosen

@@ -1,209 +1,194 @@
 from __future__ import annotations
 
-import mimetypes
 import sqlite3
 from pathlib import Path
 from typing import Any, Optional
 
+import pandas as pd
 
-def _table_exists(cur: sqlite3.Cursor, table: str) -> bool:
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
-    return cur.fetchone() is not None
+from sfdump.viewer_app.services.paths import resolve_export_path
 
 
 def _table_columns(cur: sqlite3.Cursor, table: str) -> list[str]:
     cur.execute(f'PRAGMA table_info("{table}")')
-    return [r[1] for r in cur.fetchall()]  # (cid, name, type, notnull, dflt_value, pk)
+    return [r[1] for r in cur.fetchall()]
 
 
-def _guess_mime(file_name: str) -> str:
-    mime, _ = mimetypes.guess_type(file_name)
-    return mime or "application/octet-stream"
+def _first_present(cols: list[str], candidates: list[str]) -> Optional[str]:
+    low = {c.lower(): c for c in cols}
+    for cand in candidates:
+        if cand.lower() in low:
+            return low[cand.lower()]
+    return None
 
 
 def list_record_documents(
     *,
     db_path: Path,
+    object_type: str,
     record_id: str,
-    object_type: Optional[str] = None,
-    record_api: Optional[str] = None,
     limit: int = 500,
 ) -> list[dict[str, Any]]:
     """
-    Return per-record documents from the SQLite `record_documents` table.
+    Return document rows for a given record.
 
-    This function is deliberately schema-flexible because you’ve had at least
-    two layouts in-flight:
+    The underlying DB schema has changed across versions; we detect columns at runtime.
 
-    Newer CSV header you pasted:
-      file_source,file_name,file_extension,local_path,object_type,record_name,record_id,...
-
-    Older layout (previous iterations):
-      file_source,file_id,file_name,file_extension,path,content_type,record_api,record_id,...
-
-    We normalize output so callers can rely on:
-      - file_name
-      - file_extension
-      - file_source
-      - record_id
-      - object_type (if present)
-      - local_path (if present)
-      - path (alias: whichever local-ish path column exists)
-      - content_type (best-effort)
+    Returns list of dict rows, with at least:
+      - path (best-effort local file path column)
+      - file_name / file_extension / content_type when present
     """
-    rid = (record_id or "").strip()
-    if not rid:
+    db_path = Path(db_path)
+    if not db_path.exists():
         return []
-
-    effective_api = (object_type or record_api or "").strip()
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
         cur = conn.cursor()
-        if not _table_exists(cur, "record_documents"):
+
+        # Ensure table exists
+        cur.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            ("record_documents",),
+        )
+        if cur.fetchone() is None:
             return []
 
         cols = _table_columns(cur, "record_documents")
 
-        # Which columns identify the owning record?
-        api_col = None
-        if "object_type" in cols:
-            api_col = "object_type"
-        elif "record_api" in cols:
-            api_col = "record_api"
+        # Column candidates across versions
+        api_col = _first_present(cols, ["object_type", "record_api", "record_type", "api_name"])
+        rid_col = _first_present(cols, ["record_id", "linked_record_id", "parent_id", "entity_id"])
+        path_col = _first_present(
+            cols, ["path", "local_path", "file_path", "attachment_path", "content_path"]
+        )
 
-        # Which column contains the local file path?
-        path_col = None
-        for c in ("local_path", "path", "attachment_path", "content_path"):
-            if c in cols:
-                path_col = c
-                break
+        # If we can't filter in SQL, we’ll fetch and filter in Python.
+        select_cols = cols[:]  # select all; table is typically not huge
+        select_sql = ", ".join([f'"{c}"' for c in select_cols])
 
-        # Build SELECT list (keep it small but useful)
-        wanted = [
-            "file_source",
-            "file_id",
-            "file_link_id",
-            "file_name",
-            "file_extension",
-            "content_type",
-            "record_id",
-            "record_name",
-            "account_id",
-            "account_name",
-            "opp_id",
-            "opp_name",
-            "opp_stage",
-            "opp_amount",
-            "opp_close_date",
-            "content_document_id",
-            "attachment_id",
-            "index_source_file",
-        ]
-        if api_col:
-            wanted.append(api_col)
-        if path_col:
-            wanted.append(path_col)
-
-        select_cols = [c for c in wanted if c in cols]
-        if not select_cols:
-            # fallback: select everything (worst-case)
-            select_sql = "*"
+        if api_col and rid_col:
+            sql = (
+                f'SELECT {select_sql} FROM "record_documents" '
+                f'WHERE "{api_col}"=? AND "{rid_col}"=? '
+                f"LIMIT ?"
+            )
+            cur.execute(sql, (object_type, record_id, int(limit)))
+            rows = [dict(r) for r in cur.fetchall()]
         else:
-            select_sql = ", ".join([f'"{c}"' for c in select_cols])
+            sql = f'SELECT {select_sql} FROM "record_documents" LIMIT ?'
+            cur.execute(sql, (int(max(limit, 2000)),))
+            rows = [dict(r) for r in cur.fetchall()]
 
-        where = ['"record_id"=?']
-        params: list[Any] = [rid]
+            def _match(r: dict[str, Any]) -> bool:
+                ok_api = True
+                ok_id = True
+                if api_col:
+                    ok_api = str(r.get(api_col, "") or "") == object_type
+                if rid_col:
+                    ok_id = str(r.get(rid_col, "") or "") == record_id
+                return ok_api and ok_id
 
-        if api_col and effective_api:
-            where.append(f'"{api_col}"=?')
-            params.append(effective_api)
+            rows = [r for r in rows if _match(r)][: int(limit)]
 
-        sql = f'SELECT {select_sql} FROM "record_documents" WHERE {" AND ".join(where)} LIMIT ?'
-        params.append(int(limit))
+        # Normalize a few keys so the UI can rely on "path"
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            rr = dict(r)
+            if "path" not in rr:
+                if path_col:
+                    rr["path"] = rr.get(path_col, "")
+                else:
+                    rr["path"] = ""
+            out.append(rr)
 
-        cur.execute(sql, tuple(params))
-        rows = [dict(r) for r in cur.fetchall()]
+        return out
+
     finally:
         conn.close()
 
-    # Normalize schema differences
-    out: list[dict[str, Any]] = []
-    for r in rows:
-        file_name = (r.get("file_name") or "").strip()
-        file_ext = (r.get("file_extension") or "").strip()
-        ct = (r.get("content_type") or "").strip()
 
-        if not ct:
-            # infer from filename/ext
-            guess_name = file_name or f"file{file_ext or ''}"
-            ct = _guess_mime(guess_name)
-
-        # normalize api key name
-        if "object_type" not in r and "record_api" in r:
-            r["object_type"] = r.get("record_api")
-
-        # normalize path/local_path
-        pval = ""
-        for k in ("local_path", "path", "attachment_path", "content_path"):
-            if k in r and r.get(k):
-                pval = str(r.get(k))
-                break
-
-        # Provide both keys so old/new call sites work
-        if "local_path" not in r:
-            r["local_path"] = pval
-        r["path"] = pval
-
-        r["content_type"] = ct
-        out.append(r)
-
-    return out
-
-
-def load_master_documents_index(export_root: Path) -> Optional["Any"]:
+def load_master_documents_index(export_root: Path) -> Optional[pd.DataFrame]:
     """
-    Load meta/master_documents_index.csv as a pandas DataFrame.
-    Returns None if missing or unreadable.
+    Load meta/master_documents_index.csv.
+
+    Returns a DataFrame with normalized column names expected by the UI:
+      - local_path
+      - record_id
+      - object_type
+      - file_name
+      - file_extension
+      - file_source
     """
-    p = Path(export_root) / "meta" / "master_documents_index.csv"
+    export_root = Path(export_root)
+    p = export_root / "meta" / "master_documents_index.csv"
     if not p.exists():
         return None
 
-    try:
-        import pandas as pd  # type: ignore[import-not-found]
-    except Exception:
+    # Read as strings for safety
+    df = pd.read_csv(p, dtype=str).fillna("")
+
+    # Normalize column names to expected ones
+    cols = {c.lower(): c for c in df.columns}
+
+    def _col(*names: str) -> Optional[str]:
+        for n in names:
+            if n.lower() in cols:
+                return cols[n.lower()]
         return None
 
-    try:
-        df = pd.read_csv(p, dtype=str).fillna("")
-    except Exception:
-        # Don’t crash the UI — just return None.
-        return None
+    # Rename to canonical names if needed
+    ren: dict[str, str] = {}
 
-    # Normalize column names to the ones the UI expects
-    cols_lower = {c.lower(): c for c in df.columns}
+    c_local = _col("local_path", "path", "file_path", "attachment_path", "content_path")
+    if c_local and c_local != "local_path":
+        ren[c_local] = "local_path"
 
-    def _ensure(name: str, *aliases: str) -> None:
-        if name in df.columns:
-            return
-        for a in aliases:
-            if a in df.columns:
-                df[name] = df[a]
-                return
-            if a.lower() in cols_lower:
-                df[name] = df[cols_lower[a.lower()]]
-                return
-        df[name] = ""
+    c_rid = _col("record_id", "linked_record_id", "parent_id", "entity_id")
+    if c_rid and c_rid != "record_id":
+        ren[c_rid] = "record_id"
 
-    _ensure("local_path", "path", "attachment_path", "content_path")
-    _ensure("object_type", "record_api")
-    _ensure("record_id")
-    _ensure("record_name")
-    _ensure("file_name")
-    _ensure("file_extension")
-    _ensure("file_source")
-    _ensure("content_type")
+    c_obj = _col("object_type", "record_api", "record_type", "api_name")
+    if c_obj and c_obj != "object_type":
+        ren[c_obj] = "object_type"
+
+    c_fn = _col("file_name", "filename", "name")
+    if c_fn and c_fn != "file_name":
+        ren[c_fn] = "file_name"
+
+    c_ext = _col("file_extension", "extension", "ext")
+    if c_ext and c_ext != "file_extension":
+        ren[c_ext] = "file_extension"
+
+    c_src = _col("file_source", "source")
+    if c_src and c_src != "file_source":
+        ren[c_src] = "file_source"
+
+    if ren:
+        df = df.rename(columns=ren)
+
+    # Ensure the key columns exist
+    for needed in [
+        "local_path",
+        "record_id",
+        "object_type",
+        "file_name",
+        "file_extension",
+        "file_source",
+    ]:
+        if needed not in df.columns:
+            df[needed] = ""
 
     return df
+
+
+def resolve_index_row_to_file(export_root: Path, row: dict[str, Any]) -> Optional[Path]:
+    """
+    Given a master index row, resolve to a real file path if possible.
+    """
+    export_root = Path(export_root)
+    lp = str(row.get("local_path", "") or "").strip()
+    if not lp:
+        return None
+    return resolve_export_path(export_root, lp)

@@ -25,10 +25,6 @@ def reset() -> None:
     st.session_state[_NAV_KEY] = []
 
 
-def set_stack(items: list[NavItem]) -> None:
-    st.session_state[_NAV_KEY] = list(items)
-
-
 def push(api_name: str, record_id: str, label: Optional[str] = None) -> None:
     s = _stack()
     s.append(NavItem(api_name=api_name, record_id=record_id, label=label or ""))
@@ -51,3 +47,14 @@ def breadcrumbs(max_items: int = 6) -> list[NavItem]:
     if len(s) <= max_items:
         return s[:]
     return s[-max_items:]
+
+
+def jump_to(index_from_start: int) -> None:
+    """
+    Keep stack up to and including index_from_start (0-based).
+    """
+    s = _stack()
+    if not s:
+        return
+    idx = max(0, min(index_from_start, len(s) - 1))
+    st.session_state[_NAV_KEY] = s[: idx + 1]

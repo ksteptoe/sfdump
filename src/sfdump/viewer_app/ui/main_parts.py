@@ -7,8 +7,7 @@ from typing import Any, Optional
 
 import streamlit as st
 
-from sfdump.viewer_app.services.display import get_important_fields
-from sfdump.viewer_app.services.nav import breadcrumbs, peek, pop, reset, set_stack
+from sfdump.viewer_app.services.nav import breadcrumbs, jump_to, peek, pop, reset
 
 
 @dataclass
@@ -33,10 +32,10 @@ def _list_tables(db_path: Path) -> list[str]:
     finally:
         conn.close()
 
-    # Hide internal-ish tables
     hidden_prefixes = ("sqlite_",)
-    hidden_exact = {"record_documents"}
-    out: list[str] = []
+    hidden_exact = {"record_documents"}  # shown via UI tools, not as a main object
+
+    out = []
     for t in tables:
         if t in hidden_exact:
             continue
@@ -65,7 +64,7 @@ def render_sidebar_controls(
         return None
 
     return render_sidebar(
-        effective_db,
+        Path(effective_db),
         default_api_name=default_api_name,
         default_record_id=default_record_id,
     )
@@ -89,13 +88,6 @@ def render_sidebar(
         return None
 
     api_options = [_guess_api_from_table(t) for t in tables]
-
-    # If nav stack has something, prefer it
-    current = peek()
-    if current:
-        default_api_name = current.api_name
-        default_record_id = current.record_id
-
     api_default = default_api_name if default_api_name in api_options else api_options[0]
     api_name = st.sidebar.selectbox("Object", api_options, index=api_options.index(api_default))
 
@@ -120,29 +112,27 @@ def render_sidebar(
     bc = breadcrumbs()
     if bc:
         st.sidebar.caption("Navigation")
-
-        # clickable crumbs: jump to that point
         for i, item in enumerate(bc):
             label = item.label or item.record_id
             if st.sidebar.button(f"{item.api_name}: {label}", key=f"nav_jump_{i}"):
-                set_stack(bc[: i + 1])
+                jump_to(i)
                 st.rerun()
 
         cols = st.sidebar.columns(2)
         with cols[0]:
-            if st.sidebar.button("Back", key="nav_back"):
+            if st.button("Back"):
                 pop()
                 st.rerun()
         with cols[1]:
-            if st.sidebar.button("Reset", key="nav_reset"):
+            if st.button("Reset"):
                 reset()
                 st.rerun()
 
+    # If nav stack has something, prefer it as selection
+    current = peek()
     selected_id = ""
     selected_label = ""
 
-    # If nav stack has something, use it as selection
-    current = peek()
     if current:
         api_name = current.api_name
         selected_id = current.record_id
@@ -173,7 +163,8 @@ def render_record_list(
     search_term: str = "",
     limit: int = 200,
     regex_search: bool = False,
-    show_all_fields: bool = False,
+    show_all_fields: bool = False,  # accepted for compatibility; not used here
+    show_ids: bool = False,  # accepted for compatibility; not used here
 ) -> tuple[list[dict[str, Any]], str]:
     """
     Render the left-hand record list and return (rows, selected_id).
@@ -189,8 +180,7 @@ def render_record_list(
         return [r[1] for r in cur.fetchall()]
 
     def _pick_table(cur: sqlite3.Cursor, name: str) -> str | None:
-        candidates = [name, name.lower()]
-        for t in candidates:
+        for t in [name, name.lower()]:
             if _table_exists(cur, t):
                 return t
         return None
@@ -216,42 +206,24 @@ def render_record_list(
             st.warning(f"Table `{table}` has no Id column.")
             return ([], "")
 
-        # candidates for labeling and searching
         label_candidates = ["Name", "Subject", "Title", "DocumentTitle"]
         label_cols = [c for c in label_candidates if c in cols]
 
-        important = [c for c in get_important_fields(api_name) if c in cols]
-        fetch_cols = ["Id"]
-
-        # If show_all_fields, we can include more for better labels/search,
-        # but don’t fetch *everything* (keep it sane).
-        if show_all_fields:
-            for c in label_cols + important:
-                if c not in fetch_cols:
-                    fetch_cols.append(c)
-            # add a few extra columns if present
-            extras = [c for c in cols if c not in fetch_cols][:10]
-            fetch_cols.extend(extras)
-        else:
-            for c in important + label_cols:
-                if c not in fetch_cols:
-                    fetch_cols.append(c)
-
+        fetch_cols = ["Id"] + label_cols[:3]
         select_sql = ", ".join([f'"{c}"' for c in fetch_cols])
 
         term = (search_term or "").strip()
         rows: list[dict[str, Any]] = []
 
         if term and label_cols and not regex_search:
-            like_cols = label_cols[:3]
-            where = " OR ".join([f'"{c}" LIKE ?' for c in like_cols])
-            params = [f"%{term}%"] * len(like_cols)
+            where = " OR ".join([f'"{c}" LIKE ?' for c in label_cols[:3]])
+            params = [f"%{term}%"] * len(label_cols[:3])
             sql = f'SELECT {select_sql} FROM "{table}" WHERE ({where}) LIMIT ?'
             cur.execute(sql, (*params, int(limit)))
             rows = [dict(r) for r in cur.fetchall()]
         else:
             sql = f'SELECT {select_sql} FROM "{table}" LIMIT ?'
-            cur.execute(sql, (int(max(limit, 200)),))
+            cur.execute(sql, (int(max(limit, 500)),))
             rows = [dict(r) for r in cur.fetchall()]
 
             if term:
@@ -263,19 +235,13 @@ def render_record_list(
                         rx = None
 
                     def _match(r: dict[str, Any]) -> bool:
-                        hay = " ".join(
-                            str(r.get(c, "") or "") for c in (label_cols + important + ["Id"])
-                        )
-                        if rx:
-                            return bool(rx.search(hay))
-                        return term.lower() in hay.lower()
+                        hay = " ".join(str(r.get(c, "") or "") for c in fetch_cols)
+                        return bool(rx.search(hay)) if rx else (term.lower() in hay.lower())
 
                 else:
 
                     def _match(r: dict[str, Any]) -> bool:
-                        hay = " ".join(
-                            str(r.get(c, "") or "") for c in (label_cols + important + ["Id"])
-                        )
+                        hay = " ".join(str(r.get(c, "") or "") for c in fetch_cols)
                         return term.lower() in hay.lower()
 
                 rows = [r for r in rows if _match(r)][: int(limit)]
@@ -287,22 +253,16 @@ def render_record_list(
             return ([], "")
 
         def _label_row(r: dict[str, Any]) -> str:
-            parts: list[str] = []
-            for c in important:
+            rid = str(r.get("Id", "") or "").strip()
+            name = ""
+            for c in label_cols:
                 v = str(r.get(c, "") or "").strip()
                 if v:
-                    parts.append(v)
-
-            if not parts:
-                for c in label_cols:
-                    v = str(r.get(c, "") or "").strip()
-                    if v:
-                        parts.append(v)
-                        break
-
-            rid = str(r.get("Id", "") or "").strip()
-            label = " — ".join(parts) if parts else rid
-            return f"{label} [{rid}]" if rid else label
+                    name = v
+                    break
+            if name and rid:
+                return f"{name} [{rid}]"
+            return rid or name or "(unknown)"
 
         labels = [_label_row(r) for r in rows]
 
@@ -324,15 +284,8 @@ def render_record_list(
             index=default_index,
             key=f"record_list_{api_name}",
         )
-
         selected_id = _id_from_label(choice)
-        if not selected_id:
-            # fallback: if parsing fails, use the row at the chosen index
-            try:
-                selected_id = str(rows[labels.index(choice)].get("Id", "") or "")
-            except Exception:
-                selected_id = ""
-
         return (rows, selected_id)
+
     finally:
         conn.close()
