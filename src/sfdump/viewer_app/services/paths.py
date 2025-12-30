@@ -1,24 +1,54 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 
-def infer_export_root(db_path: Path) -> Path:
+def infer_export_root(db_path: Path) -> Optional[Path]:
     """
-    Given <export_root>/meta/sfdata.db, return <export_root>.
-    Fallback to parent if the structure is unexpected.
+    Best-effort: infer EXPORT_ROOT from a db path.
+    Common layout: EXPORT_ROOT/meta/sfdata.db
     """
     p = Path(db_path)
-    if p.name.lower().endswith(".db") and p.parent.name.lower() == "meta":
+
+    # If user passed EXPORT_ROOT instead of the DB file
+    if p.is_dir():
+        candidate = p / "meta" / "sfdata.db"
+        if candidate.exists():
+            return p
+        return None
+
+    if p.name.lower() != "sfdata.db":
+        # still try: if a file under meta/
+        for parent in p.parents:
+            if parent.name.lower() == "meta":
+                return parent.parent
+        return None
+
+    # p is sfdata.db
+    if p.parent.name.lower() == "meta":
         return p.parent.parent
-    return p.parent
+
+    # search upwards for /meta/
+    for parent in p.parents:
+        if parent.name.lower() == "meta":
+            return parent.parent
+
+    return None
 
 
-def resolve_export_path(export_root: Path, local_path: str) -> Path:
+def resolve_export_path(export_root: Path, rel_or_abs_path: str) -> Path:
     """
-    Resolve a relative path from the export root.
-
-    Handles both Windows-style backslashes and forward slashes.
+    Resolve a document path which might be:
+      - absolute, or
+      - relative to export_root, possibly with backslashes
     """
-    lp = (local_path or "").replace("\\", "/").lstrip("/")
-    return (Path(export_root) / lp).resolve()
+    s = (rel_or_abs_path or "").strip().strip('"').strip("'")
+    p = Path(s)
+
+    if p.is_absolute():
+        return p
+
+    # normalize windows-y separators
+    s = s.replace("\\", "/").lstrip("/")
+    return Path(export_root) / s

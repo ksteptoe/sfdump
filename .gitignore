@@ -92,3 +92,5 @@ docs/_generated/
 *.tar
 *.gz
 /viewer-snapshot.tgz
+
+*.tgz

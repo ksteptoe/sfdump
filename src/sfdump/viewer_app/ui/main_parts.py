@@ -8,7 +8,7 @@ from typing import Any, Optional
 import streamlit as st
 
 from sfdump.viewer_app.services.display import get_important_fields
-from sfdump.viewer_app.services.nav import breadcrumbs, peek, pop, push, reset
+from sfdump.viewer_app.services.nav import breadcrumbs, peek, pop, reset, set_stack
 
 
 @dataclass
@@ -33,6 +33,7 @@ def _list_tables(db_path: Path) -> list[str]:
     finally:
         conn.close()
 
+    # Hide internal-ish tables
     hidden_prefixes = ("sqlite_",)
     hidden_exact = {"record_documents"}
     out: list[str] = []
@@ -88,6 +89,13 @@ def render_sidebar(
         return None
 
     api_options = [_guess_api_from_table(t) for t in tables]
+
+    # If nav stack has something, prefer it
+    current = peek()
+    if current:
+        default_api_name = current.api_name
+        default_record_id = current.record_id
+
     api_default = default_api_name if default_api_name in api_options else api_options[0]
     api_name = st.sidebar.selectbox("Object", api_options, index=api_options.index(api_default))
 
@@ -112,24 +120,29 @@ def render_sidebar(
     bc = breadcrumbs()
     if bc:
         st.sidebar.caption("Navigation")
+
+        # clickable crumbs: jump to that point
         for i, item in enumerate(bc):
             label = item.label or item.record_id
             if st.sidebar.button(f"{item.api_name}: {label}", key=f"nav_jump_{i}"):
-                push(item.api_name, item.record_id, label=item.label)
+                set_stack(bc[: i + 1])
                 st.rerun()
 
         cols = st.sidebar.columns(2)
-        if cols[0].button("Back", use_container_width=True):
-            pop()
-            st.rerun()
-        if cols[1].button("Reset", use_container_width=True):
-            reset()
-            st.rerun()
+        with cols[0]:
+            if st.sidebar.button("Back", key="nav_back"):
+                pop()
+                st.rerun()
+        with cols[1]:
+            if st.sidebar.button("Reset", key="nav_reset"):
+                reset()
+                st.rerun()
 
-    current = peek()
     selected_id = ""
     selected_label = ""
 
+    # If nav stack has something, use it as selection
+    current = peek()
     if current:
         api_name = current.api_name
         selected_id = current.record_id
@@ -160,22 +173,15 @@ def render_record_list(
     search_term: str = "",
     limit: int = 200,
     regex_search: bool = False,
-    show_all_fields: bool = False,  # accepted for API compatibility
-    show_ids: bool = False,
+    show_all_fields: bool = False,
 ) -> tuple[list[dict[str, Any]], str]:
     """
-    Render the record picker and return (rows, selected_id).
-
-    Robust behaviour: the selectbox OPTION is the record Id, and the display label
-    is provided via format_func. This avoids brittle parsing of Ids from strings.
+    Render the left-hand record list and return (rows, selected_id).
     """
     import re
 
     def _table_exists(cur: sqlite3.Cursor, table: str) -> bool:
-        cur.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-            (table,),
-        )
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
         return cur.fetchone() is not None
 
     def _table_columns(cur: sqlite3.Cursor, table: str) -> list[str]:
@@ -183,13 +189,14 @@ def render_record_list(
         return [r[1] for r in cur.fetchall()]
 
     def _pick_table(cur: sqlite3.Cursor, name: str) -> str | None:
-        for t in (name, name.lower()):
+        candidates = [name, name.lower()]
+        for t in candidates:
             if _table_exists(cur, t):
                 return t
         return None
 
-    def _try_extract_id(text: str) -> str:
-        s = (text or "").strip()
+    def _id_from_label(label: str) -> str:
+        s = (label or "").strip()
         if s.endswith("]") and "[" in s:
             return s.rsplit("[", 1)[-1].rstrip("]").strip()
         return ""
@@ -209,20 +216,31 @@ def render_record_list(
             st.warning(f"Table `{table}` has no Id column.")
             return ([], "")
 
+        # candidates for labeling and searching
         label_candidates = ["Name", "Subject", "Title", "DocumentTitle"]
         label_cols = [c for c in label_candidates if c in cols]
 
         important = [c for c in get_important_fields(api_name) if c in cols]
-
         fetch_cols = ["Id"]
-        for c in important + label_cols:
-            if c not in fetch_cols:
-                fetch_cols.append(c)
+
+        # If show_all_fields, we can include more for better labels/search,
+        # but don’t fetch *everything* (keep it sane).
+        if show_all_fields:
+            for c in label_cols + important:
+                if c not in fetch_cols:
+                    fetch_cols.append(c)
+            # add a few extra columns if present
+            extras = [c for c in cols if c not in fetch_cols][:10]
+            fetch_cols.extend(extras)
+        else:
+            for c in important + label_cols:
+                if c not in fetch_cols:
+                    fetch_cols.append(c)
 
         select_sql = ", ".join([f'"{c}"' for c in fetch_cols])
 
         term = (search_term or "").strip()
-        rows: list[dict[str, Any]]
+        rows: list[dict[str, Any]] = []
 
         if term and label_cols and not regex_search:
             like_cols = label_cols[:3]
@@ -248,7 +266,10 @@ def render_record_list(
                         hay = " ".join(
                             str(r.get(c, "") or "") for c in (label_cols + important + ["Id"])
                         )
-                        return bool(rx.search(hay)) if rx else (term.lower() in hay.lower())
+                        if rx:
+                            return bool(rx.search(hay))
+                        return term.lower() in hay.lower()
+
                 else:
 
                     def _match(r: dict[str, Any]) -> bool:
@@ -265,15 +286,7 @@ def render_record_list(
             st.info("No records found.")
             return ([], "")
 
-        # id list + label map
-        ids: list[str] = []
-        label_map: dict[str, str] = {}
-
-        for r in rows:
-            rid = str(r.get("Id", "") or "").strip()
-            if not rid:
-                continue
-
+        def _label_row(r: dict[str, Any]) -> str:
             parts: list[str] = []
             for c in important:
                 v = str(r.get(c, "") or "").strip()
@@ -287,39 +300,39 @@ def render_record_list(
                         parts.append(v)
                         break
 
-            base_label = " — ".join(parts) if parts else rid
-            label = f"{base_label} [{rid}]" if show_ids else base_label
+            rid = str(r.get("Id", "") or "").strip()
+            label = " — ".join(parts) if parts else rid
+            return f"{label} [{rid}]" if rid else label
 
-            ids.append(rid)
-            label_map[rid] = label
+        labels = [_label_row(r) for r in rows]
 
-        if not ids:
-            st.info("No records found.")
-            return (rows, "")
-
-        # Determine default selection
         default_index = 0
         if selected_label:
             sel = str(selected_label).strip()
-            sel_id = _try_extract_id(sel) or sel
-            if sel_id in ids:
-                default_index = ids.index(sel_id)
-            else:
-                # match by label text
-                for i, rid in enumerate(ids):
-                    if label_map.get(rid, "") == sel:
-                        default_index = i
-                        break
+            sel_id = _id_from_label(sel) or sel
+            for i, lab in enumerate(labels):
+                if lab == sel:
+                    default_index = i
+                    break
+                if sel_id and _id_from_label(lab) == sel_id:
+                    default_index = i
+                    break
 
-        selected_id = st.selectbox(
+        choice = st.selectbox(
             "Records",
-            options=ids,
+            options=labels,
             index=default_index,
             key=f"record_list_{api_name}",
-            format_func=lambda rid: label_map.get(str(rid), str(rid)),
         )
 
-        return (rows, str(selected_id))
+        selected_id = _id_from_label(choice)
+        if not selected_id:
+            # fallback: if parsing fails, use the row at the chosen index
+            try:
+                selected_id = str(rows[labels.index(choice)].get("Id", "") or "")
+            except Exception:
+                selected_id = ""
 
+        return (rows, selected_id)
     finally:
         conn.close()

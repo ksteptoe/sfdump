@@ -25,6 +25,10 @@ def reset() -> None:
     st.session_state[_NAV_KEY] = []
 
 
+def set_stack(items: list[NavItem]) -> None:
+    st.session_state[_NAV_KEY] = list(items)
+
+
 def push(api_name: str, record_id: str, label: Optional[str] = None) -> None:
     s = _stack()
     s.append(NavItem(api_name=api_name, record_id=record_id, label=label or ""))
