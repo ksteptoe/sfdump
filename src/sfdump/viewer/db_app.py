@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import streamlit as st
 
 from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children
-from sfdump.viewer_app.preview.files import open_local_file, preview_file
-from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
+from sfdump.viewer_app.preview.files import preview_file
 from sfdump.viewer_app.services.display import get_important_fields
-from sfdump.viewer_app.services.documents import list_record_documents, load_master_documents_index
-from sfdump.viewer_app.services.paths import infer_export_root, resolve_export_path
+from sfdump.viewer_app.services.documents import load_master_documents_index
+from sfdump.viewer_app.services.paths import infer_export_root
 from sfdump.viewer_app.services.traversal import collect_subtree_ids
+from sfdump.viewer_app.ui.documents_panel import render_documents_panel
 from sfdump.viewer_app.ui.main_parts import render_record_list, render_sidebar_controls
 from sfdump.viewer_app.ui.record_tabs import render_children_with_navigation
 
@@ -135,90 +135,11 @@ def main() -> None:
             )
 
         with tab_docs:
-            export_root = _export_root_from_db_path(db_path)
-            if export_root is None:
-                st.warning(
-                    "Could not infer EXPORT_ROOT from DB path. "
-                    "Expected EXPORT_ROOT/meta/sfdata.db layout."
-                )
-                st.stop()
-
-            docs = list_record_documents(
+            render_documents_panel(
                 db_path=db_path,
                 object_type=api_name,
                 record_id=selected_id,
             )
-
-            if not docs:
-                st.info("No documents indexed for this record.")
-            else:
-                docs_df = pd.DataFrame(docs)
-
-                show_cols = [
-                    c
-                    for c in [
-                        "file_source",
-                        "file_id",
-                        "file_name",
-                        "file_extension",
-                        "path",
-                        "size_bytes",
-                        "content_type",
-                    ]
-                    if c in docs_df.columns
-                ]
-                st.dataframe(docs_df[show_cols], width="stretch", hide_index=True, height=260)
-
-                def _label(row: dict[str, Any]) -> str:
-                    name = row.get("file_name") or "(no name)"
-                    fid = row.get("file_id") or ""
-                    return f"{name} [{fid}]"
-
-                options = [_label(r) for r in docs]
-                choice = st.selectbox("Select a document", options, index=0)
-
-                chosen = docs[options.index(choice)]
-                rel_path = str(chosen.get("path") or "")
-                if not rel_path:
-                    st.warning(
-                        "This row has no local path. That usually means the file wasn’t downloaded into the export."
-                    )
-                else:
-                    full_path = resolve_export_path(export_root, rel_path)
-
-                    cols = st.columns([1, 3])
-                    with cols[0]:
-                        if st.button("Open"):
-                            if full_path.exists():
-                                open_local_file(full_path)
-                                st.success("Opened locally.")
-                            else:
-                                st.error(f"File not found on disk: {full_path}")
-
-                    with cols[1]:
-                        st.caption(str(full_path))
-
-                    if full_path.exists():
-                        data = full_path.read_bytes()
-                        download_name = full_path.name
-                        mime = chosen.get("content_type") or "application/octet-stream"
-                        ext = full_path.suffix.lower()
-
-                        if ext == ".pdf":
-                            with st.expander("Preview PDF", expanded=True):
-                                preview_pdf_bytes(data, height=750)
-                        elif str(mime).startswith("image/"):
-                            with st.expander("Preview image", expanded=True):
-                                st.image(data, caption=download_name)
-
-                        st.download_button(
-                            "Download",
-                            data=data,
-                            file_name=download_name,
-                            mime=str(mime),
-                        )
-                    else:
-                        st.error(f"File not found on disk: {full_path}")
 
         # ------------------------------------------------------------------
         # Recursive subtree document search (Account -> Opp -> Invoice -> ...)
