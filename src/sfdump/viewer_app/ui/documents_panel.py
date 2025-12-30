@@ -36,9 +36,18 @@ def render_documents_panel(*, db_path: Path, object_type: str, record_id: str) -
         st.caption("Preview/open needs EXPORT_ROOT to resolve relative file paths.")
         return
 
-    # Build stable options
-    options = {_doc_label(r): r for r in docs}
-    labels = [k for k in options.keys() if k.strip()]
+    # Build UNIQUE labels and map them to rows (avoid dict-key collisions)
+    labels: list[str] = []
+    label_to_row: dict[str, dict[str, Any]] = {}
+
+    for i, r in enumerate(docs):
+        lab = _doc_label(r)
+        if not lab.strip():
+            continue
+        lab_u = f"{i + 1:03d} — {lab}"  # prefix ensures uniqueness
+        labels.append(lab_u)
+        label_to_row[lab_u] = r
+
     if not labels:
         st.info("Documents found but none have usable labels/paths.")
         return
@@ -48,7 +57,9 @@ def render_documents_panel(*, db_path: Path, object_type: str, record_id: str) -
         labels,
         key=f"preview_doc_{object_type}_{record_id}",
     )
-    row = options[sel_label]
+
+    row = label_to_row[sel_label]
+
     rel_path = (row.get("path") or row.get("local_path") or "").strip()
     if not rel_path:
         st.warning("Selected document has no path in index.")
