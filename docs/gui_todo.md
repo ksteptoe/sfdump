@@ -51,6 +51,27 @@ When messaging, copy/paste:
 
 ## Now (popt queue)
 
+**Active popt:** DB-001
+
+### DB-oo1 URGENT  Not All files retreived from db and sfdump does not know of them
+**Problem:** A situation has been discoverd our export DB/index contains 12,964 distinct 069… file_ids (ContentDocument IDs).
+But the  current Salesforce session (what sfdump is using right now) can only see 285 ContentDocuments/Versions.
+No Makefile formula can download what the current credentials can’t see.
+
+**Approach (minimal):** Understand failure and repair - this was fixed before and somehow was lost in a previous  git merge?
+
+**DoD**
+- Review the conversation in a chat called Viewer refactor suggestion in which this is uncovered and fixed
+- Make rapid sugustions to resolve permanently
+
+**Smoke test**
+- On a record with multiple docs:
+  - Select doc A → preview A appears
+  - Select doc B → preview B appears
+  - Select missing doc → clear message shown
+
+---
+
 **Active popt:** DOC-001
 
 ### DOC-001 Preview doc selector must actually preview (and not “do nothing”)
