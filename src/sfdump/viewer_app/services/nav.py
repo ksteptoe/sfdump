@@ -47,14 +47,3 @@ def breadcrumbs(max_items: int = 6) -> list[NavItem]:
     if len(s) <= max_items:
         return s[:]
     return s[-max_items:]
-
-
-def jump_to(index_from_start: int) -> None:
-    """
-    Keep stack up to and including index_from_start (0-based).
-    """
-    s = _stack()
-    if not s:
-        return
-    idx = max(0, min(index_from_start, len(s) - 1))
-    st.session_state[_NAV_KEY] = s[: idx + 1]

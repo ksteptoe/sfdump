@@ -1,104 +1,109 @@
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Optional
 
-import pandas as pd
+# Keep this file dependency-light: avoid importing pandas at module import time.
 
-# A small curated set per object. You can extend this over time.
+
 IMPORTANT_FIELDS: dict[str, list[str]] = {
-    "Account": [
+    "Account": ["Name", "Type", "Industry", "BillingCountry", "BillingCity", "Website"],
+    "Opportunity": [
         "Name",
-        "Type",
-        "Industry",
-        "BillingCity",
-        "BillingCountry",
-        "Website",
-        "Phone",
+        "StageName",
+        "Amount",
+        "CloseDate",
+        "AccountId",
         "OwnerId",
+        "CurrencyIsoCode",
     ],
-    "Opportunity": ["Name", "StageName", "Amount", "CloseDate", "AccountId", "OwnerId"],
-    "Contact": ["Name", "FirstName", "LastName", "Email", "Phone", "AccountId", "OwnerId"],
-    "Case": ["CaseNumber", "Subject", "Status", "Priority", "AccountId", "ContactId", "OwnerId"],
-    # Common FF / custom-ish:
+    "ContentDocumentLink": ["LinkedEntityId", "ContentDocumentId", "Visibility", "ShareType"],
     "c2g__codaInvoice__c": [
         "Name",
-        "c2g__Account__c",
         "c2g__InvoiceDate__c",
-        "c2g__DueDate__c",
-        "c2g__Total__c",
+        "c2g__InvoiceStatus__c",
+        "c2g__InvoiceTotal__c",
+        "c2g__OutstandingValue__c",
+        "CurrencyIsoCode",
     ],
-    "fferpcore__BillingDocument__c": [
-        "Name",
-        "fferpcore__Account__c",
-        "fferpcore__Status__c",
-        "fferpcore__Total__c",
-    ],
-    "ContentDocumentLink": ["LinkedEntityId", "ContentDocumentId", "ShareType", "Visibility"],
 }
 
 
-def get_important_fields(api_name: str) -> list[str]:
-    """
-    Return the "important" field list for an object. If unknown, return [].
-    """
-    return IMPORTANT_FIELDS.get(api_name, [])
+def get_important_fields(object_api_name: str) -> list[str]:
+    return IMPORTANT_FIELDS.get(object_api_name, [])
 
 
-def _ensure_list(x: Iterable[str] | None) -> list[str]:
-    return list(x) if x else []
+def _first_present(candidates: Iterable[str], cols: set[str]) -> Optional[str]:
+    for c in candidates:
+        if c in cols:
+            return c
+    return None
 
 
 def select_display_columns(
-    api_name: str,
-    df: pd.DataFrame,
+    object_api_name,
+    df=None,
     show_all_fields: bool = False,
     *,
     show_ids: bool = False,
 ) -> list[str]:
     """
-    Decide which columns to show for a child dataframe / list view.
+    Decide which columns to show in a child table.
 
-    Signature matches db_app usage:
-        select_display_columns(api_name, df, show_all_fields)
+    Backwards-compatible with earlier broken signatures:
+      - select_display_columns(df)
+      - select_display_columns(object_api, df, show_all_fields)
 
-    If show_all_fields is True: show everything (optionally hiding Id columns unless show_ids).
-    Otherwise: show important fields if present, falling back to common label columns.
+    Rules:
+      - If show_all_fields: show all columns.
+      - Else: show important fields if present, else fall back to heuristics.
     """
-    cols = _ensure_list(getattr(df, "columns", []))
+    # Back-compat: called as select_display_columns(df)
+    if df is None and hasattr(object_api_name, "columns"):
+        _df = object_api_name
+        return list(getattr(_df, "columns", []))
 
-    if not cols:
+    if df is None:
         return []
 
+    cols = list(df.columns)
     if show_all_fields:
-        if show_ids:
-            return cols
-        return [c for c in cols if c.lower() != "id" and not c.lower().endswith("id")]
+        return cols
 
-    important = [c for c in get_important_fields(api_name) if c in cols]
+    colset = set(cols)
 
-    # Fallback label-ish columns
-    label_candidates = ["Name", "Subject", "Title", "DocumentTitle", "StageName", "Status"]
-    label_cols = [c for c in label_candidates if c in cols]
+    important = [c for c in get_important_fields(str(object_api_name)) if c in colset]
+    if important:
+        out = important[:]
+    else:
+        out: list[str] = []
 
-    # Always try to include Id for navigation (even if we hide it visually later)
-    base = []
-    if "Id" in cols:
-        base.append("Id")
+        for key in ("Name", "Subject", "Title", "DocumentTitle"):
+            if key in colset and key not in out:
+                out.append(key)
 
-    chosen = base + important
-    for c in label_cols:
-        if c not in chosen:
-            chosen.append(c)
+        for key in (
+            "CloseDate",
+            "Amount",
+            "StageName",
+            "Status",
+            "InvoiceDate",
+            "TotalAmount",
+            "Balance",
+            "CurrencyIsoCode",
+        ):
+            if key in colset and key not in out:
+                out.append(key)
 
-    # Keep it bounded but useful
-    chosen = chosen[:12] if len(chosen) > 12 else chosen
+        for key in ("AccountId", "OwnerId", "OpportunityId", "ContentDocumentId", "LinkedEntityId"):
+            if key in colset and key not in out:
+                out.append(key)
 
-    # If user doesn't want Id columns shown, drop them from the final display set
-    if not show_ids:
-        chosen = [c for c in chosen if c.lower() != "id" and not c.lower().endswith("id")]
+        if not out:
+            out = cols[:8]
 
-    # Guarantee we show something
-    if not chosen:
-        chosen = cols[:8]
+    if show_ids and "Id" in colset and "Id" not in out:
+        out.append("Id")
 
-    return chosen
+    order_index = {c: i for i, c in enumerate(cols)}
+    out = sorted(out, key=lambda c: order_index.get(c, 10_000))
+    return out
