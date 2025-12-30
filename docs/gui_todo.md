@@ -6,13 +6,31 @@
 
 ---
 
+## Done
+
+- NAV-001 Breadcrumb jump should not duplicate stack (commit: 0441558)
+
+---
+
 ## Working rules
 
 - **One change per PR/commit** (small, reviewable, low-regression).
 - Every item below has:
   - **DoD** (definition of done)
   - **Smoke test** steps (what we click to confirm)
-- Use **pusht** to add new ideas to *Later*, and **popt** to take the next item into *Now*.
+- Use **pusht** to add new ideas into *Next* or *Later*.
+- Use **popt** to pull exactly one item into focus (top of *Now*).
+
+---
+
+## How to use this with ChatGPT
+
+When messaging, copy/paste:
+
+- `popt: <ITEM-ID> <title>`
+- the **DoD**
+- the **smallest relevant code block**
+- (after changes) smoke test results + `git status -sb`
 
 ---
 
@@ -31,25 +49,12 @@
 
 ---
 
-## Now (popt)
+## Now (popt queue)
 
-### NAV-001 Breadcrumb jump should not duplicate stack
-**Problem:** Breadcrumb buttons currently `push()` duplicates instead of jumping.
-**Approach:** Add `nav.goto(i)` to truncate stack and wire breadcrumbs to it.
-
-**DoD**
-- Clicking a breadcrumb returns to that exact point in navigation history (stack truncated).
-- Stack does not grow when clicking breadcrumbs.
-
-**Smoke test**
-- Drill in: Account → Opportunity → Child
-- Click “Account” breadcrumb
-- Confirm you are back at Account without repeated breadcrumb items
-
----
+**Active popt:** DOC-001
 
 ### DOC-001 Preview doc selector must actually preview (and not “do nothing”)
-**Problem:** Selecting a different doc sometimes appears to do nothing (often due to non-unique labels / stale widget key).
+**Problem:** Selecting a different doc sometimes appears to do nothing (often due to non-unique labels or stale widget key).
 **Approach (minimal):** Ensure document select labels are unique and selectbox has a stable key.
 
 **DoD**
@@ -79,7 +84,7 @@
 
 ---
 
-## Next (pusht candidate)
+## Next (pusht candidates)
 
 ### DOC-002 Documents panel: standardised renderer
 **Goal:** One shared UI component that lists docs, previews, and opens/downloads.
@@ -91,7 +96,7 @@
 
 ---
 
-### DOC-003 “Document Explorer” (global search)
+### DOC-003 Document Explorer (global search)
 **Goal:** Search across *all* documents via `meta/master_documents_index.csv`.
 **Features**
 - Search box (filename/keyword)
@@ -144,5 +149,3 @@
   - Contracts (PDF) attached to Opportunities
   - Invoices / credit notes / cash entries linked via transactions/journals
   - Anything connecting finance objects ↔ opportunities/accounts
-
----
