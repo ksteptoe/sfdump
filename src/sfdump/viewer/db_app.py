@@ -12,10 +12,7 @@ from sfdump.viewer_app.preview.files import open_local_file, preview_file
 from sfdump.viewer_app.preview.pdf import preview_pdf_bytes
 from sfdump.viewer_app.services.display import get_important_fields
 from sfdump.viewer_app.services.documents import list_record_documents, load_master_documents_index
-from sfdump.viewer_app.services.paths import (
-    infer_export_root,
-    resolve_export_path,
-)
+from sfdump.viewer_app.services.paths import infer_export_root, resolve_export_path
 from sfdump.viewer_app.services.traversal import collect_subtree_ids
 from sfdump.viewer_app.ui.main_parts import render_record_list, render_sidebar_controls
 from sfdump.viewer_app.ui.record_tabs import render_children_with_navigation
@@ -30,8 +27,7 @@ def _export_root_from_db_path(db_path: Path) -> Optional[Path]:
 
 
 def _initial_db_path_from_argv() -> Optional[Path]:
-    # When launched via: streamlit run db_app.py -- <db-path>
-    # sys.argv for this script will look like: ['db_app.py', '<db-path>']
+    # When launched via: streamlit run <entry> -- <db-path>
     args = sys.argv[1:]
     for arg in args:
         if not arg.startswith("-"):
@@ -44,20 +40,11 @@ def main() -> None:
     st.markdown(
         """
         <style>
-          /* overall app font */
           html, body, [class*="css"]  { font-size: 13px; }
-
-          /* tighten padding */
           .block-container { padding-top: 1rem; padding-bottom: 1rem; }
           section[data-testid="stSidebar"] .block-container { padding-top: 1rem; }
-
-          /* dataframes: smaller text */
           div[data-testid="stDataFrame"] { font-size: 12px; }
-
-          /* expander headers a bit smaller */
           details summary { font-size: 13px; }
-
-          /* shrink selectbox / inputs slightly */
           .stSelectbox, .stTextInput, .stNumberInput, .stCheckbox { font-size: 12px; }
         </style>
         """,
@@ -65,7 +52,7 @@ def main() -> None:
     )
 
     st.title("SF Dump DB Viewer")
-    # Sidebar: DB selection (delegated)
+
     initial_db = _initial_db_path_from_argv()
     state = render_sidebar_controls(initial_db=initial_db)
     if state is None:
@@ -90,6 +77,7 @@ def main() -> None:
             regex_search=regex_search,
             limit=int(limit),
             show_all_fields=show_all_fields,
+            show_ids=state.show_ids,
         )
 
     with col_right:
@@ -97,7 +85,7 @@ def main() -> None:
 
         if not rows or not selected_id:
             st.info("Select a record on the left to see details and related records.")
-            return
+            st.stop()
 
         try:
             record = get_record_with_children(
@@ -108,7 +96,7 @@ def main() -> None:
             )
         except Exception as exc:
             st.error(f"Error loading record {selected_id}: {exc}")
-            return
+            st.stop()
 
         parent = record.parent
         parent_label = getattr(parent.sf_object, "label", None) or parent.sf_object.api_name
@@ -137,6 +125,9 @@ def main() -> None:
                 st.table(parent_df)
 
         with tab_children:
+            st.caption(
+                "Open a relationship expander → pick a child in **Select a child record** → click **Open**."
+            )
             render_children_with_navigation(
                 record=record,
                 show_all_fields=show_all_fields,
@@ -146,7 +137,6 @@ def main() -> None:
         with tab_docs:
             export_root = _export_root_from_db_path(db_path)
             if export_root is None:
-                # Keep the UI usable even if we can't infer export root
                 st.warning(
                     "Could not infer EXPORT_ROOT from DB path. "
                     "Expected EXPORT_ROOT/meta/sfdata.db layout."
@@ -155,7 +145,7 @@ def main() -> None:
 
             docs = list_record_documents(
                 db_path=db_path,
-                object_type=api_name,  # IMPORTANT: this matches record_documents.object_type
+                object_type=api_name,
                 record_id=selected_id,
             )
 
@@ -164,7 +154,6 @@ def main() -> None:
             else:
                 docs_df = pd.DataFrame(docs)
 
-                # Show a compact table
                 show_cols = [
                     c
                     for c in [
@@ -180,7 +169,6 @@ def main() -> None:
                 ]
                 st.dataframe(docs_df[show_cols], width="stretch", hide_index=True, height=260)
 
-                # Pick one to open
                 def _label(row: dict[str, Any]) -> str:
                     name = row.get("file_name") or "(no name)"
                     fid = row.get("file_id") or ""
@@ -210,19 +198,15 @@ def main() -> None:
                     with cols[1]:
                         st.caption(str(full_path))
 
-                    # --- inline preview / download ---
                     if full_path.exists():
                         data = full_path.read_bytes()
                         download_name = full_path.name
                         mime = chosen.get("content_type") or "application/octet-stream"
-
-                        # Preview (PDF + images)
                         ext = full_path.suffix.lower()
 
                         if ext == ".pdf":
                             with st.expander("Preview PDF", expanded=True):
                                 preview_pdf_bytes(data, height=750)
-
                         elif str(mime).startswith("image/"):
                             with st.expander("Preview image", expanded=True):
                                 st.image(data, caption=download_name)
@@ -250,15 +234,12 @@ def main() -> None:
 
             st.caption(f"Export root inferred as: {export_root}")
 
-            # Controls
             max_depth = st.slider("Max traversal depth", 1, 6, 3, 1)
             max_children = st.slider("Max children per relationship", 10, 500, 100, 10)
 
-            # Optional object filter (useful once this gets big)
             allow_filter = st.checkbox("Filter to specific object types", value=False)
             allow_objects: Optional[set[str]] = None
             if allow_filter:
-                # Offer choices from OBJECTS registry
                 all_api_names = sorted(OBJECTS.keys())
                 selected = st.multiselect(
                     "Allowed objects",
@@ -291,21 +272,17 @@ def main() -> None:
                 )
                 st.stop()
 
-            # Filter docs by record_id in subtree
             all_ids: set[str] = set()
             for ids in subtree.values():
                 all_ids.update(ids)
 
-            # master index keys on record_id
             sub_docs = docs_df[docs_df["record_id"].isin(list(all_ids))].copy()
-
             st.write(f"Documents found: **{len(sub_docs)}**")
 
             if len(sub_docs) == 0:
                 st.info("No documents attached to any record in the subtree.")
                 st.stop()
 
-            # Nice defaults for display
             show_cols = [
                 "file_extension",
                 "file_source",
@@ -320,11 +297,10 @@ def main() -> None:
                 "opp_close_date",
             ]
             show_cols = [c for c in show_cols if c in sub_docs.columns]
-
             st.dataframe(sub_docs[show_cols], height=260, hide_index=True, width="stretch")
 
-            # Select + preview
-            choices = []
+            # Select + preview (make preview *visibly* appear)
+            choices: list[str] = []
             for _, r in sub_docs.iterrows():
                 lp = r.get("local_path", "")
                 fn = r.get("file_name", "")
@@ -334,11 +310,19 @@ def main() -> None:
                 label = f"{fn} — {ot}:{rn} [{rid}] :: {lp}"
                 choices.append(label)
 
-            selected_doc = st.selectbox("Preview a document", choices, index=0)
-            # local_path is after ':: '
+            selected_doc = st.selectbox(
+                "Preview a document", choices, index=0, key="subtree_preview_select"
+            )
             local_path = selected_doc.rsplit("::", 1)[-1].strip()
+
             if local_path:
-                preview_file(export_root, local_path)
+                # This now expands by default (preview_file default expanded=True)
+                preview_file(
+                    export_root,
+                    local_path,
+                    title="Selected subtree document preview",
+                    expanded=True,
+                )
 
 
 if __name__ == "__main__":

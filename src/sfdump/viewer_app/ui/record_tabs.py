@@ -2,11 +2,37 @@ from __future__ import annotations
 
 from typing import Any
 
-import pandas as pd
 import streamlit as st
 
-from sfdump.viewer_app.services.display import select_display_columns
+from sfdump.viewer_app.services.display import get_important_fields, select_display_columns
 from sfdump.viewer_app.services.nav import push
+
+
+def _child_label(api_name: str, row: dict[str, Any]) -> str:
+    """
+    Build a stable, readable label: prefer important fields, then Name/Subject/Title,
+    always include [Id] so we can reliably parse it back.
+    """
+    rid = str(row.get("Id", "") or "").strip()
+
+    cols = set(row.keys())
+    important = [c for c in get_important_fields(api_name) if c in cols]
+
+    parts: list[str] = []
+    for c in important:
+        v = str(row.get(c, "") or "").strip()
+        if v:
+            parts.append(v)
+
+    if not parts:
+        for c in ("Name", "Subject", "Title", "DocumentTitle"):
+            v = str(row.get(c, "") or "").strip()
+            if v:
+                parts.append(v)
+                break
+
+    label = " — ".join(parts) if parts else rid
+    return f"{label} [{rid}]" if rid else label
 
 
 def _id_from_label(label: str) -> str:
@@ -16,89 +42,85 @@ def _id_from_label(label: str) -> str:
     return ""
 
 
-def render_children_with_navigation(
-    *,
-    record: Any,
-    show_all_fields: bool,
-    show_ids: bool,
-) -> None:
+def render_children_with_navigation(*, record, show_all_fields: bool, show_ids: bool) -> None:
     """
-    Renders the Children tab with an explicit "pick child -> Open" mechanism.
+    Children tab renderer WITH explicit navigation controls.
 
-    Expects `record` to be the return of get_record_with_children().
+    For each relationship expander:
+      - shows a dataframe
+      - provides a selectbox to pick a child
+      - provides an Open button that pushes onto nav stack and reruns
     """
     if not getattr(record, "children", None):
         st.info("No child records found for this record.")
         return
 
+    st.caption(
+        "Tip: open a relationship, pick a child record, then click **Open** to navigate down."
+    )
+
     for coll in record.children:
         child_obj = coll.sf_object
         rel = coll.relationship
+
         title = (
             f"{child_obj.api_name} via {rel.child_field} "
             f"(relationship: {rel.name}, {len(coll.records)} record(s))"
         )
 
         with st.expander(title, expanded=False):
-            child_df = pd.DataFrame(coll.records)
+            if not coll.records:
+                st.info("No rows.")
+                continue
 
+            try:
+                import pandas as pd  # type: ignore[import-not-found]
+            except Exception:
+                st.error("pandas is required to render child tables.")
+                return
+
+            child_df = pd.DataFrame(coll.records)
             if child_df.empty:
                 st.info("No rows.")
                 continue
 
-            # Build labels for selection
-            label_cols = [c for c in ["Name", "Subject", "Title"] if c in child_df.columns]
-            has_id = "Id" in child_df.columns
+            display_cols = select_display_columns(
+                child_obj.api_name, child_df, show_all_fields, show_ids=show_ids
+            )
 
-            labels: list[str] = []
-            ids: list[str] = []
-            for _, r in child_df.iterrows():
-                rid = str(r.get("Id", "") if has_id else "").strip()
-                lab = ""
-                for c in label_cols:
-                    v = str(r.get(c, "") or "").strip()
-                    if v:
-                        lab = v
-                        break
-                if lab and rid:
-                    labels.append(f"{lab} [{rid}]")
-                elif rid:
-                    labels.append(rid)
-                else:
-                    labels.append(lab or "(no id)")
-                ids.append(rid)
+            st.dataframe(
+                child_df[display_cols],
+                width="stretch",
+                hide_index=True,
+                height=260,
+            )
 
-            # Selector + Open button
-            cols = st.columns([3, 1])
+            # --- Navigation controls (THE FIX) ---
+            # Build choices from records dicts so we always have Id
+            choices = [
+                _child_label(child_obj.api_name, r)
+                for r in coll.records
+                if str(r.get("Id", "") or "").strip()
+            ]
+
+            if not choices:
+                st.info("No Ids available to navigate to in this relationship.")
+                continue
+
+            # Keep widget keys stable & unique per relationship
+            key_base = f"child_nav_{record.parent.sf_object.api_name}_{record.parent.data.get('Id','')}_{child_obj.api_name}_{rel.name}"
+
+            cols = st.columns([4, 1])
             with cols[0]:
-                choice = st.selectbox(
-                    "Pick a child record to open",
-                    options=labels,
+                sel = st.selectbox(
+                    "Select a child record",
+                    options=choices,
                     index=0,
-                    key=f"child_pick_{child_obj.api_name}_{rel.name}",
+                    key=f"{key_base}_select",
                 )
             with cols[1]:
-                if st.button("Open child", key=f"child_open_{child_obj.api_name}_{rel.name}"):
-                    child_id = _id_from_label(choice) or choice
-                    if not child_id:
-                        st.warning("Selected row has no Id; cannot navigate.")
-                    else:
-                        push(child_obj.api_name, child_id, label=choice)
-                        st.rerun()
-
-            # Show table
-            display_cols = select_display_columns(
-                child_obj.api_name,
-                child_df,
-                show_all_fields,
-                show_ids=show_ids,
-            )
-            if display_cols:
-                st.dataframe(
-                    child_df[display_cols],
-                    width="stretch",
-                    hide_index=True,
-                    height=260,
-                )
-            else:
-                st.dataframe(child_df, width="stretch", hide_index=True, height=260)
+                if st.button("Open", key=f"{key_base}_open"):
+                    rid = _id_from_label(sel)
+                    label = sel.rsplit("[", 1)[0].strip()
+                    push(child_obj.api_name, rid, label=label)
+                    st.rerun()
