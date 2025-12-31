@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,52 @@ def _doc_label(row: dict[str, Any]) -> str:
     if src:
         return f"{name} — {src}" if name else src
     return name or "(unnamed document)"
+
+
+def _load_master_index_map(export_root: Path) -> dict[tuple[str, str], str]:
+    """
+    Map (file_source, file_id) -> local_path from meta/master_documents_index.csv.
+    Cached in Streamlit session_state for speed.
+    """
+    key = f"_master_index_map::{str(export_root)}"
+    cached = st.session_state.get(key)
+    if isinstance(cached, dict):
+        return cached  # type: ignore[return-value]
+
+    p = export_root / "meta" / "master_documents_index.csv"
+    m: dict[tuple[str, str], str] = {}
+    if not p.exists():
+        st.session_state[key] = m
+        return m
+
+    with p.open(newline="", encoding="utf-8") as f:
+        r = csv.DictReader(f)
+        for row in r:
+            src = (row.get("file_source") or "").strip()
+            fid = (row.get("file_id") or "").strip()
+            lp = (row.get("local_path") or "").strip()
+            if src and fid and lp:
+                m[(src, fid)] = lp
+
+    st.session_state[key] = m
+    return m
+
+
+def _resolve_rel_path(export_root: Path, row: dict[str, Any]) -> str:
+    # 1) Prefer direct fields on the row (DB/index rows)
+    for k in ("path", "local_path", "Path", "LocalPath", "rel_path", "relative_path"):
+        v = row.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+
+    # 2) Fall back to the master index (best source after backfill)
+    src = (row.get("file_source") or row.get("source") or "").strip()
+    fid = (row.get("file_id") or row.get("Id") or "").strip()
+    if src and fid:
+        m = _load_master_index_map(export_root)
+        return m.get((src, fid), "")
+
+    return ""
 
 
 def render_documents_panel(*, db_path: Path, object_type: str, record_id: str) -> None:
@@ -60,9 +107,11 @@ def render_documents_panel(*, db_path: Path, object_type: str, record_id: str) -
 
     row = label_to_row[sel_label]
 
-    rel_path = (row.get("path") or row.get("local_path") or "").strip()
+    rel_path = _resolve_rel_path(export_root, row)
     if not rel_path:
-        st.warning("Selected document has no path in index.")
+        st.warning("Selected document has no path in index (and no master index match).")
+        with st.expander("Debug: selected row"):
+            st.json(row)
         return
 
     c1, c2, c3 = st.columns([1, 1, 3])
