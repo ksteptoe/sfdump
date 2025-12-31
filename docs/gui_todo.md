@@ -10,6 +10,7 @@
 
 - NAV-001 Breadcrumb jump should not duplicate stack (commit: 0441558)
 - DB-001 URGENT  Not All files retreived from db and sfdump does not know of them
+- DOC-001 Preview doc selector must actually preview (and not “do nothing”)
 
 ---
 
@@ -52,23 +53,7 @@ When messaging, copy/paste:
 
 ## Now (popt queue)
 
-**Active popt:** DOC-001
-
-### DOC-001 Preview doc selector must actually preview (and not “do nothing”)
-**Problem:** Selecting a different doc sometimes appears to do nothing (often due to non-unique labels or stale widget key).
-**Approach (minimal):** Ensure document select labels are unique and selectbox has a stable key.
-
-**DoD**
-- Changing selection updates preview every time (PDF/image/text as applicable).
-- If file missing, UI shows clear error once (not silent failure).
-
-**Smoke test**
-- On a record with multiple docs:
-  - Select doc A → preview A appears
-  - Select doc B → preview B appears
-  - Select missing doc → clear message shown
-
----
+**Active popt:** NAV-002
 
 ### NAV-002 Back button (main pane) pops the object
 **Problem:** Need quick “back” without relying on sidebar.

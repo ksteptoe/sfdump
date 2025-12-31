@@ -75,7 +75,7 @@ def preview_file(
     with st.spinner("Loading preview..."):
         if ext == ".pdf":
             with st.expander("PDF preview", expanded=expanded):
-                preview_pdf_file(full_path, height=pdf_height)
+                preview_pdf_file(full_path, height=pdf_height, context=title or "")
             return
 
         if ext in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff"):
