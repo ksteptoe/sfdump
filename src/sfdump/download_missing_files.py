@@ -5,31 +5,101 @@ import csv
 import json
 import os
 import re
+import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Optional, Tuple
+
+
+def _configure_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+        except Exception:
+            pass
+
+
+def _safe_print(msg: str) -> None:
+    """
+    Print without ever crashing on Windows console encodings.
+    Falls back to writing UTF-8 bytes if text write fails.
+    """
+    try:
+        sys.stdout.write(msg + "\n")
+    except UnicodeEncodeError:
+        sys.stdout.buffer.write((msg + "\n").encode("utf-8", "backslashreplace"))
+        sys.stdout.flush()
 
 
 def _looks_like_url(s: str) -> bool:
     return s.startswith("https://") or s.startswith("http://")
 
 
-def _request_json(url: str, access_token: str) -> Any:
-    req = urllib.request.Request(url)
-    req.add_header("Authorization", f"Bearer {access_token}")
-    req.add_header("Accept", "application/json")
-    with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
-        data = resp.read().decode("utf-8")
-    return json.loads(data)
+def _parse_dotenv_line(line: str) -> Tuple[Optional[str], Optional[str]]:
+    # Very small .env parser: KEY=VALUE, ignores comments/blank lines
+    s = line.strip()
+    if not s or s.startswith("#"):
+        return None, None
+    if "=" not in s:
+        return None, None
+    k, v = s.split("=", 1)
+    k = k.strip()
+    v = v.strip()
+
+    # strip surrounding quotes
+    if len(v) >= 2 and ((v[0] == v[-1] == '"') or (v[0] == v[-1] == "'")):
+        v = v[1:-1]
+    return (k or None), v
 
 
-def _request_bytes(url: str, access_token: str) -> bytes:
-    req = urllib.request.Request(url)
-    req.add_header("Authorization", f"Bearer {access_token}")
-    req.add_header("Accept", "*/*")
-    with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
-        return resp.read()
+def _load_env_file(path: Path) -> bool:
+    if not path.exists() or not path.is_file():
+        return False
+
+    try:
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            k, v = _parse_dotenv_line(line)
+            if not k:
+                continue
+            # do not override already-set env
+            os.environ.setdefault(k, v)
+        return True
+    except Exception:
+        return False
+
+
+def _dotenv_candidates(start: Path) -> Iterable[Path]:
+    """
+    Yield candidate .env paths, starting at 'start' and walking parents,
+    plus cwd and its parents. This avoids the 'works in python -m but not in console_script'
+    cwd mismatch.
+    """
+    seen: set[Path] = set()
+
+    def walk(p: Path) -> Iterable[Path]:
+        p = p.resolve()
+        for parent in (p, *p.parents):
+            yield parent / ".env"
+
+    for p in walk(start):
+        if p not in seen:
+            seen.add(p)
+            yield p
+
+    cwd = Path.cwd()
+    for p in walk(cwd):
+        if p not in seen:
+            seen.add(p)
+            yield p
+
+
+def _load_dotenv_best_effort(export_root: Path) -> None:
+    # Try to load the first .env we find (closest wins), but harmless if none.
+    for cand in _dotenv_candidates(export_root):
+        if _load_env_file(cand):
+            return
 
 
 def _coerce_access_token(token_obj: Any) -> str:
@@ -53,6 +123,122 @@ def _coerce_access_token(token_obj: Any) -> str:
     )
 
 
+def _coerce_instance_url(token_obj: Any) -> str:
+    inst = ""
+    if isinstance(token_obj, dict):
+        inst = str(token_obj.get("instance_url") or token_obj.get("instanceUrl") or "").strip()
+    else:
+        inst = str(
+            getattr(token_obj, "instance_url", None)
+            or getattr(token_obj, "instanceUrl", None)
+            or ""
+        ).strip()
+    return inst.rstrip("/")
+
+
+class TokenProvider:
+    """
+    Holds the current token and can refresh on 401 by calling sfdump.sf_auth.get_salesforce_token().
+    """
+
+    def __init__(self, token: str, instance_url: str, cfg: Any) -> None:
+        self._token = token
+        self._instance_url = instance_url
+        self._cfg = cfg
+
+    @property
+    def token(self) -> str:
+        return self._token
+
+    @property
+    def instance_url(self) -> str:
+        return self._instance_url
+
+    def refresh(self) -> None:
+        from sfdump.sf_auth import get_salesforce_token  # type: ignore
+
+        token_obj = get_salesforce_token()
+        tok = _coerce_access_token(token_obj)
+        inst = _coerce_instance_url(token_obj)
+
+        if tok:
+            self._token = tok
+        if inst:
+            self._instance_url = inst
+
+        if not self._token:
+            raise SystemExit("Token refresh failed: missing access token.")
+        if not self._instance_url:
+            # keep existing instance_url if token doesn't provide it
+            if not self._instance_url:
+                raise SystemExit("Token refresh failed: missing instance_url.")
+
+
+def _urlopen(req: urllib.request.Request, timeout: int = 60) -> bytes:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        return resp.read()
+
+
+def _request_json(url: str, tp: TokenProvider, *, timeout: int = 60, max_retries: int = 3) -> Any:
+    """
+    Robust request:
+      - on 401: refresh token once, retry immediately
+      - on 429/5xx: backoff + retry
+    """
+    refreshed = False
+
+    for attempt in range(max_retries):
+        req = urllib.request.Request(url)
+        req.add_header("Authorization", f"Bearer {tp.token}")
+        req.add_header("Accept", "application/json")
+
+        try:
+            raw = _urlopen(req, timeout=timeout)
+            return json.loads(raw.decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            code = getattr(e, "code", None)
+
+            if code == 401 and not refreshed:
+                # token likely expired mid-run
+                tp.refresh()
+                refreshed = True
+                continue
+
+            # transient retry
+            if code in (429, 500, 502, 503, 504) and attempt < (max_retries - 1):
+                time.sleep(min(8.0, 0.5 * (2**attempt)))
+                continue
+
+            raise
+
+
+def _request_bytes(
+    url: str, tp: TokenProvider, *, timeout: int = 60, max_retries: int = 3
+) -> bytes:
+    refreshed = False
+
+    for attempt in range(max_retries):
+        req = urllib.request.Request(url)
+        req.add_header("Authorization", f"Bearer {tp.token}")
+        req.add_header("Accept", "*/*")
+
+        try:
+            return _urlopen(req, timeout=timeout)
+        except urllib.error.HTTPError as e:
+            code = getattr(e, "code", None)
+
+            if code == 401 and not refreshed:
+                tp.refresh()
+                refreshed = True
+                continue
+
+            if code in (429, 500, 502, 503, 504) and attempt < (max_retries - 1):
+                time.sleep(min(8.0, 0.5 * (2**attempt)))
+                continue
+
+            raise
+
+
 def _safe_filename(stem: str, ext: str) -> str:
     stem = (stem or "").strip()
     stem = re.sub(r"[^\w\-. ()]+", "_", stem)
@@ -68,12 +254,12 @@ def _safe_filename(stem: str, ext: str) -> str:
 def _get_latest_published_version_id(
     *,
     instance_url: str,
-    access_token: str,
+    tp: TokenProvider,
     api_version: str,
     content_document_id: str,
 ) -> str:
     url = f"{instance_url}/services/data/v{api_version}/sobjects/ContentDocument/{content_document_id}"
-    data = _request_json(url, access_token)
+    data = _request_json(url, tp)
     v = data.get("LatestPublishedVersionId") or data.get("LatestPublishedVersionId".lower())
     if not v:
         raise SystemExit(
@@ -86,7 +272,7 @@ def _get_latest_published_version_id(
 def _download_content_version_versiondata(
     *,
     instance_url: str,
-    access_token: str,
+    tp: TokenProvider,
     api_version: str,
     content_version_id: str,
 ) -> bytes:
@@ -94,7 +280,7 @@ def _download_content_version_versiondata(
         f"{instance_url}/services/data/v{api_version}/sobjects/"
         f"ContentVersion/{content_version_id}/VersionData"
     )
-    return _request_bytes(url, access_token)
+    return _request_bytes(url, tp)
 
 
 def run_backfill(
@@ -106,14 +292,11 @@ def run_backfill(
     api_version: str = "60.0",
     access_token: str | None = None,
 ) -> int:
-    """Backfill missing Salesforce Files into an existing export.
+    _configure_stdio()
 
-    Downloads blobs for rows in meta/master_documents_index.csv that represent
-    Salesforce Files but have blank local_path.
-
-    Returns an exit code (0=ok, 2=some failures).
-    """
     export_root = Path(export_root)
+    _load_dotenv_best_effort(export_root)
+
     index_path = export_root / "meta" / "master_documents_index.csv"
     files_root = export_root / "files"
 
@@ -121,15 +304,12 @@ def run_backfill(
         raise SystemExit(f"Missing index: {index_path}")
     files_root.mkdir(parents=True, exist_ok=True)
 
-    # Use the existing env/.env machinery (api.py loads .env on import)
     from sfdump.api import SFConfig  # triggers load_env_files(quiet=True)
 
     cfg = SFConfig.from_env()
-
-    # api_version: CLI arg > cfg > default
     ver = (api_version or cfg.api_version or "60.0").strip()
 
-    # instance URL: CLI arg > SF_INSTANCE_URL/cfg.instance_url > fallback to SF_LOGIN_URL/cfg.login_url
+    # instance URL: CLI arg > cfg.instance_url/env > fallback to login_url if it looks like a My Domain URL
     inst = (
         (instance_url or cfg.instance_url or os.environ.get("SF_INSTANCE_URL", ""))
         .strip()
@@ -137,34 +317,30 @@ def run_backfill(
     )
     if not inst:
         login_fallback = (
-            getattr(cfg, "login_url", None) or os.environ.get("SF_LOGIN_URL", "")
-        ).strip()
-        if login_fallback and _looks_like_url(login_fallback):
-            inst = login_fallback.rstrip("/")
+            (getattr(cfg, "login_url", None) or os.environ.get("SF_LOGIN_URL", ""))
+            .strip()
+            .rstrip("/")
+        )
+        if (
+            login_fallback
+            and _looks_like_url(login_fallback)
+            and login_fallback.endswith(".my.salesforce.com")
+        ):
+            inst = login_fallback
 
-    # token: CLI arg > cfg/env; if missing, fetch using existing helper
     tok = (access_token or cfg.access_token or os.environ.get("SF_ACCESS_TOKEN", "")).strip()
+
+    # If no token, obtain one (and maybe instance_url) via sf_auth
     if not tok:
         from sfdump.sf_auth import get_salesforce_token  # type: ignore
 
         token_obj = get_salesforce_token()
         tok = _coerce_access_token(token_obj)
 
-        # some flows return instance_url too
         if not inst:
-            inst_from_token = ""
-            if isinstance(token_obj, dict):
-                inst_from_token = str(
-                    token_obj.get("instance_url") or token_obj.get("instanceUrl") or ""
-                ).strip()
-            else:
-                inst_from_token = str(
-                    getattr(token_obj, "instance_url", None)
-                    or getattr(token_obj, "instanceUrl", None)
-                    or ""
-                ).strip()
+            inst_from_token = _coerce_instance_url(token_obj)
             if inst_from_token:
-                inst = inst_from_token.rstrip("/")
+                inst = inst_from_token
 
     if not inst:
         raise SystemExit(
@@ -174,7 +350,8 @@ def run_backfill(
     if not tok:
         raise SystemExit("Missing access_token (or SF_ACCESS_TOKEN).")
 
-    # Read rows
+    tp = TokenProvider(tok, inst, cfg)
+
     with index_path.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         fieldnames = list(reader.fieldnames or [])
@@ -193,21 +370,20 @@ def run_backfill(
         )
     ]
 
-    print(f"Index rows: {len(rows)}")
-    print(
+    _safe_print(f"Index rows: {len(rows)}")
+    _safe_print(
         "Missing File rows (069=ContentDocument or 068=ContentVersion) with blank local_path: "
         f"{len(missing)}"
     )
     if not missing:
-        print("Nothing to do.")
+        _safe_print("Nothing to do.")
         return 0
 
-    # Click uses limit=0 to mean "no limit"
     todo = missing if limit <= 0 else missing[: int(limit)]
-    if limit <= 0:
-        print(f"Will process: {len(todo)} (limit=0 -> no limit, dry_run={dry_run})")
-    else:
-        print(f"Will process: {len(todo)} (limit={limit}, dry_run={dry_run})")
+    _safe_print(
+        f"Will process: {len(todo)} "
+        f"({'limit=0 -> no limit' if limit <= 0 else f'limit={limit}'}, dry_run={dry_run})"
+    )
 
     downloaded = 0
     failed = 0
@@ -220,23 +396,23 @@ def run_backfill(
         try:
             if file_id.startswith("069"):
                 ver_id = _get_latest_published_version_id(
-                    instance_url=inst,
-                    access_token=tok,
+                    instance_url=tp.instance_url,
+                    tp=tp,
                     api_version=ver,
                     content_document_id=file_id,
                 )
             elif file_id.startswith("068"):
                 ver_id = file_id
             else:
-                print(f"SKIP unsupported file_id: {file_id}")
+                _safe_print(f"SKIP unsupported file_id: {file_id}")
                 continue
         except urllib.error.HTTPError as e:
             failed += 1
-            print(f"FAIL resolve {file_id} HTTP {e.code}: {e.reason}")
+            _safe_print(f"FAIL resolve {file_id} HTTP {e.code}: {e.reason}")
             continue
         except Exception as e:
             failed += 1
-            print(f"FAIL resolve {file_id}: {e}")
+            _safe_print(f"FAIL resolve {file_id}: {e}")
             continue
 
         subdir = files_root / file_id[:2]
@@ -248,30 +424,30 @@ def run_backfill(
 
         if abs_path.exists():
             r["local_path"] = str(rel_path).replace("/", "\\")
-            print(f"SKIP exists -> set local_path: {file_id} -> {r['local_path']}")
+            _safe_print(f"SKIP exists -> set local_path: {file_id} -> {r['local_path']}")
             continue
 
         if dry_run:
-            print(f"DRY-RUN would download: {file_id} (via {ver_id}) -> {rel_path}")
+            _safe_print(f"DRY-RUN would download: {file_id} (via {ver_id}) -> {rel_path}")
             continue
 
         try:
             data = _download_content_version_versiondata(
-                instance_url=inst,
-                access_token=tok,
+                instance_url=tp.instance_url,
+                tp=tp,
                 api_version=ver,
                 content_version_id=ver_id,
             )
             abs_path.write_bytes(data)
             r["local_path"] = str(rel_path).replace("/", "\\")
             downloaded += 1
-            print(f"OK {file_id} (via {ver_id}) ({len(data)} bytes) -> {r['local_path']}")
+            _safe_print(f"OK {file_id} (via {ver_id}) ({len(data)} bytes) -> {r['local_path']}")
         except urllib.error.HTTPError as e:
             failed += 1
-            print(f"FAIL download {file_id} (via {ver_id}) HTTP {e.code}: {e.reason}")
+            _safe_print(f"FAIL download {file_id} (via {ver_id}) HTTP {e.code}: {e.reason}")
         except Exception as e:
             failed += 1
-            print(f"FAIL download {file_id} (via {ver_id}): {e}")
+            _safe_print(f"FAIL download {file_id} (via {ver_id}): {e}")
 
     if not dry_run:
         tmp = index_path.with_suffix(".csv.tmp")
@@ -281,7 +457,7 @@ def run_backfill(
             writer.writerows(rows)
         tmp.replace(index_path)
 
-    print(f"Downloaded: {downloaded}  Failed: {failed}")
+    _safe_print(f"Downloaded: {downloaded}  Failed: {failed}")
     return 0 if failed == 0 else 2
 
 

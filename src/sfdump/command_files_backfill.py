@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import click
+
+
+def _configure_stdio() -> None:
+    # Force UTF-8 + never crash on unencodable output
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+        except Exception:
+            pass
 
 
 @click.command("files-backfill")
@@ -39,6 +49,8 @@ def files_backfill_cmd(
     dry_run: bool,
 ) -> None:
     """Backfill missing Salesforce Files into an existing export."""
+    _configure_stdio()
+
     from sfdump.download_missing_files import run_backfill
 
     rc = run_backfill(
