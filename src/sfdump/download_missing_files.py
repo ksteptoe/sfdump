@@ -33,7 +33,6 @@ def _request_bytes(url: str, access_token: str) -> bytes:
 
 
 def _coerce_access_token(token_obj: Any) -> str:
-    # Common sfdump setups return a bare token string
     if isinstance(token_obj, str):
         return token_obj.strip()
 
@@ -49,7 +48,8 @@ def _coerce_access_token(token_obj: Any) -> str:
         return str(tok).strip()
 
     raise SystemExit(
-        f"Could not obtain access token from get_salesforce_token() return type={type(token_obj).__name__}"
+        "Could not obtain access token from get_salesforce_token() "
+        f"return type={type(token_obj).__name__}"
     )
 
 
@@ -77,7 +77,8 @@ def _get_latest_published_version_id(
     v = data.get("LatestPublishedVersionId") or data.get("LatestPublishedVersionId".lower())
     if not v:
         raise SystemExit(
-            f"ContentDocument {content_document_id}: missing LatestPublishedVersionId (keys={sorted(data.keys())[:30]})"
+            f"ContentDocument {content_document_id}: missing LatestPublishedVersionId "
+            f"(keys={sorted(data.keys())[:30]})"
         )
     return str(v)
 
@@ -96,27 +97,23 @@ def _download_content_version_versiondata(
     return _request_bytes(url, access_token)
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(
-        description="Download missing Salesforce Files referenced by master_documents_index.csv"
-    )
-    ap.add_argument("--export-root", required=True, help="Export root folder")
-    ap.add_argument("--limit", type=int, default=200, help="Max downloads in this run")
-    ap.add_argument(
-        "--api-version", default="60.0", help="Salesforce REST API version (e.g. 60.0)."
-    )
-    ap.add_argument(
-        "--access-token", default="", help="Override access token (or set SF_ACCESS_TOKEN)"
-    )
-    ap.add_argument(
-        "--instance-url", default="", help="Override instance URL (or set SF_INSTANCE_URL)"
-    )
-    ap.add_argument(
-        "--dry-run", action="store_true", help="Do not download; just report what would be done."
-    )
-    args = ap.parse_args()
+def run_backfill(
+    *,
+    export_root: Path,
+    instance_url: str | None = None,
+    limit: int = 200,
+    dry_run: bool = False,
+    api_version: str = "60.0",
+    access_token: str | None = None,
+) -> int:
+    """Backfill missing Salesforce Files into an existing export.
 
-    export_root = Path(args.export_root)
+    Downloads blobs for rows in meta/master_documents_index.csv that represent
+    Salesforce Files but have blank local_path.
+
+    Returns an exit code (0=ok, 2=some failures).
+    """
+    export_root = Path(export_root)
     index_path = export_root / "meta" / "master_documents_index.csv"
     files_root = export_root / "files"
 
@@ -124,15 +121,58 @@ def main() -> int:
         raise SystemExit(f"Missing index: {index_path}")
     files_root.mkdir(parents=True, exist_ok=True)
 
-    instance_url = (args.instance_url or os.environ.get("SF_INSTANCE_URL", "")).strip().rstrip("/")
-    if not instance_url:
-        raise SystemExit("Missing --instance-url (or SF_INSTANCE_URL).")
+    # Use the existing env/.env machinery (api.py loads .env on import)
+    from sfdump.api import SFConfig  # triggers load_env_files(quiet=True)
 
-    access_token = (args.access_token or os.environ.get("SF_ACCESS_TOKEN", "")).strip()
-    if not access_token:
+    cfg = SFConfig.from_env()
+
+    # api_version: CLI arg > cfg > default
+    ver = (api_version or cfg.api_version or "60.0").strip()
+
+    # instance URL: CLI arg > SF_INSTANCE_URL/cfg.instance_url > fallback to SF_LOGIN_URL/cfg.login_url
+    inst = (
+        (instance_url or cfg.instance_url or os.environ.get("SF_INSTANCE_URL", ""))
+        .strip()
+        .rstrip("/")
+    )
+    if not inst:
+        login_fallback = (
+            getattr(cfg, "login_url", None) or os.environ.get("SF_LOGIN_URL", "")
+        ).strip()
+        if login_fallback and _looks_like_url(login_fallback):
+            inst = login_fallback.rstrip("/")
+
+    # token: CLI arg > cfg/env; if missing, fetch using existing helper
+    tok = (access_token or cfg.access_token or os.environ.get("SF_ACCESS_TOKEN", "")).strip()
+    if not tok:
         from sfdump.sf_auth import get_salesforce_token  # type: ignore
 
-        access_token = _coerce_access_token(get_salesforce_token())
+        token_obj = get_salesforce_token()
+        tok = _coerce_access_token(token_obj)
+
+        # some flows return instance_url too
+        if not inst:
+            inst_from_token = ""
+            if isinstance(token_obj, dict):
+                inst_from_token = str(
+                    token_obj.get("instance_url") or token_obj.get("instanceUrl") or ""
+                ).strip()
+            else:
+                inst_from_token = str(
+                    getattr(token_obj, "instance_url", None)
+                    or getattr(token_obj, "instanceUrl", None)
+                    or ""
+                ).strip()
+            if inst_from_token:
+                inst = inst_from_token.rstrip("/")
+
+    if not inst:
+        raise SystemExit(
+            "Missing instance_url. Set SF_INSTANCE_URL in .env, or set SF_LOGIN_URL to your My Domain "
+            "(e.g. https://yourorg.my.salesforce.com), or pass --instance-url."
+        )
+    if not tok:
+        raise SystemExit("Missing access_token (or SF_ACCESS_TOKEN).")
 
     # Read rows
     with index_path.open("r", encoding="utf-8", newline="") as f:
@@ -143,7 +183,6 @@ def main() -> int:
     if "local_path" not in fieldnames:
         raise SystemExit("master_documents_index.csv has no 'local_path' column")
 
-    # Missing "File" rows with a file_id that looks like ContentDocument(069) or ContentVersion(068)
     missing = [
         r
         for r in rows
@@ -156,14 +195,19 @@ def main() -> int:
 
     print(f"Index rows: {len(rows)}")
     print(
-        f"Missing File rows (069=ContentDocument or 068=ContentVersion) with blank local_path: {len(missing)}"
+        "Missing File rows (069=ContentDocument or 068=ContentVersion) with blank local_path: "
+        f"{len(missing)}"
     )
     if not missing:
         print("Nothing to do.")
         return 0
 
-    todo = missing[: int(args.limit)]
-    print(f"Will process: {len(todo)} (limit={args.limit}, dry_run={args.dry_run})")
+    # Click uses limit=0 to mean "no limit"
+    todo = missing if limit <= 0 else missing[: int(limit)]
+    if limit <= 0:
+        print(f"Will process: {len(todo)} (limit=0 -> no limit, dry_run={dry_run})")
+    else:
+        print(f"Will process: {len(todo)} (limit={limit}, dry_run={dry_run})")
 
     downloaded = 0
     failed = 0
@@ -173,14 +217,12 @@ def main() -> int:
         name = str(r.get("file_name") or "").strip()
         ext = str(r.get("file_extension") or "").strip()
 
-        # Decide which id we need for VersionData
         try:
             if file_id.startswith("069"):
-                # ContentDocument -> LatestPublishedVersionId (ContentVersion)
                 ver_id = _get_latest_published_version_id(
-                    instance_url=instance_url,
-                    access_token=access_token,
-                    api_version=str(args.api_version),
+                    instance_url=inst,
+                    access_token=tok,
+                    api_version=ver,
                     content_document_id=file_id,
                 )
             elif file_id.startswith("068"):
@@ -209,15 +251,15 @@ def main() -> int:
             print(f"SKIP exists -> set local_path: {file_id} -> {r['local_path']}")
             continue
 
-        if args.dry_run:
+        if dry_run:
             print(f"DRY-RUN would download: {file_id} (via {ver_id}) -> {rel_path}")
             continue
 
         try:
             data = _download_content_version_versiondata(
-                instance_url=instance_url,
-                access_token=access_token,
-                api_version=str(args.api_version),
+                instance_url=inst,
+                access_token=tok,
+                api_version=ver,
                 content_version_id=ver_id,
             )
             abs_path.write_bytes(data)
@@ -231,7 +273,7 @@ def main() -> int:
             failed += 1
             print(f"FAIL download {file_id} (via {ver_id}): {e}")
 
-    if not args.dry_run:
+    if not dry_run:
         tmp = index_path.with_suffix(".csv.tmp")
         with tmp.open("w", encoding="utf-8", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -241,6 +283,36 @@ def main() -> int:
 
     print(f"Downloaded: {downloaded}  Failed: {failed}")
     return 0 if failed == 0 else 2
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Download missing Salesforce Files referenced by master_documents_index.csv"
+    )
+    ap.add_argument("--export-root", required=True, help="Export root folder")
+    ap.add_argument("--limit", type=int, default=200, help="Max downloads in this run")
+    ap.add_argument(
+        "--api-version", default="60.0", help="Salesforce REST API version (e.g. 60.0)."
+    )
+    ap.add_argument(
+        "--access-token", default="", help="Override access token (or set SF_ACCESS_TOKEN)"
+    )
+    ap.add_argument(
+        "--instance-url", default="", help="Override instance URL (or set SF_INSTANCE_URL)"
+    )
+    ap.add_argument(
+        "--dry-run", action="store_true", help="Do not download; just report what would be done."
+    )
+    args = ap.parse_args(argv)
+
+    return run_backfill(
+        export_root=Path(args.export_root),
+        instance_url=args.instance_url or None,
+        limit=int(args.limit),
+        dry_run=bool(args.dry_run),
+        api_version=str(args.api_version),
+        access_token=args.access_token or None,
+    )
 
 
 if __name__ == "__main__":

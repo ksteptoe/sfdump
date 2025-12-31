@@ -32,6 +32,7 @@ FILES_LEGACY_DIR := $(EXPORT_ROOT)/files_legacy
 LINKS_DIR        := $(EXPORT_ROOT)/links
 META_DIR         := $(EXPORT_ROOT)/meta
 LOG_DIR          := $(EXPORT_ROOT)/logs
+LOG_FILE	 := $(LOG_DIR)/$(EXPORT_ROOT).log
 
 # ----------------------------------------------------------------------
 # FILE INDEX SETTINGS (for --index-by)

@@ -8,6 +8,7 @@ from typing import Optional, cast
 import click
 from click import Command
 
+from sfdump.command_files_backfill import files_backfill_cmd
 from sfdump.sf_auth import get_salesforce_token, run_salesforce_query
 
 from . import __version__
@@ -130,6 +131,7 @@ cli.add_command(cast(Command, schema_cmd), "schema")
 cli.add_command(cast(Command, rels_cmd))
 cli.add_command(cast(Command, docs_for_cmd))
 cli.add_command(cast(Command, probe_cmd))
+cli.add_command(cast(Command, files_backfill_cmd))
 
 
 # Keep the original name (probably "cfo-generate-docs")

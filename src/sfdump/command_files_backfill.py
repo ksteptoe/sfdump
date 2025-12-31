@@ -8,6 +8,7 @@ import click
 @click.command("files-backfill")
 @click.option(
     "--export-root",
+    "-d",
     type=click.Path(path_type=Path, exists=True, file_okay=False),
     required=True,
     help="Existing sfdump export root (contains meta/master_documents_index.csv).",
@@ -16,7 +17,7 @@ import click
     "--instance-url",
     type=str,
     default=None,
-    help="Salesforce instance URL (if token helper returns token only).",
+    help="Salesforce instance URL override (otherwise from env/.env).",
 )
 @click.option(
     "--limit",
@@ -37,13 +38,8 @@ def files_backfill_cmd(
     limit: int,
     dry_run: bool,
 ) -> None:
-    """Backfill missing Salesforce Files into an existing export.
-
-    Downloads blobs for rows in meta/master_documents_index.csv that represent
-    Salesforce Files but have blank local_path.
-    """
-    # Lazy import so normal CLI stays fast and avoids importing requests deps if unused
-    from scripts.download_missing_files import run_backfill  # type: ignore[import-not-found]
+    """Backfill missing Salesforce Files into an existing export."""
+    from sfdump.download_missing_files import run_backfill
 
     rc = run_backfill(
         export_root=export_root,
