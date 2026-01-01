@@ -11,6 +11,7 @@
 - NAV-001 Breadcrumb jump should not duplicate stack (commit: 0441558)
 - DB-001 URGENT  Not All files retreived from db and sfdump does not know of them
 - DOC-001 Preview doc selector must actually preview (and not “do nothing”)
+- NAV-002 Back button (main pane) pops the object
 
 ---
 
@@ -53,25 +54,7 @@ When messaging, copy/paste:
 
 ## Now (popt queue)
 
-**Active popt:** NAV-002
-
-### NAV-002 Back button (main pane) pops the object
-**Problem:** Need quick “back” without relying on sidebar.
-**Approach:** Add `⬅ Back` in right-pane header using `nav.pop()`.
-
-**DoD**
-- Back button always returns to previous object (pop stack).
-- Disabled when there is no previous object.
-
-**Smoke test**
-- Drill in one level
-- Press Back
-- Confirm you return to parent
-
----
-
-## Next (pusht candidates)
-
+**Active popt:** DOC-002
 ### DOC-002 Documents panel: standardised renderer
 **Goal:** One shared UI component that lists docs, previews, and opens/downloads.
 **Approach:** Introduce `ui/documents_panel.py` with `render_documents_panel(...)`.
@@ -81,7 +64,6 @@ When messaging, copy/paste:
 - No duplicated preview logic scattered across UI files
 
 ---
-
 ### DOC-003 Document Explorer (global search)
 **Goal:** Search across *all* documents via `meta/master_documents_index.csv`.
 **Features**
@@ -103,6 +85,12 @@ When messaging, copy/paste:
 - Starting at an Opportunity, you can view all attached docs in its descendant tree
 
 ---
+
+## Next (pusht candidates)
+
+
+
+
 
 ### REL-002 “Inbound references” view (graph-ish navigation)
 **Goal:** From finance objects (invoice/journal/transaction), discover links back to Opportunity/Account even if schema is incomplete.
