@@ -8,7 +8,6 @@ import streamlit as st
 
 from sfdump.indexing import OBJECTS
 from sfdump.viewer import get_record_with_children
-from sfdump.viewer_app.preview.files import preview_file
 from sfdump.viewer_app.services.display import get_important_fields
 from sfdump.viewer_app.services.documents import load_master_documents_index
 from sfdump.viewer_app.services.paths import infer_export_root
@@ -153,6 +152,7 @@ def main() -> None:
                 db_path=db_path,
                 object_type=api_name,
                 record_id=selected_id,
+                title="Documents tab preview",
             )
 
         # ------------------------------------------------------------------
@@ -251,12 +251,21 @@ def main() -> None:
             local_path = selected_doc.rsplit("::", 1)[-1].strip()
 
             if local_path:
-                # This now expands by default (preview_file default expanded=True)
-                preview_file(
-                    export_root,
-                    local_path,
+                from sfdump.viewer_app.ui.documents_panel import render_documents_panel_from_rows
+
+                chosen_doc_row = {
+                    "path": local_path,  # relative path under export_root
+                    "file_name": Path(local_path).name,
+                    "file_id": "",  # optional
+                    "file_source": "File",
+                }
+
+                render_documents_panel_from_rows(
+                    export_root=export_root,
+                    rows=[chosen_doc_row],
                     title="Selected subtree document preview",
-                    expanded=True,
+                    key_prefix=f"subtree_doc_{api_name}_{selected_id}",
+                    pdf_height=800,
                 )
 
 
