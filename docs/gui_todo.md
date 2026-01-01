@@ -12,6 +12,7 @@
 - DB-001 URGENT  Not All files retreived from db and sfdump does not know of them
 - DOC-001 Preview doc selector must actually preview (and not “do nothing”)
 - NAV-002 Back button (main pane) pops the object
+- DOC-002 Documents panel: standardised renderer
 
 ---
 
@@ -54,16 +55,8 @@ When messaging, copy/paste:
 
 ## Now (popt queue)
 
-**Active popt:** DOC-002
-### DOC-002 Documents panel: standardised renderer
-**Goal:** One shared UI component that lists docs, previews, and opens/downloads.
-**Approach:** Introduce `ui/documents_panel.py` with `render_documents_panel(...)`.
+**Active popt:** DOC-003
 
-**DoD**
-- Documents tab uses shared panel
-- No duplicated preview logic scattered across UI files
-
----
 ### DOC-003 Document Explorer (global search)
 **Goal:** Search across *all* documents via `meta/master_documents_index.csv`.
 **Features**
