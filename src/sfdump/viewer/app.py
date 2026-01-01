@@ -7,6 +7,8 @@ from typing import Optional
 import pandas as pd
 import streamlit as st
 
+from sfdump.viewer_app.ui.documents_panel import render_documents_panel_from_rows
+
 from .nav import nav_back_button, nav_breadcrumb, nav_current, nav_init, nav_open_button
 
 
@@ -110,7 +112,6 @@ def render_home(repo: Repo) -> None:
             if id_col is None:
                 st.warning("Invoice CSV has no Id column; cannot drill into invoices.")
             else:
-                # Keep it light: show first N rows and a filter
                 q = st.text_input("Filter (contains)", value="", key="_sfdump_invoice_filter")
                 if q:
                     mask = show.astype(str).apply(lambda s: s.str.contains(q, case=False, na=False))
@@ -138,7 +139,6 @@ def render_home(repo: Repo) -> None:
     with col2:
         st.markdown("#### Documents")
         md = repo.master_docs
-        # If file_source exists, prefer Files, otherwise show all.
         if "file_source" in md.columns:
             md = md[md["file_source"].astype(str) == "File"]
         qd = st.text_input("Filter documents (contains)", value="", key="_sfdump_doc_filter")
@@ -146,7 +146,6 @@ def render_home(repo: Repo) -> None:
             mask = md.astype(str).apply(lambda s: s.str.contains(qd, case=False, na=False))
             md = md[mask.any(axis=1)]
 
-        # Prefer content_document_id if present; else any id-like column.
         doc_id_col = _best_col(md, "content_document_id", "document_id", "id")
         title_col = _best_col(md, "title", "file_title", "name")
         md = md.head(200)
@@ -178,7 +177,7 @@ def render_invoice(repo: Repo, invoice_id: str) -> None:
             inv = repo.invoices[repo.invoices[id_col].astype(str) == str(invoice_id)]
             if not inv.empty:
                 st.markdown("#### Invoice row")
-                st.dataframe(inv, use_container_width=True, hide_index=True)
+                st.dataframe(inv, width="stretch", hide_index=True)
 
     st.markdown("#### Linked documents")
     rd = repo.record_docs
@@ -192,7 +191,7 @@ def render_invoice(repo: Repo, invoice_id: str) -> None:
         st.warning(
             "record_documents.csv missing expected columns; need record_id + content_document_id."
         )
-        st.dataframe(rd.head(50), use_container_width=True)
+        st.dataframe(rd.head(50), width="stretch")
         return
 
     links = rd[rd[rec_col].astype(str) == str(invoice_id)].copy()
@@ -208,7 +207,7 @@ def render_invoice(repo: Repo, invoice_id: str) -> None:
         )
 
     title_col = _best_col(links, "title", "file_title", "name")
-    local_col = _best_col(links, "local_path")
+    local_col = _best_col(links, "local_path", "path")
 
     for i, row in links.head(500).iterrows():
         doc_id = str(row.get(doc_col, ""))
@@ -216,7 +215,7 @@ def render_invoice(repo: Repo, invoice_id: str) -> None:
         local_path = str(row.get(local_col, "")) if local_col else ""
         cols = st.columns([6, 2, 1])
         cols[0].write(title)
-        cols[1].caption(local_path if local_path else "(missing local_path)")
+        cols[1].caption(local_path if local_path else "(missing path)")
         with cols[2]:
             nav_open_button(
                 label="Open",
@@ -234,7 +233,7 @@ def render_document(repo: Repo, doc_id: str) -> None:
     md_doc_col = _best_col(md, "content_document_id", "document_id", "id")
     if md_doc_col is None:
         st.warning("master_documents_index has no doc id column.")
-        st.dataframe(md.head(50), use_container_width=True)
+        st.dataframe(md.head(50), width="stretch")
         return
 
     row = md[md[md_doc_col].astype(str) == str(doc_id)]
@@ -243,30 +242,34 @@ def render_document(repo: Repo, doc_id: str) -> None:
         return
 
     st.markdown("#### Document row")
-    st.dataframe(row, use_container_width=True, hide_index=True)
+    st.dataframe(row, width="stretch", hide_index=True)
 
-    local_col = _best_col(row, "local_path")
-    if local_col:
-        rel = str(row.iloc[0].get(local_col, ""))
-        if rel:
-            abs_path = repo.export_root / rel
-            if abs_path.exists():
-                st.success(f"Local file exists: {rel}")
-                try:
-                    data = abs_path.read_bytes()
-                    st.download_button(
-                        "Download file",
-                        data=data,
-                        file_name=abs_path.name,
-                        mime="application/octet-stream",
-                        use_container_width=False,
-                    )
-                except Exception:
-                    st.info("File exists but could not be read for download button.")
-            else:
-                st.warning(f"local_path set but file missing on disk: {rel}")
-        else:
-            st.warning("Missing local_path (needs backfill/download).")
+    # Standardised preview/open/download (DOC-002)
+    local_col = _best_col(row, "local_path", "path")
+    rel = str(row.iloc[0].get(local_col, "")) if local_col else ""
+    if not rel:
+        st.warning("Missing local_path/path (needs backfill/download).")
+    else:
+        src_col = _best_col(row, "file_source")
+        name_col = _best_col(row, "file_name", "title", "name")
+        title_col = _best_col(row, "title", "name")
+
+        chosen_doc_row = {
+            "file_source": str(row.iloc[0].get(src_col, "")) if src_col else "",
+            "file_id": str(row.iloc[0].get(md_doc_col, doc_id)),
+            "file_name": str(row.iloc[0].get(name_col, "")) if name_col else "",
+            "title": str(row.iloc[0].get(title_col, "")) if title_col else "",
+            "path": rel,
+            "local_path": rel,
+        }
+
+        render_documents_panel_from_rows(
+            export_root=repo.export_root,
+            rows=[chosen_doc_row],
+            title=f"Document {doc_id} preview",
+            key_prefix=f"doc_view_{doc_id}",
+            pdf_height=800,
+        )
 
     st.markdown("#### Linked from (records)")
     rd = repo.record_docs
@@ -287,7 +290,6 @@ def render_document(repo: Repo, doc_id: str) -> None:
         st.info("No parent/linked records found for this document.")
         return
 
-    # If invoices exist, label invoice parents more clearly.
     inv_id_col = None
     inv_name_col = None
     if repo.invoices is not None and not repo.invoices.empty:
