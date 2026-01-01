@@ -135,6 +135,11 @@ OBJECTS: Dict[str, SFObject] = {
         label="Journal Line Item",
         table_name="c2g__codaJournalLineItem__c",
     ),
+    "c2g__codaPurchaseInvoice__c": SFObject(
+        api_name="c2g__codaPurchaseInvoice__c",
+        label="Purchase Invoice",
+        table_name="c2g__codaPurchaseInvoice__c",
+    ),
     # Add further exported objects here as we need them
 }
 
