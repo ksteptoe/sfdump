@@ -5,7 +5,6 @@ from typing import Any
 import streamlit as st
 
 from sfdump.viewer_app.services.display import get_important_fields, select_display_columns
-from sfdump.viewer_app.services.nav import push
 
 
 def _child_label(api_name: str, row: dict[str, Any]) -> str:
@@ -119,7 +118,27 @@ def render_children_with_navigation(*, record, show_all_fields: bool, show_ids: 
                     key=f"{key_base}_select",
                 )
             with cols[1]:
+                from sfdump.viewer_app.services.nav import peek, push
+
                 if st.button("Open", key=f"{key_base}_open"):
+                    # NAV-002: ensure parent is on nav stack before drilling into child
+                    parent_api = record.parent.sf_object.api_name
+                    parent_id = str(
+                        record.parent.data.get(record.parent.sf_object.id_field, "")
+                        or record.parent.data.get("Id", "")
+                        or ""
+                    )
+                    parent_label = str(
+                        record.parent.data.get("Name", "")
+                        or record.parent.data.get("Subject", "")
+                        or record.parent.data.get("Title", "")
+                        or parent_id
+                    ).strip()
+
+                    cur = peek()
+                    if cur is None or cur.api_name != parent_api or cur.record_id != parent_id:
+                        push(parent_api, parent_id, label=parent_label)
+
                     rid = _id_from_label(sel)
                     label = sel.rsplit("[", 1)[0].strip()
                     push(child_obj.api_name, rid, label=label)
