@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+
+from sfdump.viewer_app.ui.documents_panel import render_documents_panel_from_rows
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -49,25 +50,6 @@ def load_master_index(path: Path) -> pd.DataFrame:
         + df.get("opp_name", "")
     ).str.lower()
     return df
-
-
-def resolve_file_path(export_root: Path, local_path: str) -> Path:
-    """Resolve the on-disk path for a document.
-
-    - If local_path is absolute and exists → return it.
-    - If local_path is relative → first try export_root / local_path.
-    - If nothing exists → return the original as a Path (will fail later).
-    """
-    p = Path(local_path)
-    if p.is_absolute() and p.exists():
-        return p
-
-    if not p.is_absolute():
-        candidate = (export_root / p).resolve()
-        if candidate.exists():
-            return candidate
-
-    return p
 
 
 def main() -> None:
@@ -164,9 +146,8 @@ def main() -> None:
         "",
     )
 
-    # --- NEW: column-specific filters ---------------------------------
+    # Column-specific filters
     col_filters: dict[str, str] = {}
-
     with st.sidebar.expander("More column filters", expanded=False):
         if "record_name" in df.columns:
             col_filters["record_name"] = st.text_input("Record name contains", "")
@@ -176,7 +157,6 @@ def main() -> None:
             col_filters["opp_name"] = st.text_input("Opportunity name contains", "")
         if "opp_stage" in df.columns:
             col_filters["opp_stage"] = st.text_input("Stage contains", "")
-    # ------------------------------------------------------------------
 
     # ------------------------------------------------------------------
     # Apply filters
@@ -190,13 +170,10 @@ def main() -> None:
         mask &= df["file_extension"].isin(selected_ext)
 
     if query:
-        q = query.strip().lower()
-        q = q.replace("*", "")  # allow * for convenience
-
+        q = query.strip().lower().replace("*", "")
         if q:
             mask &= df["search_blob"].str.contains(q, case=False, na=False)
 
-    # Apply column-specific filters
     for col, value in col_filters.items():
         if value:
             mask &= df[col].str.contains(value, case=False, na=False)
@@ -208,7 +185,7 @@ def main() -> None:
     st.info(f"Displaying the first 500 of {filtered_count:,} matching documents.")
 
     # ----------------------------------------------------------------------
-    # Columns to show (robust and future-proof)
+    # Columns to show
     # ----------------------------------------------------------------------
     preferred_cols = [
         "file_source",
@@ -222,9 +199,8 @@ def main() -> None:
         "opp_amount",
         "opp_close_date",
         "local_path",
+        "path",
     ]
-
-    # Only use columns that actually exist
     available_cols = [col for col in preferred_cols if col in filtered.columns]
 
     if not available_cols:
@@ -234,7 +210,6 @@ def main() -> None:
         )
         st.stop()
 
-    # --- NEW: allow user to choose which columns to display ------------
     with st.sidebar.expander("Columns to display", expanded=False):
         show_cols = st.multiselect(
             "Select columns",
@@ -243,78 +218,57 @@ def main() -> None:
         )
     if not show_cols:
         show_cols = available_cols
-    # ----------------------------------------------------------------------
 
-    # ----------------------------------------------------------------------
-    # Display the table
-    # ----------------------------------------------------------------------
     display = filtered[show_cols].head(500)
     st.dataframe(display, width="stretch")
 
-    # Success banner
     st.success(f"Viewer loaded successfully — {len(df):,} total documents indexed.")
-
-    st.caption(
-        "Tip: Narrow down with filters and search, "
-        "then use the section below to open a specific document."
-    )
+    st.caption("Tip: Narrow down with filters and search, then preview/open a document below.")
 
     # ------------------------------------------------------------------
-    # Open a specific document
+    # Preview / open a document (standard renderer)
     # ------------------------------------------------------------------
-    st.subheader("Open a document")
-
-    if "local_path" not in filtered.columns:
-        st.warning(
-            "This export does not include direct file paths.\n"
-            "You can still browse the index, but document opening is unavailable."
-        )
-        st.stop()
+    st.subheader("Preview / Open a document")
 
     if filtered.empty:
         st.info("No matching documents. Adjust your filters/search.")
         return
 
+    path_col = (
+        "local_path"
+        if "local_path" in filtered.columns
+        else ("path" if "path" in filtered.columns else "")
+    )
+    if not path_col:
+        st.warning(
+            "This export does not include file paths ('local_path' or 'path').\n"
+            "You can still browse the index, but preview/open is unavailable."
+        )
+        return
+
     limited = filtered.head(200)
 
-    options = [
-        f"{row.file_name}  |  {row.object_type}  |  {row.record_name}"
-        for _, row in limited.iterrows()
-    ]
+    rows = []
+    for _, r in limited.iterrows():
+        rel = (r.get(path_col) or "").strip()
+        rows.append(
+            {
+                "file_source": r.get("file_source", ""),
+                "file_id": r.get("file_id", ""),
+                "file_name": r.get("file_name", ""),
+                "title": r.get("file_name", ""),
+                "path": rel,
+                "local_path": rel,
+            }
+        )
 
-    choice = st.selectbox(
-        "Select a document to open (limited to first 200 filtered results):",
-        options=[""] + options,
+    render_documents_panel_from_rows(
+        export_root=export_root,
+        rows=rows,
+        title="Global documents preview",
+        key_prefix=f"global_docs_{selected_run_name}",
+        pdf_height=800,
     )
-
-    if choice:
-        idx = options.index(choice)
-        row = limited.iloc[idx]
-        local_path = row.get("local_path", "")
-
-        if not local_path:
-            st.warning(
-                "No local file is available for this row.\n\n"
-                "The master index knows a document was associated with this record, "
-                "but no Attachment/File binary was exported (for example, because it "
-                "doesn't exist anymore or is stored in a package-specific object)."
-            )
-            return
-
-        full_path = resolve_file_path(export_root, local_path)
-
-        if st.button(f"Open '{row.file_name}'"):
-            if not full_path.exists():
-                st.error(
-                    f"File not found on disk:\n\n{full_path}\n\n"
-                    "It may not have been downloaded or may have been moved."
-                )
-            else:
-                try:
-                    os.startfile(str(full_path))  # Windows
-                    st.success(f"Opened file:\n{full_path}")
-                except Exception as e:
-                    st.error(f"Unable to open this file:\n{e}")
 
 
 if __name__ == "__main__":
