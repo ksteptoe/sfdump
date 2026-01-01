@@ -13,6 +13,7 @@
 - DOC-001 Preview doc selector must actually preview (and not “do nothing”)
 - NAV-002 Back button (main pane) pops the object
 - DOC-002 Documents panel: standardised renderer
+- DOC-003 Document Explorer (global search)
 
 ---
 
@@ -53,23 +54,9 @@ When messaging, copy/paste:
 
 ---
 
-## Now (popt queue)
+## Now (popt queue)  REL-001 Show “documents in subtree”
 
-**Active popt:** DOC-003
-
-### DOC-003 Document Explorer (global search)
-**Goal:** Search across *all* documents via `meta/master_documents_index.csv`.
-**Features**
-- Search box (filename/keyword)
-- Filters: source/object type/content type (PDF first)
-- Preview/open/download from results
-
-**DoD**
-- Can find a known contract PDF by search term within seconds
-- Selecting a result can preview + navigate to parent record (if indexed)
-
----
-
+**Active popt:**
 ### REL-001 Show “documents in subtree”
 **Goal:** From Account/Opportunity, show documents for the whole subtree (Opportunity + children).
 **Approach:** Use traversal to collect descendant IDs → filter global index.
@@ -80,10 +67,6 @@ When messaging, copy/paste:
 ---
 
 ## Next (pusht candidates)
-
-
-
-
 
 ### REL-002 “Inbound references” view (graph-ish navigation)
 **Goal:** From finance objects (invoice/journal/transaction), discover links back to Opportunity/Account even if schema is incomplete.
