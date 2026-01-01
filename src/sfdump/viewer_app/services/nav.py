@@ -61,3 +61,10 @@ def goto(index: int) -> Optional[NavItem]:
         return peek()
     st.session_state[_NAV_KEY] = s[: index + 1]
     return peek()
+
+
+def open_record(api_name: str, record_id: str, label: str = "") -> None:
+    """
+    Navigate to a specific record (push onto stack).
+    """
+    push(api_name=api_name, record_id=record_id, label=label)

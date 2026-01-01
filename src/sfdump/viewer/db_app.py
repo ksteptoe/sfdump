@@ -12,6 +12,7 @@ from sfdump.viewer_app.services.display import get_important_fields
 from sfdump.viewer_app.services.documents import load_master_documents_index
 from sfdump.viewer_app.services.paths import infer_export_root
 from sfdump.viewer_app.services.traversal import collect_subtree_ids
+from sfdump.viewer_app.ui.document_explorer import render_document_explorer
 from sfdump.viewer_app.ui.documents_panel import render_documents_panel
 from sfdump.viewer_app.ui.main_parts import render_record_list, render_sidebar_controls
 from sfdump.viewer_app.ui.record_tabs import render_children_with_navigation
@@ -116,7 +117,9 @@ def main() -> None:
         with c_title:
             pass
 
-        tab_details, tab_children, tab_docs = st.tabs(["Details", "Children", "Documents"])
+        tab_details, tab_children, tab_docs, tab_explorer = st.tabs(
+            ["Details", "Children", "Documents", "Explorer"]
+        )
 
         with tab_details:
             st.markdown(
@@ -153,6 +156,19 @@ def main() -> None:
                 object_type=api_name,
                 record_id=selected_id,
                 title="Documents tab preview",
+            )
+
+        with tab_explorer:
+            export_root = _export_root_from_db_path(db_path)
+            if export_root is None:
+                st.warning(
+                    "Could not infer EXPORT_ROOT from DB path (expected EXPORT_ROOT/meta/sfdata.db)."
+                )
+                st.stop()
+
+            render_document_explorer(
+                export_root=export_root,
+                key_prefix=f"expl_{api_name}_{selected_id}",
             )
 
         # ------------------------------------------------------------------
