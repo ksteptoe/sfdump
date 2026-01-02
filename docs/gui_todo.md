@@ -14,6 +14,7 @@
 - NAV-002 Back button (main pane) pops the object
 - DOC-002 Documents panel: standardised renderer
 - DOC-003 Document Explorer (global search)
+- REL-001 Show “documents in subtree”
 
 ---
 
@@ -54,21 +55,24 @@ When messaging, copy/paste:
 
 ---
 
-## Now (popt queue)  REL-001 Show “documents in subtree”
+## Now (popt queue)  REL-002 Tables for Opp -> invoice -> Journal relationships
 
-**Active popt:**
-### REL-001 Show “documents in subtree”
-**Goal:** From Account/Opportunity, show documents for the whole subtree (Opportunity + children).
-**Approach:** Use traversal to collect descendant IDs → filter global index.
+**Active popt:** REL-002 Understand and build tables that describe the (forward) realtionships between Opportunities and invoices
+### REL-002 Understand and build tables that describe the (forward) realtionships between Opportunities and invoices
+**Goal:** Understand and Build (create if neccessary) relationsips between Opportunities and Financial records e.g.
+**Approach**
+- Understand the Schema properly. Build and analyse SF queries to understand these relationships and in addition I will give a picture of the schema in SF and we need to build this.
+- Where there are one to many relationships between e.g. Invoices and Opportunities then we need to create the reverse TABLE
 
 **DoD**
-- Starting at an Opportunity, you can view all attached docs in its descendant tree
+- Using SQlite quiries on the db we show that the tables have been built ready for the next stage. So that a later popt From an opinvoice/journal record, you can hop to at least one upstream commercial object (Opportunity/Account) when the data supports it
+can build the GUI to navigate down to these objects
 
 ---
 
 ## Next (pusht candidates)
 
-### REL-002 “Inbound references” view (graph-ish navigation)
+### REL-003 “Inbound references” view (graph-ish navigation)
 **Goal:** From finance objects (invoice/journal/transaction), discover links back to Opportunity/Account even if schema is incomplete.
 **Approach**
 - Scan tables for columns ending in `Id`
