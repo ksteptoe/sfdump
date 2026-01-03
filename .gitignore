@@ -94,3 +94,4 @@ docs/_generated/
 /viewer-snapshot.tgz
 
 *.tgz
+*.local.json
