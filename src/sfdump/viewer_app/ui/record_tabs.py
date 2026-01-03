@@ -69,7 +69,30 @@ def render_children_with_navigation(*, record, show_all_fields: bool, show_ids: 
 
         with st.expander(title, expanded=False):
             if not coll.records:
-                st.info("No rows.")
+                # Provide contextual messages for common scenarios
+                msg = "No rows."
+
+                # Check if this is an Opportunity with no Invoices
+                if (
+                    record.parent.sf_object.api_name == "Opportunity"
+                    and child_obj.api_name == "c2g__codaInvoice__c"
+                ):
+                    stage = record.parent.data.get("StageName", "").strip()
+                    if stage in ("Closed Lost", "Closed Won"):
+                        if stage == "Closed Lost":
+                            msg = (
+                                f"ℹ️ No invoices found. This is expected for Closed Lost opportunities "
+                                f"(Stage: {stage}), as they typically don't generate invoices."
+                            )
+                        else:
+                            msg = (
+                                "ℹ️ No invoices found for this Closed Won opportunity. "
+                                "Invoices may not have been created yet, or were created outside of this opportunity."
+                            )
+                    else:
+                        msg = f"ℹ️ No invoices found (Opportunity Stage: {stage})."
+
+                st.info(msg)
                 continue
 
             try:
