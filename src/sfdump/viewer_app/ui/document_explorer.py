@@ -38,6 +38,10 @@ def _load_master_index(export_root: Path) -> pd.DataFrame:
     _ensure("record_id", ["record_id", "linked_entity_id", "linkedentityid"])
     _ensure("record_name", ["record_name"])
     _ensure("local_path", ["local_path", "path"])
+    _ensure("account_name", ["account_name"])
+    _ensure("account_id", ["account_id"])
+    _ensure("opp_name", ["opp_name"])
+    _ensure("opp_id", ["opp_id"])
 
     # Precompute search blob (fast filtering)
     df["__search_blob"] = (
@@ -48,6 +52,10 @@ def _load_master_index(export_root: Path) -> pd.DataFrame:
         + df["record_name"].astype(str)
         + " "
         + df["record_id"].astype(str)
+        + " "
+        + df["account_name"].astype(str)
+        + " "
+        + df["opp_name"].astype(str)
     ).str.lower()
 
     return df
@@ -62,11 +70,30 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
         st.warning(f"master_documents_index.csv not found under: {export_root / 'meta'}")
         return
 
+    # --- Primary Filters (Account & Opportunity)
+    st.markdown("**Search by Account or Opportunity:**")
+    c1, c2 = st.columns(2)
+    with c1:
+        account_search = st.text_input(
+            "Account Name",
+            value="",
+            key=f"{key_prefix}_account",
+            help="Search for documents by Account name (e.g., 'VITEC', 'Aion')",
+        ).strip()
+    with c2:
+        opp_search = st.text_input(
+            "Opportunity Name",
+            value="",
+            key=f"{key_prefix}_opp",
+            help="Search for documents by Opportunity name (e.g., 'Degirum', 'NPI')",
+        ).strip()
+
+    st.markdown("**Additional Filters:**")
     # --- Filters
     c1, c2, c3 = st.columns([2, 2, 2])
     with c1:
         q = st.text_input(
-            "Search (filename/record/object/id)", value="", key=f"{key_prefix}_q"
+            "General Search (filename/record/object/id)", value="", key=f"{key_prefix}_q"
         ).strip()
     with c2:
         default_pdf_only = True
@@ -89,6 +116,15 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
     )
 
     mask = pd.Series(True, index=df.index)
+
+    # Account and Opportunity filters (case-insensitive partial match)
+    if account_search:
+        account_lower = account_search.lower()
+        mask &= df["account_name"].astype(str).str.lower().str.contains(account_lower, na=False)
+
+    if opp_search:
+        opp_lower = opp_search.lower()
+        mask &= df["opp_name"].astype(str).str.lower().str.contains(opp_lower, na=False)
 
     if pdf_only:
         mask &= df["file_extension"].astype(str).str.lower().eq(".pdf") | df[
@@ -116,6 +152,8 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
                     "file_source",
                     "file_name",
                     "file_extension",
+                    "account_name",
+                    "opp_name",
                     "object_type",
                     "record_name",
                     "record_id",
