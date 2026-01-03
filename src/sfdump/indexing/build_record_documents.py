@@ -61,6 +61,22 @@ def _iter_files_index_rows(links_dir: Path) -> Iterable[Dict[str, str]]:
                 yield row
 
 
+def _read_master_index_by_file_id(master_index_path: Path) -> Dict[str, Dict[str, str]]:
+    """Read master_documents_index.csv and return {file_id: rowdict}."""
+    if not master_index_path.exists():
+        return {}
+
+    with master_index_path.open(newline="", encoding="utf-8") as f:
+        r = csv.DictReader(f)
+        out: Dict[str, Dict[str, str]] = {}
+        for row in r:
+            # file_id could be attachment_id or content_document_id depending on source
+            file_id = (row.get("file_id") or "").strip()
+            if file_id:
+                out[file_id] = row
+        return out
+
+
 def build_record_documents(db_path: Path, export_root: Path) -> None:
     """
     Build a single table that maps:
@@ -70,11 +86,14 @@ def build_record_documents(db_path: Path, export_root: Path) -> None:
       links/*_files_index.csv
       links/attachments.csv
       links/content_versions.csv  (if present)
+      meta/master_documents_index.csv (fallback for paths)
     """
     links_dir = export_root / "links"
+    meta_dir = export_root / "meta"
 
     attachments = _read_csv_map_by_id(links_dir / "attachments.csv")
     versions = _read_csv_map_by_id(links_dir / "content_versions.csv")
+    master_index = _read_master_index_by_file_id(meta_dir / "master_documents_index.csv")
 
     conn = sqlite3.connect(str(db_path))
     try:
@@ -122,6 +141,20 @@ def build_record_documents(db_path: Path, export_root: Path) -> None:
                 cs = (v.get("ContentSize") or v.get("content_size") or "").strip()
                 if cs.isdigit():
                     size_bytes = int(cs)
+
+            # Fallback to master_documents_index.csv if path not found
+            if not path:
+                m = master_index.get(file_id, {})
+                path = (m.get("local_path") or m.get("path") or "").strip() or None
+                # Also try to get other metadata from master index if still missing
+                if not sha256:
+                    sha256 = (m.get("sha256") or "").strip() or None
+                if not content_type:
+                    content_type = (m.get("content_type") or "").strip() or None
+                if not size_bytes:
+                    sb = (m.get("size_bytes") or "").strip()
+                    if sb.isdigit():
+                        size_bytes = int(sb)
 
             rows.append(
                 (
