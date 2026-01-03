@@ -54,7 +54,7 @@ def nav_back_button(*, label: str = "← Back") -> None:
     stack = st.session_state.get(_STACK_KEY, [])
     if len(stack) <= 1:
         return
-    if st.button(label, use_container_width=False):
+    if st.button(label):
         nav_pop()
         st.rerun()
 
@@ -68,7 +68,7 @@ def nav_open_button(
     disabled: bool = False,
     **params: Any,
 ) -> None:
-    if st.button(label, key=key, disabled=disabled, use_container_width=False):
+    if st.button(label, key=key, disabled=disabled):
         nav_push(view, title=title, **params)
         st.rerun()
 

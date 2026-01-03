@@ -176,7 +176,6 @@ def main() -> None:
                             sub_docs[show_cols],
                             height=260,
                             hide_index=True,
-                            use_container_width=True,
                         )
 
                         # Documents list + PDF preview (always visible)
