@@ -140,6 +140,32 @@ OBJECTS: Dict[str, SFObject] = {
         label="Purchase Invoice",
         table_name="c2g__codaPurchaseInvoice__c",
     ),
+    # Finance supporting objects
+    "c2g__codaCompany__c": SFObject(
+        api_name="c2g__codaCompany__c",
+        label="Company",
+        table_name="c2g__codaCompany__c",
+    ),
+    "c2g__codaPeriod__c": SFObject(
+        api_name="c2g__codaPeriod__c",
+        label="Period",
+        table_name="c2g__codaPeriod__c",
+    ),
+    "c2g__codaAccountingCurrency__c": SFObject(
+        api_name="c2g__codaAccountingCurrency__c",
+        label="Accounting Currency",
+        table_name="c2g__codaAccountingCurrency__c",
+    ),
+    "c2g__codaBankAccount__c": SFObject(
+        api_name="c2g__codaBankAccount__c",
+        label="Bank Account",
+        table_name="c2g__codaBankAccount__c",
+    ),
+    "c2g__codaGeneralLedgerAccount__c": SFObject(
+        api_name="c2g__codaGeneralLedgerAccount__c",
+        label="General Ledger Account",
+        table_name="c2g__codaGeneralLedgerAccount__c",
+    ),
     # Add further exported objects here as we need them
 }
 
@@ -223,6 +249,41 @@ RELATIONSHIPS: List[SFRelationship] = [
         child="c2g__codaInvoice__c",
         child_field="c2g__Transaction__c",
     ),
+    # Company -> Invoice (Invoice has c2g__OwnerCompany__c)
+    SFRelationship(
+        name="CodaCompany_CodaInvoice",
+        parent="c2g__codaCompany__c",
+        child="c2g__codaInvoice__c",
+        child_field="c2g__OwnerCompany__c",
+    ),
+    # Period -> Invoice (Invoice has c2g__Period__c)
+    SFRelationship(
+        name="CodaPeriod_CodaInvoice",
+        parent="c2g__codaPeriod__c",
+        child="c2g__codaInvoice__c",
+        child_field="c2g__Period__c",
+    ),
+    # Currency -> Invoice (Invoice has c2g__InvoiceCurrency__c)
+    SFRelationship(
+        name="CodaAccountingCurrency_CodaInvoice",
+        parent="c2g__codaAccountingCurrency__c",
+        child="c2g__codaInvoice__c",
+        child_field="c2g__InvoiceCurrency__c",
+    ),
+    # BankAccount -> Invoice (Invoice has Bank_Account__c)
+    SFRelationship(
+        name="CodaBankAccount_CodaInvoice",
+        parent="c2g__codaBankAccount__c",
+        child="c2g__codaInvoice__c",
+        child_field="Bank_Account__c",
+    ),
+    # GeneralLedgerAccount -> Invoice (Invoice has c2g__GeneralLedgerAccount__c)
+    SFRelationship(
+        name="CodaGeneralLedgerAccount_CodaInvoice",
+        parent="c2g__codaGeneralLedgerAccount__c",
+        child="c2g__codaInvoice__c",
+        child_field="c2g__GeneralLedgerAccount__c",
+    ),
     # Journal -> Transaction (Transaction has c2g__Journal__c)
     SFRelationship(
         name="CodaJournal_CodaTransaction",
@@ -236,6 +297,63 @@ RELATIONSHIPS: List[SFRelationship] = [
         parent="c2g__codaJournal__c",
         child="c2g__codaJournalLineItem__c",
         child_field="c2g__Journal__c",
+    ),
+    # Company -> Journal (Journal has c2g__OwnerCompany__c)
+    SFRelationship(
+        name="CodaCompany_CodaJournal",
+        parent="c2g__codaCompany__c",
+        child="c2g__codaJournal__c",
+        child_field="c2g__OwnerCompany__c",
+    ),
+    # Period -> Journal (Journal has c2g__Period__c)
+    SFRelationship(
+        name="CodaPeriod_CodaJournal",
+        parent="c2g__codaPeriod__c",
+        child="c2g__codaJournal__c",
+        child_field="c2g__Period__c",
+    ),
+    # Currency -> Journal (Journal has c2g__JournalCurrency__c)
+    SFRelationship(
+        name="CodaAccountingCurrency_CodaJournal",
+        parent="c2g__codaAccountingCurrency__c",
+        child="c2g__codaJournal__c",
+        child_field="c2g__JournalCurrency__c",
+    ),
+    # Purchase Invoice relationships
+    # Account -> PurchaseInvoice (PurchaseInvoice has c2g__Account__c)
+    SFRelationship(
+        name="Account_CodaPurchaseInvoice",
+        parent="Account",
+        child="c2g__codaPurchaseInvoice__c",
+        child_field="c2g__Account__c",
+    ),
+    # Company -> PurchaseInvoice (PurchaseInvoice has c2g__OwnerCompany__c)
+    SFRelationship(
+        name="CodaCompany_CodaPurchaseInvoice",
+        parent="c2g__codaCompany__c",
+        child="c2g__codaPurchaseInvoice__c",
+        child_field="c2g__OwnerCompany__c",
+    ),
+    # Period -> PurchaseInvoice (PurchaseInvoice has c2g__Period__c)
+    SFRelationship(
+        name="CodaPeriod_CodaPurchaseInvoice",
+        parent="c2g__codaPeriod__c",
+        child="c2g__codaPurchaseInvoice__c",
+        child_field="c2g__Period__c",
+    ),
+    # Currency -> PurchaseInvoice (PurchaseInvoice has c2g__InvoiceCurrency__c)
+    SFRelationship(
+        name="CodaAccountingCurrency_CodaPurchaseInvoice",
+        parent="c2g__codaAccountingCurrency__c",
+        child="c2g__codaPurchaseInvoice__c",
+        child_field="c2g__InvoiceCurrency__c",
+    ),
+    # Transaction -> PurchaseInvoice (PurchaseInvoice has c2g__Transaction__c)
+    SFRelationship(
+        name="CodaTransaction_CodaPurchaseInvoice",
+        parent="c2g__codaTransaction__c",
+        child="c2g__codaPurchaseInvoice__c",
+        child_field="c2g__Transaction__c",
     ),
 ]
 
