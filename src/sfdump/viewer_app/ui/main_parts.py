@@ -215,6 +215,15 @@ def render_record_list(
         cur = conn.cursor()
 
         table = _pick_table(cur, api_name)
+
+        # DEBUG: Show what we're looking for
+        with st.expander("🐛 Record List Debug", expanded=False):
+            st.code(f"""API Name: {api_name}
+Table: {table}
+Selected ID: {selected_id}
+Selected Label: {selected_label}
+Search Term: '{search_term}'""")
+
         if not table:
             st.warning(f"No table found for object `{api_name}` in this DB.")
             return ([], "")
@@ -276,6 +285,9 @@ def render_record_list(
 
         if not rows:
             st.info("No records found.")
+            st.caption(
+                f"Debug: Query returned 0 rows from table '{table}' with search term '{term}'"
+            )
             return ([], "")
 
         # CRITICAL FIX: If we have a selected_id from navigation, ensure that record is in the list
