@@ -104,15 +104,17 @@ Launching Streamlit viewer for exports/export-2025-12-31/meta/sfdata.db ...
 - Share the Network URL with others on your local network
 - Press `Ctrl+C` in terminal to stop the viewer
 
-![Viewer Launch](_static/images/viewer/01-launch.png)
-*Screenshot: Viewer launching in terminal*
-
 ## Viewer Interface Overview
 
-The viewer has a clean, three-column layout designed for efficient navigation:
+The viewer has a clean, two-column layout designed for efficient navigation:
 
-![Viewer Interface](_static/images/viewer/02-interface.png)
-*Screenshot: Main viewer interface showing sidebar, record list, and details*
+![Initial Viewer](Doc%20Pics/01-initial-viewer-account.png)
+*Screenshot: Initial viewer showing Account object with clean layout*
+
+**Layout:**
+- **Left (40%)**: Record details & relationships
+- **Right (60%)**: Documents section
+- **Sidebar**: Navigation & search controls
 
 ### Left Sidebar - Navigation & Search
 
@@ -130,20 +132,22 @@ The viewer has a clean, three-column layout designed for efficient navigation:
 - Show all fields: Toggle detailed/compact view
 - Show IDs: Display Salesforce IDs
 
-### Middle Panel - Record List
-
-- Shows filtered records matching your search
-- Click any record to view details
-- Important fields displayed first (configurable per object)
-
-### Right Panel - Record Details
+### Left Column - Record Details & Relationships
 
 Four tabs provide different views of the selected record:
 
-1. **Details** - All field values
-2. **Children** - Related child records (Opportunities, Invoices, etc.)
+1. **Details** - Important fields only (not all 100+ fields)
+2. **Children** - Related child records with navigation controls
 3. **Documents** - Files attached to this record
-4. **Document Explorer** - Search across all documents
+4. **Explorer** - Search across all documents
+
+### Right Column - Documents
+
+- **Recursive document search** from current record + all children
+- **Parent document inclusion** from navigation chain
+- **Record count** showing types and document count
+- **Collapsible controls** for depth, filters
+- **PDF preview** panel
 
 ## Browsing Records
 
@@ -152,9 +156,26 @@ Four tabs provide different views of the selected record:
 1. Click the **Object** dropdown in the sidebar
 2. Select the object you want to browse (e.g., "Account")
 3. Records load automatically
+4. **The dropdown automatically syncs with navigation** - when you drill down to children, it updates
 
-![Select Object](_static/images/viewer/03-select-object.png)
-*Screenshot: Object dropdown showing available objects*
+### Viewing Record Details
+
+After selecting a record, the **Details** tab shows:
+
+![Account Details](Doc%20Pics/02-account-details-important-fields.png)
+*Screenshot: Account Details tab showing only important fields (7-10 key fields instead of 100+)*
+
+**Key Features:**
+- **Important fields only** by default - Name, Type, Industry, BillingCountry, Website, Phone
+- **Compact display** - No more scrolling through 100+ fields
+- **Toggle "Show all fields"** checkbox in sidebar to see everything
+- **Expandable sections** - Parent fields grouped in expandable panel
+
+**Field display:**
+- Empty fields shown as "(empty)"
+- Dates formatted for readability
+- URLs clickable
+- Long text fields word-wrapped
 
 ### Searching Records
 
@@ -166,27 +187,9 @@ Four tabs provide different views of the selected record:
 **Example searches:**
 - Account name: "VITEC" → finds all VITEC-related accounts
 - Opportunity: "Degirum" → finds Degirum opportunities
-- Invoice: "SIN002795" → finds specific invoice
+- Invoice: "SIN003926" → finds specific invoice
 
-![Search Records](_static/images/viewer/04-search-records.png)
-*Screenshot: Searching for "VITEC" in Account object*
-
-### Viewing Record Details
-
-After selecting a record, the **Details** tab shows:
-
-- **Important fields first** - Name, Status, Amount, etc.
-- **Grouped logically** - Contact info, addresses, financial data
-- **All fields available** - Toggle "Show all fields" for complete view
-
-![Record Details](_static/images/viewer/05-record-details.png)
-*Screenshot: Account record showing details tab*
-
-**Field display:**
-- Empty fields shown as "(empty)"
-- Dates formatted for readability
-- URLs clickable
-- Long text fields word-wrapped
+**Note:** Search is automatically disabled when navigating to ensure the target record is always displayed.
 
 ## Navigating Relationships
 
@@ -210,30 +213,32 @@ Account
 2. Click the **Children** tab
 3. Expand any relationship to see child records
 
-![Children Tab](_static/images/viewer/06-children-tab.png)
-*Screenshot: Children tab showing Opportunity relationship expanded*
+![Children Navigation](Doc%20Pics/03-children-navigation.png)
+*Screenshot: Children tab showing Opportunity relationship with navigation controls*
 
 **Each relationship shows:**
-- Relationship name (e.g., "Account_Opportunity")
-- Child object type (e.g., "Opportunity")
+- Relationship name (e.g., "Opportunity via AccountId")
+- Child object type and field
 - Number of records (e.g., "12 record(s)")
+- **Navigation controls:** Dropdown + "Open" button
 
 ### Navigating Down
 
 To drill down into a child record:
 
-1. Expand a relationship
-2. Select a child record from the dropdown
-3. Click **Open**
+1. Expand a relationship section
+2. Select a child record from the **"Select a child record"** dropdown
+3. Click **"Open"** button
 4. The viewer navigates to that child record
 
-**Navigation stack:**
-- Breadcrumbs at top show your path
-- **Back** button returns to previous record
-- Full history maintained during session
+**What happens:**
+- Page reloads showing the child record
+- **Object dropdown syncs** to the new object type
+- **Navigation breadcrumbs** appear in sidebar
+- **Back** and **Reset** buttons become available
 
-![Navigate Down](_static/images/viewer/07-navigate-down.png)
-*Screenshot: Selecting and opening a child Opportunity*
+![Opportunity After Navigation](Doc%20Pics/04-opportunity-after-navigation.png)
+*Screenshot: After navigating to Opportunity - Object dropdown auto-syncs, breadcrumbs appear*
 
 ### Contextual Messages
 
@@ -248,8 +253,38 @@ When viewing records with expected empty relationships, helpful messages explain
 
 This prevents confusion about "missing" data that's actually expected business logic.
 
-![Contextual Message](_static/images/viewer/08-contextual-message.png)
-*Screenshot: Closed Lost opportunity showing contextual message*
+### Multi-Level Navigation
+
+You can navigate through multiple levels of relationships:
+
+![Opportunity Children - Invoices](Doc%20Pics/05-opportunity-children-invoices.png)
+*Screenshot: Opportunity Children tab showing Invoice relationship*
+
+**Example navigation path:**
+1. Start at Account: VITEC SA
+2. Navigate to Opportunity: Vitec_Change_Order_CNN036
+3. Navigate to Invoice: SIN003926
+
+**Full breadcrumb trail maintains:**
+- Account: VITEC SA
+- Opportunity: Vitec_Change_Order_CNN036
+- c2g__codaInvoice__c: SIN003926
+
+### Parent Document Inclusion
+
+**KEY FEATURE:** When viewing any record, the Documents section automatically includes files from all parent records in the navigation chain.
+
+![Invoice with Parent Documents](Doc%20Pics/06-invoice-full-parent-chain.png)
+*Screenshot: Invoice view showing full navigation chain (Account → Opportunity → Invoice) with documents from all parent records*
+
+**Example:** Viewing invoice SIN003926 shows:
+- Documents attached to the Invoice itself
+- Documents attached to the parent Opportunity
+- Documents attached to the parent Account
+
+The record count displays: **"📊 4 records across 4 types │ 📄 2 documents"**
+
+This eliminates the need to navigate back to parent records to find related documents!
 
 ## Document Explorer
 
@@ -257,11 +292,11 @@ The **Document Explorer** tab provides powerful search across all documents in y
 
 ### Accessing Document Explorer
 
-1. From any record, click the **Document Explorer** tab
-2. Or navigate directly via the main interface
+1. From any record, click the **Explorer** tab (rightmost tab in left column)
+2. The Explorer provides a searchable table of ALL documents across the database
 
-![Document Explorer](_static/images/viewer/09-document-explorer.png)
-*Screenshot: Document Explorer main interface*
+![Document Explorer](Doc%20Pics/07-document-explorer.png)
+*Screenshot: Document Explorer tab showing searchable document table with filters*
 
 ### Search by Account
 
@@ -273,24 +308,18 @@ The **Document Explorer** tab provides powerful search across all documents in y
 
 **Example:**
 - Search: "VITEC"
-- Results: 73 documents (contracts, invoices, presentations, etc.)
-
-![Search by Account](_static/images/viewer/10-search-account.png)
-*Screenshot: Searching for VITEC shows 73 documents*
+- Results: All documents related to VITEC accounts and opportunities
 
 ### Search by Opportunity
 
 **To find all documents for a specific deal:**
 
-1. In "Opportunity Name" field, type the opportunity name (e.g., "Degirum")
+1. Type in the search/filter box to find opportunities by name
 2. Results show all documents linked to matching opportunities
 
 **Example:**
 - Search: "Degirum"
-- Results: 75 documents across multiple Degirum opportunities
-
-![Search by Opportunity](_static/images/viewer/11-search-opportunity.png)
-*Screenshot: Searching for Degirum shows 75 documents*
+- Results: All documents across Degirum opportunities
 
 ### Combined Search
 
@@ -320,18 +349,10 @@ The results table shows key information:
 
 ### Document Preview
 
-**To preview a document:**
-
-1. Select a document from the dropdown
-2. Scroll down to the preview section
-3. PDF preview loads inline (requires PyMuPDF)
-
-![PDF Preview](_static/images/viewer/12-pdf-preview.png)
-*Screenshot: PDF preview showing RFP Response document inline*
+The Documents section includes inline PDF preview (requires PyMuPDF):
 
 **Features:**
 - Multi-page PDFs scroll smoothly
-- Zoom in/out
 - No download required
 - Works for PDFs up to 50MB+
 
@@ -339,19 +360,6 @@ The results table shows key information:
 - Download link provided
 - File metadata shown
 - Path to file location
-
-### Navigate to Parent Record
-
-From any document, jump to its parent record:
-
-1. Select a document in Document Explorer
-2. Click **"Open parent record"** button
-3. Viewer navigates to the Opportunity/Invoice/etc. that document belongs to
-
-This helps you understand document context and find related records.
-
-![Open Parent](_static/images/viewer/13-open-parent.png)
-*Screenshot: Open parent record button navigates to source Opportunity*
 
 ## Common Workflows
 
@@ -502,13 +510,25 @@ This may be expected:
 - **For administrators:** See [Developer Guide](../developer-guide/index.md) for customization
 - **For archive handoff:** See [FAQ](faq.md) for common questions
 
-## Summary
+## Key Features Summary
 
 The Database Viewer provides:
-- ✅ Fast, searchable access to all Salesforce records
-- ✅ Intuitive navigation through relationships
-- ✅ Powerful document search by Account/Opportunity
-- ✅ PDF preview without downloads
-- ✅ Contextual help for understanding your data
+- ✅ **Default to Account object** - Starts with the most commonly used object
+- ✅ **Compact field display** - Shows only 7-10 important fields instead of 100+
+- ✅ **Smart navigation** - Object dropdown auto-syncs with navigation state
+- ✅ **Breadcrumb trail** - Full navigation path with Back/Reset buttons
+- ✅ **Parent document inclusion** - Automatically shows documents from navigation chain
+- ✅ **Powerful document search** - Find files by Account/Opportunity across entire database
+- ✅ **PDF preview** - View documents inline without downloads
+- ✅ **Contextual help** - Explains why data may be missing
 
-This makes it ideal for archiving organizations before shutdown - providing permanent, offline access to critical business data.
+### Recent Improvements (2026-01)
+
+- **Important Fields**: Reduced screen length by showing only key fields by default
+- **Parent Documents**: When viewing Invoice, automatically includes Account + Opportunity documents
+- **Navigation Sync**: Object dropdown stays in sync with breadcrumb navigation
+- **Search Disable**: Search automatically disabled during navigation to ensure target record loads
+- **Compact Layout**: Object details (40%) left, Documents (60%) right for optimal screen usage
+- **Collapsible Controls**: Document search controls collapse to save space
+
+This makes it ideal for archiving organizations before shutdown - providing permanent, offline access to critical business data with an intuitive, efficient interface.
