@@ -6,7 +6,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from sfdump.viewer_app.services.nav import open_record
+from sfdump.viewer_app.navigation.record_nav import open_record
 from sfdump.viewer_app.ui.documents_panel import render_documents_panel_from_rows
 
 

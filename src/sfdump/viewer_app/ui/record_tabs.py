@@ -118,7 +118,7 @@ def render_children_with_navigation(*, record, show_all_fields: bool, show_ids: 
                     key=f"{key_base}_select",
                 )
             with cols[1]:
-                from sfdump.viewer_app.services.nav import peek, push
+                from sfdump.viewer_app.navigation.record_nav import peek, push
 
                 if st.button("Open", key=f"{key_base}_open"):
                     # NAV-002: ensure parent is on nav stack before drilling into child

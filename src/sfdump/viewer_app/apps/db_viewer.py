@@ -104,7 +104,7 @@ def main() -> None:
         import pandas as pd  # type: ignore[import-not-found]
 
         # NAV-002: Back button (main pane) pops the navigation stack (no seeding/reset here)
-        from sfdump.viewer_app.services.nav import pop
+        from sfdump.viewer_app.navigation.record_nav import pop
 
         _nav_stack = st.session_state.get("_sfdump_nav_stack", [])
         _can_back = isinstance(_nav_stack, list) and len(_nav_stack) > 1

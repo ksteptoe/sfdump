@@ -8,8 +8,8 @@ from typing import Any, Optional
 
 import streamlit as st
 
+from sfdump.viewer_app.navigation.record_nav import breadcrumbs, goto, peek, pop, reset
 from sfdump.viewer_app.services.display import get_important_fields
-from sfdump.viewer_app.services.nav import breadcrumbs, goto, peek, pop, reset
 
 
 @dataclass

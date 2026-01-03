@@ -57,10 +57,10 @@ def db_viewer_command(export_dir: Optional[Path], db_path: Optional[Path]) -> No
 
     # Resolve the path to the Streamlit app script inside the installed package
     try:
-        mod = importlib.import_module("sfdump.viewer.db_app")
+        mod = importlib.import_module("sfdump.viewer_app.apps.db_viewer")
     except ImportError as exc:  # pragma: no cover - packaging issue
         raise click.ClickException(
-            "Could not import sfdump.viewer.db_app; is sfdump installed correctly?"
+            "Could not import sfdump.viewer_app.apps.db_viewer; is sfdump installed correctly?"
         ) from exc
 
     script_path = Path(inspect.getfile(mod))
