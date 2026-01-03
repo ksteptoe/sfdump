@@ -140,6 +140,26 @@ OBJECTS: Dict[str, SFObject] = {
         label="Purchase Invoice",
         table_name="c2g__codaPurchaseInvoice__c",
     ),
+    "c2g__codaCashEntry__c": SFObject(
+        api_name="c2g__codaCashEntry__c",
+        label="Cash Entry",
+        table_name="c2g__codaCashEntry__c",
+    ),
+    "c2g__codaPurchaseCreditNote__c": SFObject(
+        api_name="c2g__codaPurchaseCreditNote__c",
+        label="Purchase Credit Note",
+        table_name="c2g__codaPurchaseCreditNote__c",
+    ),
+    "c2g__codaCreditNote__c": SFObject(
+        api_name="c2g__codaCreditNote__c",
+        label="Credit Note (Sales)",
+        table_name="c2g__codaCreditNote__c",
+    ),
+    "c2g__codaPayment__c": SFObject(
+        api_name="c2g__codaPayment__c",
+        label="Payment",
+        table_name="c2g__codaPayment__c",
+    ),
     # Finance supporting objects
     "c2g__codaCompany__c": SFObject(
         api_name="c2g__codaCompany__c",
@@ -354,6 +374,136 @@ RELATIONSHIPS: List[SFRelationship] = [
         parent="c2g__codaTransaction__c",
         child="c2g__codaPurchaseInvoice__c",
         child_field="c2g__Transaction__c",
+    ),
+    # Cash Entry relationships
+    # Company -> CashEntry (CashEntry has c2g__OwnerCompany__c)
+    SFRelationship(
+        name="CodaCompany_CodaCashEntry",
+        parent="c2g__codaCompany__c",
+        child="c2g__codaCashEntry__c",
+        child_field="c2g__OwnerCompany__c",
+    ),
+    # Period -> CashEntry (CashEntry has c2g__Period__c)
+    SFRelationship(
+        name="CodaPeriod_CodaCashEntry",
+        parent="c2g__codaPeriod__c",
+        child="c2g__codaCashEntry__c",
+        child_field="c2g__Period__c",
+    ),
+    # Currency -> CashEntry (CashEntry has c2g__CashEntryCurrency__c)
+    SFRelationship(
+        name="CodaAccountingCurrency_CodaCashEntry",
+        parent="c2g__codaAccountingCurrency__c",
+        child="c2g__codaCashEntry__c",
+        child_field="c2g__CashEntryCurrency__c",
+    ),
+    # BankAccount -> CashEntry (CashEntry has c2g__BankAccount__c)
+    SFRelationship(
+        name="CodaBankAccount_CodaCashEntry",
+        parent="c2g__codaBankAccount__c",
+        child="c2g__codaCashEntry__c",
+        child_field="c2g__BankAccount__c",
+    ),
+    # Transaction -> CashEntry (CashEntry has c2g__Transaction__c)
+    SFRelationship(
+        name="CodaTransaction_CodaCashEntry",
+        parent="c2g__codaTransaction__c",
+        child="c2g__codaCashEntry__c",
+        child_field="c2g__Transaction__c",
+    ),
+    # Purchase Credit Note relationships
+    # Account -> PurchaseCreditNote (PurchaseCreditNote has c2g__Account__c)
+    SFRelationship(
+        name="Account_CodaPurchaseCreditNote",
+        parent="Account",
+        child="c2g__codaPurchaseCreditNote__c",
+        child_field="c2g__Account__c",
+    ),
+    # Company -> PurchaseCreditNote (PurchaseCreditNote has c2g__OwnerCompany__c)
+    SFRelationship(
+        name="CodaCompany_CodaPurchaseCreditNote",
+        parent="c2g__codaCompany__c",
+        child="c2g__codaPurchaseCreditNote__c",
+        child_field="c2g__OwnerCompany__c",
+    ),
+    # Period -> PurchaseCreditNote (PurchaseCreditNote has c2g__Period__c)
+    SFRelationship(
+        name="CodaPeriod_CodaPurchaseCreditNote",
+        parent="c2g__codaPeriod__c",
+        child="c2g__codaPurchaseCreditNote__c",
+        child_field="c2g__Period__c",
+    ),
+    # Currency -> PurchaseCreditNote (PurchaseCreditNote has c2g__CreditNoteCurrency__c)
+    SFRelationship(
+        name="CodaAccountingCurrency_CodaPurchaseCreditNote",
+        parent="c2g__codaAccountingCurrency__c",
+        child="c2g__codaPurchaseCreditNote__c",
+        child_field="c2g__CreditNoteCurrency__c",
+    ),
+    # Transaction -> PurchaseCreditNote (PurchaseCreditNote has c2g__Transaction__c)
+    SFRelationship(
+        name="CodaTransaction_CodaPurchaseCreditNote",
+        parent="c2g__codaTransaction__c",
+        child="c2g__codaPurchaseCreditNote__c",
+        child_field="c2g__Transaction__c",
+    ),
+    # Credit Note (Sales) relationships
+    # Account -> CreditNote (CreditNote has c2g__Account__c)
+    SFRelationship(
+        name="Account_CodaCreditNote",
+        parent="Account",
+        child="c2g__codaCreditNote__c",
+        child_field="c2g__Account__c",
+    ),
+    # Company -> CreditNote (CreditNote has c2g__OwnerCompany__c)
+    SFRelationship(
+        name="CodaCompany_CodaCreditNote",
+        parent="c2g__codaCompany__c",
+        child="c2g__codaCreditNote__c",
+        child_field="c2g__OwnerCompany__c",
+    ),
+    # Period -> CreditNote (CreditNote has c2g__Period__c)
+    SFRelationship(
+        name="CodaPeriod_CodaCreditNote",
+        parent="c2g__codaPeriod__c",
+        child="c2g__codaCreditNote__c",
+        child_field="c2g__Period__c",
+    ),
+    # Currency -> CreditNote (CreditNote has c2g__CreditNoteCurrency__c)
+    SFRelationship(
+        name="CodaAccountingCurrency_CodaCreditNote",
+        parent="c2g__codaAccountingCurrency__c",
+        child="c2g__codaCreditNote__c",
+        child_field="c2g__CreditNoteCurrency__c",
+    ),
+    # Invoice -> CreditNote (CreditNote has c2g__Invoice__c)
+    SFRelationship(
+        name="CodaInvoice_CodaCreditNote",
+        parent="c2g__codaInvoice__c",
+        child="c2g__codaCreditNote__c",
+        child_field="c2g__Invoice__c",
+    ),
+    # Payment relationships
+    # Company -> Payment (Payment has c2g__OwnerCompany__c)
+    SFRelationship(
+        name="CodaCompany_CodaPayment",
+        parent="c2g__codaCompany__c",
+        child="c2g__codaPayment__c",
+        child_field="c2g__OwnerCompany__c",
+    ),
+    # BankAccount -> Payment (Payment has c2g__BankAccount__c)
+    SFRelationship(
+        name="CodaBankAccount_CodaPayment",
+        parent="c2g__codaBankAccount__c",
+        child="c2g__codaPayment__c",
+        child_field="c2g__BankAccount__c",
+    ),
+    # Currency -> Payment (Payment has c2g__PaymentCurrency__c)
+    SFRelationship(
+        name="CodaAccountingCurrency_CodaPayment",
+        parent="c2g__codaAccountingCurrency__c",
+        child="c2g__codaPayment__c",
+        child_field="c2g__PaymentCurrency__c",
     ),
 ]
 
