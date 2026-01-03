@@ -80,6 +80,7 @@ def main() -> None:
             db_path=db_path,
             api_name=api_name,
             selected_label=selected_label,
+            selected_id=state.selected_id,
             search_term=search_term,
             regex_search=regex_search,
             limit=int(limit),

@@ -177,6 +177,7 @@ def render_record_list(
     db_path: Path,
     api_name: str,
     selected_label: str | None = None,
+    selected_id: str = "",
     search_term: str = "",
     limit: int = 200,
     regex_search: bool = False,
@@ -277,15 +278,14 @@ def render_record_list(
             st.info("No records found.")
             return ([], "")
 
-        # CRITICAL FIX: If we have a selected_label/ID from navigation, ensure that record is in the list
-        if selected_label:
-            sel_id = _id_from_label(selected_label) or selected_label
+        # CRITICAL FIX: If we have a selected_id from navigation, ensure that record is in the list
+        if selected_id:
             # Check if the selected record is already in our rows
-            found = any(str(r.get("Id", "")) == sel_id for r in rows)
-            if not found and sel_id:
+            found = any(str(r.get("Id", "")) == selected_id for r in rows)
+            if not found:
                 # Record not in current results - fetch it explicitly
                 sql = f'SELECT {select_sql} FROM "{table}" WHERE "Id" = ?'
-                cur.execute(sql, (sel_id,))
+                cur.execute(sql, (selected_id,))
                 explicit_row = cur.fetchone()
                 if explicit_row:
                     # Add it to the front of the list so it's visible
