@@ -133,14 +133,14 @@ def get_record_with_children(
                 (record_id,),
             )
             child_rows = [dict(r) for r in cur.fetchall()]
-            if not child_rows:
-                continue
 
+            # Always add the relationship, even if empty (0 records)
+            # This allows the UI to show contextual messages for expected empty relationships
             child_collections.append(
                 ChildCollection(
                     relationship=rel,
                     sf_object=child_obj,
-                    records=child_rows,
+                    records=child_rows,  # May be empty list
                 )
             )
 
