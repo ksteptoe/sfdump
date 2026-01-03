@@ -89,7 +89,15 @@ def render_sidebar(
         return None
 
     api_options = [_guess_api_from_table(t) for t in tables]
-    api_default = default_api_name if default_api_name in api_options else api_options[0]
+
+    # Default to Account if present, otherwise use default_api_name, otherwise first option
+    if default_api_name and default_api_name in api_options:
+        api_default = default_api_name
+    elif "Account" in api_options:
+        api_default = "Account"
+    else:
+        api_default = api_options[0]
+
     api_name = st.sidebar.selectbox("Object", api_options, index=api_options.index(api_default))
 
     search_term = st.sidebar.text_input("Search", value="")
