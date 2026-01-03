@@ -66,9 +66,22 @@ def main() -> None:
     regex_search = state.regex_search
     show_all_fields = state.show_all_fields
 
-    col_left, col_right = st.columns([2, 3])
+    # NEW LAYOUT: Left = Documents (wider), Right = Object details (narrower)
+    col_left, col_right = st.columns([3, 2])
 
+    # ------------------------------------------------------------------
+    # LEFT COLUMN: Documents & Preview
+    # ------------------------------------------------------------------
     with col_left:
+        st.subheader("Documents")
+
+    # ------------------------------------------------------------------
+    # RIGHT COLUMN: Object Details & Relationships
+    # ------------------------------------------------------------------
+    with col_right:
+        st.subheader("Record details & relationships")
+
+        # Render record list to get selected record
         rows, selected_id = render_record_list(
             db_path=db_path,
             api_name=api_name,
@@ -80,11 +93,109 @@ def main() -> None:
             show_ids=state.show_ids,
         )
 
-    with col_right:
-        st.subheader("Record details & relationships")
-
+    # Now render documents in left column (we have selected_id)
+    with col_left:
         if not rows or not selected_id:
-            st.info("Select a record on the left to see details and related records.")
+            st.info("Select a record from the list on the right to see documents.")
+        else:
+            # Recursive subtree document search (Account -> Opp -> Invoice -> ...)
+            export_root = _export_root_from_db_path(db_path)
+            if export_root is None:
+                st.warning(
+                    "Could not infer EXPORT_ROOT from DB path. "
+                    "Expected EXPORT_ROOT/meta/sfdata.db layout."
+                )
+            else:
+                # Controls in collapsed expander
+                with st.expander("⚙️ Recursive docs controls", expanded=False):
+                    st.caption(f"Export root: {export_root}")
+
+                    max_depth = st.slider("Max traversal depth", 1, 6, 3, 1)
+                    max_children = st.slider("Max children per relationship", 10, 500, 100, 10)
+
+                    allow_filter = st.checkbox("Filter to specific object types", value=False)
+                    allow_objects: Optional[set[str]] = None
+                    if allow_filter:
+                        all_api_names = sorted(OBJECTS.keys())
+                        selected = st.multiselect(
+                            "Allowed objects",
+                            options=all_api_names,
+                            default=[
+                                "Opportunity",
+                                "c2g__codaInvoice__c",
+                                "fferpcore__BillingDocument__c",
+                            ],
+                        )
+                        allow_objects = set(selected)
+
+                # Collect subtree
+                subtree = collect_subtree_ids(
+                    db_path=db_path,
+                    root_api=api_name,
+                    root_id=selected_id,
+                    max_depth=int(max_depth) if "max_depth" in locals() else 3,
+                    max_children_per_rel=int(max_children) if "max_children" in locals() else 100,
+                    allow_objects=allow_objects if "allow_objects" in locals() else None,
+                )
+
+                total_records = sum(len(v) for v in subtree.values())
+                st.write(
+                    f"📊 Records in subtree: **{total_records}** across **{len(subtree)}** object types"
+                )
+
+                # Load and filter documents
+                docs_df = load_master_documents_index(export_root)
+                if docs_df is None:
+                    st.error(
+                        "meta/master_documents_index.csv not found. "
+                        "Run: `sfdump docs-index --export-root <EXPORT_ROOT>`"
+                    )
+                else:
+                    all_ids: set[str] = set()
+                    for ids in subtree.values():
+                        all_ids.update(ids)
+
+                    sub_docs = docs_df[docs_df["record_id"].isin(list(all_ids))].copy()
+
+                    if len(sub_docs) == 0:
+                        st.info("No documents attached to any record in the subtree.")
+                    else:
+                        st.write(f"📄 Documents found: **{len(sub_docs)}**")
+
+                        # Documents summary table
+                        show_cols = [
+                            "file_extension",
+                            "file_name",
+                            "object_type",
+                            "record_name",
+                            "account_name",
+                            "opp_name",
+                        ]
+                        show_cols = [c for c in show_cols if c in sub_docs.columns]
+                        st.dataframe(
+                            sub_docs[show_cols],
+                            height=260,
+                            hide_index=True,
+                            use_container_width=True,
+                        )
+
+                        # Documents list + PDF preview (always visible)
+                        from sfdump.viewer_app.ui.documents_panel import (
+                            render_documents_panel_from_rows,
+                        )
+
+                        render_documents_panel_from_rows(
+                            export_root=export_root,
+                            rows=sub_docs.to_dict(orient="records"),
+                            title="📎 Document Preview",
+                            key_prefix=f"subtree_docs_{api_name}_{selected_id}",
+                            pdf_height=800,
+                        )
+
+    # Continue with right column - record details
+    with col_right:
+        if not rows or not selected_id:
+            st.info("Use the sidebar to search and select records.")
             st.stop()
 
         try:
@@ -103,7 +214,7 @@ def main() -> None:
 
         import pandas as pd  # type: ignore[import-not-found]
 
-        # NAV-002: Back button (main pane) pops the navigation stack (no seeding/reset here)
+        # NAV-002: Back button (main pane) pops the navigation stack
         from sfdump.viewer_app.navigation.record_nav import pop
 
         _nav_stack = st.session_state.get("_sfdump_nav_stack", [])
@@ -170,96 +281,6 @@ def main() -> None:
                 export_root=export_root,
                 key_prefix=f"expl_{api_name}_{selected_id}",
             )
-
-        # ------------------------------------------------------------------
-        # Recursive subtree document search (Account -> Opp -> Invoice -> ...)
-        # ------------------------------------------------------------------
-        with st.expander("Recursive documents (subtree)", expanded=False):
-            export_root = _export_root_from_db_path(db_path)
-            if export_root is None:
-                st.warning(
-                    "Could not infer EXPORT_ROOT from DB path. "
-                    "Expected EXPORT_ROOT/meta/sfdata.db layout."
-                )
-                st.stop()
-
-            st.caption(f"Export root inferred as: {export_root}")
-
-            max_depth = st.slider("Max traversal depth", 1, 6, 3, 1)
-            max_children = st.slider("Max children per relationship", 10, 500, 100, 10)
-
-            allow_filter = st.checkbox("Filter to specific object types", value=False)
-            allow_objects: Optional[set[str]] = None
-            if allow_filter:
-                all_api_names = sorted(OBJECTS.keys())
-                selected = st.multiselect(
-                    "Allowed objects",
-                    options=all_api_names,
-                    default=["Opportunity", "c2g__codaInvoice__c", "fferpcore__BillingDocument__c"],
-                )
-                allow_objects = set(selected)
-
-            subtree = collect_subtree_ids(
-                db_path=db_path,
-                root_api=api_name,
-                root_id=selected_id,
-                max_depth=int(max_depth),
-                max_children_per_rel=int(max_children),
-                allow_objects=allow_objects,
-            )
-
-            total_records = sum(len(v) for v in subtree.values())
-            st.write(
-                f"Records in subtree: **{total_records}** across **{len(subtree)}** object types."
-            )
-            st.write({k: len(v) for k, v in sorted(subtree.items(), key=lambda x: -len(x[1]))})
-
-            docs_df = load_master_documents_index(export_root)
-            if docs_df is None:
-                st.error(
-                    "meta/master_documents_index.csv not found. "
-                    "Run: `sfdump docs-index --export-root <EXPORT_ROOT>` "
-                    "(or `make -f Makefile.export export-doc-index`)."
-                )
-                st.stop()
-
-            all_ids: set[str] = set()
-            for ids in subtree.values():
-                all_ids.update(ids)
-
-            sub_docs = docs_df[docs_df["record_id"].isin(list(all_ids))].copy()
-            st.write(f"Documents found: **{len(sub_docs)}**")
-
-            from sfdump.viewer_app.ui.documents_panel import render_documents_panel_from_rows
-
-            if len(sub_docs) == 0:
-                st.info("No documents attached to any record in the subtree.")
-            else:
-                # Optional quick summary table (keep if you like)
-                show_cols = [
-                    "file_extension",
-                    "file_source",
-                    "file_name",
-                    "local_path",
-                    "object_type",
-                    "record_name",
-                    "account_name",
-                    "opp_name",
-                    "opp_stage",
-                    "opp_amount",
-                    "opp_close_date",
-                ]
-                show_cols = [c for c in show_cols if c in sub_docs.columns]
-                st.dataframe(sub_docs[show_cols], height=260, hide_index=True, width="stretch")
-
-                # ✅ Standardised renderer handles: list + preview + open + download
-                render_documents_panel_from_rows(
-                    export_root=export_root,
-                    rows=sub_docs.to_dict(orient="records"),
-                    title="Documents in subtree",
-                    key_prefix=f"subtree_docs_{api_name}_{selected_id}",
-                    pdf_height=800,
-                )
 
 
 if __name__ == "__main__":
