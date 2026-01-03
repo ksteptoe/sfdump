@@ -118,6 +118,15 @@ def render_sidebar(
 
     st.sidebar.divider()
 
+    # DEBUG: Show last navigation info
+    if "_debug_last_nav" in st.session_state:
+        st.sidebar.markdown("---")
+        st.sidebar.caption("🐛 Last Navigation Debug")
+        debug = st.session_state["_debug_last_nav"]
+        st.sidebar.code(f"""API: {debug.get('child_api', 'N/A')}
+ID: {debug.get('extracted_id', 'N/A')}
+Selection: {debug.get('current_sel', 'N/A')[:50]}...""")
+
     bc = breadcrumbs()
     if bc:
         st.sidebar.caption("Navigation")

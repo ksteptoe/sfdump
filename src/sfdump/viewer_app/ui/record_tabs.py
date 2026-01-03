@@ -157,6 +157,19 @@ def render_children_with_navigation(*, record, show_all_fields: bool, show_ids: 
                     # Get the CURRENT selection from session state at button click time
                     current_sel = st.session_state.get(select_key, choices[0] if choices else "")
 
+                    # Extract ID and debug
+                    rid = _id_from_label(current_sel)
+                    label = current_sel.rsplit("[", 1)[0].strip()
+
+                    # Save debug info to session state so we can see it after rerun
+                    st.session_state["_debug_last_nav"] = {
+                        "select_key": select_key,
+                        "current_sel": current_sel,
+                        "extracted_id": rid,
+                        "label": label,
+                        "child_api": child_obj.api_name,
+                    }
+
                     # NAV-002: ensure parent is on nav stack before drilling into child
                     parent_api = record.parent.sf_object.api_name
                     parent_id = str(
@@ -174,9 +187,6 @@ def render_children_with_navigation(*, record, show_all_fields: bool, show_ids: 
                     cur = peek()
                     if cur is None or cur.api_name != parent_api or cur.record_id != parent_id:
                         push(parent_api, parent_id, label=parent_label)
-
-                    rid = _id_from_label(current_sel)
-                    label = current_sel.rsplit("[", 1)[0].strip()
 
                     push(child_obj.api_name, rid, label=label)
                     st.rerun()
