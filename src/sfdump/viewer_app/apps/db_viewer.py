@@ -128,7 +128,7 @@ def main() -> None:
                         )
                         allow_objects = set(selected)
 
-                # Collect subtree
+                # Collect subtree (children of current record)
                 subtree = collect_subtree_ids(
                     db_path=db_path,
                     root_api=api_name,
@@ -137,6 +137,15 @@ def main() -> None:
                     max_children_per_rel=int(max_children) if "max_children" in locals() else 100,
                     allow_objects=allow_objects if "allow_objects" in locals() else None,
                 )
+
+                # ALSO include parent records from navigation stack
+                from sfdump.viewer_app.navigation.record_nav import breadcrumbs
+
+                nav_stack = breadcrumbs()
+                for nav_item in nav_stack:
+                    if nav_item.api_name not in subtree:
+                        subtree[nav_item.api_name] = set()
+                    subtree[nav_item.api_name].add(nav_item.record_id)
 
                 total_records = sum(len(v) for v in subtree.values())
 
