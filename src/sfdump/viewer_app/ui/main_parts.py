@@ -90,8 +90,12 @@ def render_sidebar(
 
     api_options = [_guess_api_from_table(t) for t in tables]
 
-    # Default to Account if present, otherwise use default_api_name, otherwise first option
-    if default_api_name and default_api_name in api_options:
+    # Check navigation state FIRST to set the correct default
+    current = peek()
+    if current and current.api_name in api_options:
+        # Use the navigation state to set the default
+        api_default = current.api_name
+    elif default_api_name and default_api_name in api_options:
         api_default = default_api_name
     elif "Account" in api_options:
         api_default = "Account"
@@ -146,15 +150,19 @@ Selection: {debug.get('current_sel', 'N/A')[:50]}...""")
                 reset()
                 st.rerun()
 
-    current = peek()
+    # Get selected_id and selected_label from navigation state if api_name matches
     selected_id = ""
     selected_label = ""
 
-    if current:
-        api_name = current.api_name
+    if current and current.api_name == api_name:
+        # Navigation state matches the selected object - use it
         selected_id = current.record_id
         selected_label = current.label or current.record_id
+    elif current and current.api_name != api_name:
+        # User manually changed the object selectbox - reset navigation
+        reset()
     else:
+        # No navigation state - use default if provided
         if default_record_id:
             selected_id = default_record_id
             selected_label = default_record_id
