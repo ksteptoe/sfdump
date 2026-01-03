@@ -230,57 +230,34 @@ def main() -> None:
             sub_docs = docs_df[docs_df["record_id"].isin(list(all_ids))].copy()
             st.write(f"Documents found: **{len(sub_docs)}**")
 
+            from sfdump.viewer_app.ui.documents_panel import render_documents_panel_from_rows
+
             if len(sub_docs) == 0:
                 st.info("No documents attached to any record in the subtree.")
-                st.stop()
+            else:
+                # Optional quick summary table (keep if you like)
+                show_cols = [
+                    "file_extension",
+                    "file_source",
+                    "file_name",
+                    "local_path",
+                    "object_type",
+                    "record_name",
+                    "account_name",
+                    "opp_name",
+                    "opp_stage",
+                    "opp_amount",
+                    "opp_close_date",
+                ]
+                show_cols = [c for c in show_cols if c in sub_docs.columns]
+                st.dataframe(sub_docs[show_cols], height=260, hide_index=True, width="stretch")
 
-            show_cols = [
-                "file_extension",
-                "file_source",
-                "file_name",
-                "local_path",
-                "object_type",
-                "record_name",
-                "account_name",
-                "opp_name",
-                "opp_stage",
-                "opp_amount",
-                "opp_close_date",
-            ]
-            show_cols = [c for c in show_cols if c in sub_docs.columns]
-            st.dataframe(sub_docs[show_cols], height=260, hide_index=True, width="stretch")
-
-            # Select + preview (make preview *visibly* appear)
-            choices: list[str] = []
-            for _, r in sub_docs.iterrows():
-                lp = r.get("local_path", "")
-                fn = r.get("file_name", "")
-                rn = r.get("record_name", "")
-                ot = r.get("object_type", "")
-                rid = r.get("record_id", "")
-                label = f"{fn} — {ot}:{rn} [{rid}] :: {lp}"
-                choices.append(label)
-
-            selected_doc = st.selectbox(
-                "Preview a document", choices, index=0, key="subtree_preview_select"
-            )
-            local_path = selected_doc.rsplit("::", 1)[-1].strip()
-
-            if local_path:
-                from sfdump.viewer_app.ui.documents_panel import render_documents_panel_from_rows
-
-                chosen_doc_row = {
-                    "path": local_path,  # relative path under export_root
-                    "file_name": Path(local_path).name,
-                    "file_id": "",  # optional
-                    "file_source": "File",
-                }
-
+                # ✅ Standardised renderer handles: list + preview + open + download
                 render_documents_panel_from_rows(
                     export_root=export_root,
-                    rows=[chosen_doc_row],
-                    title="Selected subtree document preview",
-                    key_prefix=f"subtree_doc_{api_name}_{selected_id}",
+                    rows=sub_docs.to_dict(orient="records"),
+                    title="Documents in subtree",
+                    key_prefix=f"subtree_docs_{api_name}_{selected_id}",
                     pdf_height=800,
                 )
 
