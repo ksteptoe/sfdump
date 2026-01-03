@@ -132,18 +132,31 @@ def render_children_with_navigation(*, record, show_all_fields: bool, show_ids: 
             # Keep widget keys stable & unique per relationship
             key_base = f"child_nav_{record.parent.sf_object.api_name}_{record.parent.data.get('Id','')}_{child_obj.api_name}_{rel.name}"
 
+            # Use session state key for the selectbox so we can reliably read it
+            select_key = f"{key_base}_select"
+
             cols = st.columns([4, 1])
             with cols[0]:
-                sel = st.selectbox(
+                st.selectbox(
                     "Select a child record",
                     options=choices,
                     index=0,
-                    key=f"{key_base}_select",
+                    key=select_key,
                 )
+
+            # Get the selected value from session state (more reliable than variable)
+            sel = st.session_state.get(select_key, choices[0] if choices else "")
+
+            # Show what's currently selected (for debugging)
+            st.caption(f"Selected: {sel}")
+
             with cols[1]:
                 from sfdump.viewer_app.navigation.record_nav import peek, push
 
                 if st.button("Open", key=f"{key_base}_open"):
+                    # Get the CURRENT selection from session state at button click time
+                    current_sel = st.session_state.get(select_key, choices[0] if choices else "")
+
                     # NAV-002: ensure parent is on nav stack before drilling into child
                     parent_api = record.parent.sf_object.api_name
                     parent_id = str(
@@ -162,7 +175,8 @@ def render_children_with_navigation(*, record, show_all_fields: bool, show_ids: 
                     if cur is None or cur.api_name != parent_api or cur.record_id != parent_id:
                         push(parent_api, parent_id, label=parent_label)
 
-                    rid = _id_from_label(sel)
-                    label = sel.rsplit("[", 1)[0].strip()
+                    rid = _id_from_label(current_sel)
+                    label = current_sel.rsplit("[", 1)[0].strip()
+
                     push(child_obj.api_name, rid, label=label)
                     st.rerun()
