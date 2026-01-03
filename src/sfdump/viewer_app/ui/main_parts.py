@@ -250,6 +250,10 @@ Search Term: '{search_term}'""")
 
         term = (search_term or "").strip()
 
+        # When navigating to a specific record, skip search filtering
+        if selected_id:
+            term = ""
+
         rows: list[dict[str, Any]] = []
         if term and label_cols and not regex_search:
             like_cols = label_cols[:3]
