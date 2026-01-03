@@ -312,7 +312,15 @@ def render_record_list(
         labels = [_label_row(r) for r in rows]
 
         default_index = 0
-        if selected_label:
+        # Use selected_id directly if available (from navigation), otherwise try parsing from label
+        if selected_id:
+            # We have an explicit ID - find the matching label
+            for i, lab in enumerate(labels):
+                if _id_from_label(lab) == selected_id:
+                    default_index = i
+                    break
+        elif selected_label:
+            # Fallback: try matching by label text (for backward compatibility)
             sel = str(selected_label).strip()
             sel_id = _id_from_label(sel) or sel
             for i, lab in enumerate(labels):
