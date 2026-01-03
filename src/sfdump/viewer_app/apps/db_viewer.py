@@ -66,19 +66,13 @@ def main() -> None:
     regex_search = state.regex_search
     show_all_fields = state.show_all_fields
 
-    # NEW LAYOUT: Left = Documents (wider), Right = Object details (narrower)
-    col_left, col_right = st.columns([3, 2])
+    # NEW LAYOUT: Left = Object details (narrower), Right = Documents (wider)
+    col_left, col_right = st.columns([2, 3])
 
     # ------------------------------------------------------------------
-    # LEFT COLUMN: Documents & Preview
+    # LEFT COLUMN: Object Details & Relationships
     # ------------------------------------------------------------------
     with col_left:
-        st.subheader("Documents")
-
-    # ------------------------------------------------------------------
-    # RIGHT COLUMN: Object Details & Relationships
-    # ------------------------------------------------------------------
-    with col_right:
         st.subheader("Record details & relationships")
 
         # Render record list to get selected record
@@ -93,10 +87,15 @@ def main() -> None:
             show_ids=state.show_ids,
         )
 
-    # Now render documents in left column (we have selected_id)
-    with col_left:
+    # ------------------------------------------------------------------
+    # RIGHT COLUMN: Documents & Preview
+    # ------------------------------------------------------------------
+    with col_right:
+        st.subheader("Documents")
+
+        # Render documents (we have selected_id from left column)
         if not rows or not selected_id:
-            st.info("Select a record from the list on the right to see documents.")
+            st.info("Select a record from the list on the left to see documents.")
         else:
             # Recursive subtree document search (Account -> Opp -> Invoice -> ...)
             export_root = _export_root_from_db_path(db_path)
@@ -191,8 +190,8 @@ def main() -> None:
                             pdf_height=800,
                         )
 
-    # Continue with right column - record details
-    with col_right:
+    # Continue with left column - record details tabs
+    with col_left:
         if not rows or not selected_id:
             st.info("Use the sidebar to search and select records.")
             st.stop()
