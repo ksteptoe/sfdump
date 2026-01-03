@@ -174,7 +174,7 @@ def main() -> None:
         # ------------------------------------------------------------------
         # Recursive subtree document search (Account -> Opp -> Invoice -> ...)
         # ------------------------------------------------------------------
-        with st.expander("Recursive documents (subtree)", expanded=True):
+        with st.expander("Recursive documents (subtree)", expanded=False):
             export_root = _export_root_from_db_path(db_path)
             if export_root is None:
                 st.warning(
