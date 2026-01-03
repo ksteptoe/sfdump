@@ -108,7 +108,7 @@ Launching Streamlit viewer for exports/export-2025-12-31/meta/sfdata.db ...
 
 The viewer has a clean, two-column layout designed for efficient navigation:
 
-![Initial Viewer](../../Doc%20Pics/01-initial-viewer-account.png)
+![Initial Viewer](..//_static/viewer/01-initial-viewer-account.png)
 *Screenshot: Initial viewer showing Account object with clean layout*
 
 **Layout:**
@@ -162,7 +162,7 @@ Four tabs provide different views of the selected record:
 
 After selecting a record, the **Details** tab shows:
 
-![Account Details](../Doc%20Pics/02-account-details-important-fields.png)
+![Account Details](/_static/viewer/02-account-details-important-fields.png)
 *Screenshot: Account Details tab showing only important fields (7-10 key fields instead of 100+)*
 
 **Key Features:**
@@ -213,7 +213,7 @@ Account
 2. Click the **Children** tab
 3. Expand any relationship to see child records
 
-![Children Navigation](../Doc%20Pics/03-children-navigation.png)
+![Children Navigation](/_static/viewer/03-children-navigation.png)
 *Screenshot: Children tab showing Opportunity relationship with navigation controls*
 
 **Each relationship shows:**
@@ -237,7 +237,7 @@ To drill down into a child record:
 - **Navigation breadcrumbs** appear in sidebar
 - **Back** and **Reset** buttons become available
 
-![Opportunity After Navigation](../Doc%20Pics/04-opportunity-after-navigation.png)
+![Opportunity After Navigation](/_static/viewer/04-opportunity-after-navigation.png)
 *Screenshot: After navigating to Opportunity - Object dropdown auto-syncs, breadcrumbs appear*
 
 ### Contextual Messages
@@ -257,7 +257,7 @@ This prevents confusion about "missing" data that's actually expected business l
 
 You can navigate through multiple levels of relationships:
 
-![Opportunity Children - Invoices](../Doc%20Pics/05-opportunity-children-invoices.png)
+![Opportunity Children - Invoices](/_static/viewer/05-opportunity-children-invoices.png)
 *Screenshot: Opportunity Children tab showing Invoice relationship*
 
 **Example navigation path:**
@@ -274,7 +274,7 @@ You can navigate through multiple levels of relationships:
 
 **KEY FEATURE:** When viewing any record, the Documents section automatically includes files from all parent records in the navigation chain.
 
-![Invoice with Parent Documents](../Doc%20Pics/06-invoice-full-parent-chain.png)
+![Invoice with Parent Documents](/_static/viewer/06-invoice-full-parent-chain.png)
 *Screenshot: Invoice view showing full navigation chain (Account → Opportunity → Invoice) with documents from all parent records*
 
 **Example:** Viewing invoice SIN003926 shows:
@@ -294,9 +294,6 @@ The **Document Explorer** tab provides powerful search across all documents in y
 
 1. From any record, click the **Explorer** tab (rightmost tab in left column)
 2. The Explorer provides a searchable table of ALL documents across the database
-
-![Document Explorer](../Doc%20Pics/07-document-explorer.png)
-*Screenshot: Document Explorer tab showing searchable document table with filters*
 
 ### Search by Account
 
