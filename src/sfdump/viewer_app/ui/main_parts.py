@@ -277,6 +277,20 @@ def render_record_list(
             st.info("No records found.")
             return ([], "")
 
+        # CRITICAL FIX: If we have a selected_label/ID from navigation, ensure that record is in the list
+        if selected_label:
+            sel_id = _id_from_label(selected_label) or selected_label
+            # Check if the selected record is already in our rows
+            found = any(str(r.get("Id", "")) == sel_id for r in rows)
+            if not found and sel_id:
+                # Record not in current results - fetch it explicitly
+                sql = f'SELECT {select_sql} FROM "{table}" WHERE "Id" = ?'
+                cur.execute(sql, (sel_id,))
+                explicit_row = cur.fetchone()
+                if explicit_row:
+                    # Add it to the front of the list so it's visible
+                    rows.insert(0, dict(explicit_row))
+
         def _label_row(r: dict[str, Any]) -> str:
             parts: list[str] = []
             for c in important:
