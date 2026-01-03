@@ -138,9 +138,6 @@ def main() -> None:
                 )
 
                 total_records = sum(len(v) for v in subtree.values())
-                st.write(
-                    f"📊 Records in subtree: **{total_records}** across **{len(subtree)}** object types"
-                )
 
                 # Load and filter documents
                 docs_df = load_master_documents_index(export_root)
@@ -156,11 +153,15 @@ def main() -> None:
 
                     sub_docs = docs_df[docs_df["record_id"].isin(list(all_ids))].copy()
 
+                    # Combined summary on one line
+                    st.write(
+                        f"📊 **{total_records}** records across **{len(subtree)}** types  "
+                        f"│  📄 **{len(sub_docs)}** documents"
+                    )
+
                     if len(sub_docs) == 0:
                         st.info("No documents attached to any record in the subtree.")
                     else:
-                        st.write(f"📄 Documents found: **{len(sub_docs)}**")
-
                         # Documents summary table
                         show_cols = [
                             "file_extension",
@@ -218,13 +219,10 @@ def main() -> None:
         _nav_stack = st.session_state.get("_sfdump_nav_stack", [])
         _can_back = isinstance(_nav_stack, list) and len(_nav_stack) > 1
 
-        c_back, c_title = st.columns([1, 9])
-        with c_back:
-            if st.button("⬅ Back", disabled=not _can_back, key="nav_back_main"):
+        if _can_back:
+            if st.button("⬅ Back", key="nav_back_main", type="secondary"):
                 pop()
                 st.rerun()
-        with c_title:
-            pass
 
         tab_details, tab_children, tab_docs, tab_explorer = st.tabs(
             ["Details", "Children", "Documents", "Explorer"]
