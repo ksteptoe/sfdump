@@ -1,11 +1,15 @@
 """Tests for sfdump.viewer_app.services.documents module."""
 
 import sqlite3
-from unittest.mock import patch
+import sys
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sfdump.viewer_app.services.documents import (
+# Mock streamlit before importing documents module (streamlit may not be installed in CI)
+sys.modules["streamlit"] = MagicMock()
+
+from sfdump.viewer_app.services.documents import (  # noqa: E402
     _pick_first,
     _table_columns,
     list_record_documents,
