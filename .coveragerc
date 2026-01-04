@@ -28,6 +28,18 @@ omit =
     */download_missing_files.py
     *\download_missing_files.py
 
+    # CLI command files - Click wiring, tested via integration
+    */command_*.py
+    *\command_*.py
+
+    # CLI entry point
+    */cli.py
+    *\cli.py
+
+    # Probe summary - complex visualization
+    */probe_summary.py
+    *\probe_summary.py
+
 [report]
 show_missing = True
 skip_covered = True
