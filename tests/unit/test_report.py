@@ -196,7 +196,7 @@ class TestGenerateMissingReport:
         """Report redacts sensitive data when requested."""
         links_dir = export_structure / "links"
         (links_dir / "attachments_missing_retry.csv").write_text(
-            "Id,Name,ParentId,retry_success\n" "ATT001,sensitive_doc.pdf,001ABC,false\n"
+            "Id,Name,ParentId,retry_success\nATT001,sensitive_doc.pdf,001ABC,false\n"
         )
         (links_dir / "missing_file_analysis.csv").write_text(
             "ParentId,ParentObject,ParentName,MissingCount,ParentRecordUrl\n"
