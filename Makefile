@@ -27,8 +27,8 @@ KIND ?= patch
 PYTEST         := $(PYTHON) -m pytest
 PYTEST_Q       := -q
 PYTEST_WARN    := --disable-warnings
-# Do NOT enforce fail-under per-stamp; we’ll enforce once at the end
-PYTEST_COV_BASE := --cov=sfdump
+# Do NOT enforce fail-under per-stamp; we'll enforce once at the end
+PYTEST_COV_BASE := --cov=src/sfdump
 PYTEST_COV_UNIT := $(PYTEST_COV_BASE) --cov-report= --cov-append
 PYTEST_COV_INTEG := $(PYTEST_COV_BASE) --cov-report= --cov-append
 PYTEST_XDIST   ?= -n auto
@@ -158,12 +158,12 @@ test: $(UNIT_STAMP) $(INTEG_STAMP)
 
 # Full non-live run, no stamps (useful before releases)
 test-all:
-	$(PYTHON) -m pytest -v -m "not live" $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) --cov=sfdump --cov-report=term-missing --cov-report=xml --cov-fail-under=40
+	$(PYTHON) -m pytest -v -m "not live" $(PYTEST_WARN) $(PYTEST_XDIST) $(PYTEST_TIMEOUT) --cov=src/sfdump --cov-report=term-missing --cov-report=xml --cov-fail-under=40
 
 
 # Live tests are explicit & uncached (gentle on API; clearer intent)
 test-live:
-	SF_LIVE_TESTS=true $(PYTHON) -m pytest -v -m live $(PYTEST_WARN) --timeout=180 --cov=sfdump --cov-report=xml
+	SF_LIVE_TESTS=true $(PYTHON) -m pytest -v -m live $(PYTEST_WARN) --timeout=180 --cov=src/sfdump --cov-report=xml
 
 clean-tests:
 	rm -rf $(STAMPS_DIR)

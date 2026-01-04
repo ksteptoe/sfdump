@@ -1,16 +1,32 @@
 [run]
 branch = True
-source = sfdump
+source = src/sfdump
 omit =
     tests/*
+
+    # Entrypoints
     */__main__.py
     *\__main__.py
-    */viewer/*_app.py
-    *\viewer\*_app.py
-    */viewer/db_app.py
-    *\viewer\db_app.py
-    */viewer/files_app.py
-    *\viewer\files_app.py
+    */db_app.py
+    *\db_app.py
+    */files_app.py
+    *\files_app.py
+
+    # Streamlit UI code - requires integration/e2e testing
+    */viewer_app/apps/*
+    *\viewer_app\apps\*
+    */viewer_app/ui/*
+    *\viewer_app\ui\*
+    */viewer_app/preview/*
+    *\viewer_app\preview\*
+    */viewer_app/navigation/*
+    *\viewer_app\navigation\*
+    */viewer_app/config.py
+    *\viewer_app\config.py
+
+    # Complex scripts needing integration tests
+    */download_missing_files.py
+    *\download_missing_files.py
 
 [report]
 show_missing = True

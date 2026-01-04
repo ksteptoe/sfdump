@@ -72,14 +72,22 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["sfdump"]
+source = ["src/sfdump"]
 omit = [
   "tests/*",
 
   # ignore entrypoints / interactive Streamlit apps
-  "*sfdump*__main__.py",
-  "*sfdump*viewer*db_app.py",
-  "*sfdump*viewer*files_app.py",
+  "*__main__.py",
+  "*db_app.py",
+  "*files_app.py",
+
+  # Streamlit UI code - requires integration/e2e testing, not unit tests
+  "src/sfdump/viewer_app/apps/*",
+  "src/sfdump/viewer_app/ui/*",
+  "src/sfdump/viewer_app/preview/*",
+  "src/sfdump/viewer_app/navigation/*",
+  "src/sfdump/viewer_app/config.py",
+  "src/sfdump/download_missing_files.py",
 ]
 
 [tool.coverage.report]

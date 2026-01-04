@@ -11,6 +11,10 @@ from pathlib import Path
 
 from coverage import Coverage
 
+# Ensure UTF-8 output on Windows
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 target_file = Path(".coverage_target")
 cov = Coverage()
 cov.load()
@@ -21,11 +25,11 @@ prev = float(target_file.read_text()) if target_file.exists() else 0.0
 allowed = max(prev - 1.0, 40.0)
 
 if current + 1e-9 < allowed:
-    print(f"❌ Coverage {current:.1f}% < allowed minimum {allowed:.1f}% (previous {prev:.1f}%)")
+    print(f"FAIL: Coverage {current:.1f}% < allowed minimum {allowed:.1f}% (previous {prev:.1f}%)")
     sys.exit(1)
 
 if current > prev:
     target_file.write_text(f"{current:.1f}")
-    print(f"✅ Coverage improved to {current:.1f}% (previous {prev:.1f}%) — baseline updated")
+    print(f"OK: Coverage improved to {current:.1f}% (previous {prev:.1f}%) - baseline updated")
 else:
-    print(f"✅ Coverage {current:.1f}% (allowed ≥ {allowed:.1f}%) — OK")
+    print(f"OK: Coverage {current:.1f}% (allowed >= {allowed:.1f}%)")
