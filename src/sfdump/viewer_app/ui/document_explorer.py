@@ -179,7 +179,7 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
         ot = str(row.get("object_type", "")).strip()
         rn = str(row.get("record_name", "")).strip()
         fid = str(row.get("file_id", "")).strip()
-        return f"{i+1:03d} — {fn} | {ot} | {rn} [{fid}]"
+        return f"{i + 1:03d} — {fn} | {ot} | {rn} [{fid}]"
 
     labels = [_label(i, limited.iloc[i]) for i in range(len(limited))]
 
@@ -230,6 +230,6 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
         export_root=export_root,
         rows=[chosen],
         title="Preview",
-        key_prefix=f"{key_prefix}_preview_{chosen.get('file_id','')}",
+        key_prefix=f"{key_prefix}_preview_{chosen.get('file_id', '')}",
         pdf_height=800,
     )

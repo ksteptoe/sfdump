@@ -130,7 +130,7 @@ def render_children_with_navigation(*, record, show_all_fields: bool, show_ids: 
                 continue
 
             # Keep widget keys stable & unique per relationship
-            key_base = f"child_nav_{record.parent.sf_object.api_name}_{record.parent.data.get('Id','')}_{child_obj.api_name}_{rel.name}"
+            key_base = f"child_nav_{record.parent.sf_object.api_name}_{record.parent.data.get('Id', '')}_{child_obj.api_name}_{rel.name}"
 
             # Use session state key for the selectbox so we can reliably read it
             select_key = f"{key_base}_select"

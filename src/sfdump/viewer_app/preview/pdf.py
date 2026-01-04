@@ -86,6 +86,6 @@ def preview_pdf_bytes(data: bytes, *, height: int = 750, key_suffix: str = "") -
         pix = page.get_pixmap(matrix=mat, alpha=False)
         st.image(
             pix.tobytes("png"),
-            caption=f"Page {i+1}/{pages}",
+            caption=f"Page {i + 1}/{pages}",
             width="stretch",
         )
