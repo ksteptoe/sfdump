@@ -22,8 +22,7 @@ Someone in your IT team should have:
 2. Go to: **http://localhost:8503**
 3. You should see the document viewer interface
 
-![Viewer Home](_static/images/viewer/user-01-home.png)
-*Screenshot: Viewer home page*
+<!-- Screenshot: Viewer home page (user-01-home.png) -->
 
 ### If You Need to Start the Viewer
 
@@ -48,8 +47,7 @@ This is the **most common task** - finding all documents for a specific customer
 
 1. **Click the "Document Explorer" tab** at the top
 
-![Document Explorer Tab](_static/images/viewer/user-02-doc-explorer-tab.png)
-*Screenshot: Document Explorer tab location*
+<!-- Screenshot: Document Explorer tab location (user-02-doc-explorer-tab.png) -->
 
 2. **Type the customer name** in the "Account Name" box
 
@@ -59,15 +57,13 @@ This is the **most common task** - finding all documents for a specific customer
    - Continental
    - Freescale
 
-![Account Search Box](_static/images/viewer/user-03-account-search.png)
-*Screenshot: Account Name search box*
+<!-- Screenshot: Account Name search box (user-03-account-search.png) -->
 
 3. **Results appear automatically** as you type
 
    Example: Typing "VITEC" shows **73 documents**
 
-![Search Results](_static/images/viewer/user-04-search-results.png)
-*Screenshot: Search results showing 73 VITEC documents*
+<!-- Screenshot: Search results showing 73 VITEC documents (user-04-search-results.png) -->
 
 4. **Review the results table**
 
@@ -84,8 +80,7 @@ This is the **most common task** - finding all documents for a specific customer
 2. Scroll down to see the PDF preview
 3. No download needed!
 
-![PDF Preview](_static/images/viewer/user-05-pdf-preview.png)
-*Screenshot: PDF preview showing document inline*
+<!-- Screenshot: PDF preview showing document inline (user-05-pdf-preview.png) -->
 
 **Option B: Note the file path**
 1. Look at the `local_path` column
@@ -112,8 +107,7 @@ If you know the **opportunity** or **project name**, use this method.
    - VITEC_BE-NPI-SC_Q2_2020
    - ETV Spitfire2
 
-![Opportunity Search](_static/images/viewer/user-06-opp-search.png)
-*Screenshot: Opportunity Name search box*
+<!-- Screenshot: Opportunity Name search box (user-06-opp-search.png) -->
 
 3. **Results show all documents for that deal**
 
@@ -141,8 +135,7 @@ This is very useful for finding contracts for specific projects.
 4. Select the invoice from the list
 5. View details in the right panel
 
-![Invoice Search](_static/images/viewer/user-07-invoice-search.png)
-*Screenshot: Searching for specific invoice*
+<!-- Screenshot: Searching for specific invoice (user-07-invoice-search.png) -->
 
 ### Method 2: Through Customer Account
 
@@ -175,8 +168,7 @@ Contracts are typically attached to Opportunities or Accounts.
    - "SOW" (Statement of Work)
    - "MSA" (Master Service Agreement)
 
-![Contract Search](_static/images/viewer/user-08-contract-search.png)
-*Screenshot: Finding contracts by filename keywords*
+<!-- Screenshot: Finding contracts by filename keywords (user-08-contract-search.png) -->
 
 5. **Preview the PDF** to confirm it's the right contract
 

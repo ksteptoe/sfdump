@@ -1,3 +1,7 @@
+---
+orphan: true
+---
+
 # Screenshot Guide for Documentation
 
 This guide lists all screenshots needed for the documentation. Please capture these screenshots while the viewer is running and save them to `docs/_static/images/viewer/`.

@@ -1,3 +1,7 @@
+---
+orphan: true
+---
+
 # GUI TODO (sfdump viewer)
 
 > Objective: make it fast and reliable to find **all documents** (especially PDFs) by navigating from:

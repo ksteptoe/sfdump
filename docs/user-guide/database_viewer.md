@@ -1,5 +1,9 @@
 # Database Viewer
 
+**Author:** Kevin Steptoe
+
+![AION Silicon Logo](../../src/logos/EXAMPLE-CORP-logo_black-on-white.jpg)
+
 The Database Viewer is an interactive web application for browsing Salesforce records, navigating relationships, and searching for documents. This is particularly valuable for organizations archiving data before shutdown.
 
 ## Overview

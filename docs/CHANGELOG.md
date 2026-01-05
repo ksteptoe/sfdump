@@ -1,3 +1,7 @@
+---
+orphan: true
+---
+
 # Changelog
 
 ## Since v1.2.0
