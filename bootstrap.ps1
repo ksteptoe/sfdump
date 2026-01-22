@@ -12,7 +12,8 @@
         2. Right-click > Run with PowerShell
 
 .NOTES
-    - Downloads the latest version from GitHub
+    - Downloads the latest RELEASE from GitHub (stable, tested version)
+    - Falls back to main branch if no releases exist
     - Installs to user's home directory (no admin required)
     - Automatically runs the setup wizard
 #>
@@ -21,7 +22,6 @@ $ErrorActionPreference = "Stop"
 
 # Configuration
 $GitHubRepo = "ksteptoe/sfdump"
-$Branch = "main"
 $InstallDir = "$env:USERPROFILE\sfdump"
 
 function Write-Step {
@@ -80,21 +80,48 @@ if ($continue -notmatch "^[Yy]?$") {
 }
 
 # Download
-Write-Step "Downloading sfdump from GitHub..."
+Write-Step "Checking for latest release..."
 
-$zipUrl = "https://github.com/$GitHubRepo/archive/refs/heads/$Branch.zip"
 $zipPath = "$env:TEMP\sfdump-download.zip"
 $extractPath = "$env:TEMP\sfdump-extract"
+$zipUrl = $null
+$version = "main"
 
 try {
     # Ensure TLS 1.2 for GitHub
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-    # Download with progress
+    # Try to get latest release from GitHub API
+    $releaseApiUrl = "https://api.github.com/repos/$GitHubRepo/releases/latest"
+
+    try {
+        $headers = @{ "User-Agent" = "sfdump-bootstrap" }
+        $release = Invoke-RestMethod -Uri $releaseApiUrl -Headers $headers -ErrorAction Stop
+
+        # Look for the sfdump ZIP in release assets
+        $asset = $release.assets | Where-Object { $_.name -match "^sfdump-.*\.zip$" } | Select-Object -First 1
+
+        if ($asset) {
+            $zipUrl = $asset.browser_download_url
+            $version = $release.tag_name
+            Write-Host "    Found release: $version" -ForegroundColor Green
+        } else {
+            Write-Host "    Release found but no ZIP asset, using source archive" -ForegroundColor Yellow
+            $zipUrl = $release.zipball_url
+            $version = $release.tag_name
+        }
+    } catch {
+        Write-Host "    No releases found, using main branch" -ForegroundColor Yellow
+        $zipUrl = "https://github.com/$GitHubRepo/archive/refs/heads/main.zip"
+        $version = "main"
+    }
+
+    Write-Step "Downloading sfdump ($version)..."
+    Write-Host "    Source: $zipUrl"
     Write-Host "    Downloading" -NoNewline
 
     $webClient = New-Object System.Net.WebClient
-    $downloadComplete = $false
+    $webClient.Headers.Add("User-Agent", "sfdump-bootstrap")
 
     # Simple progress indicator
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
@@ -114,7 +141,7 @@ try {
     Write-Err "`nERROR: Failed to download from GitHub."
     Write-Host "Please check your internet connection and try again."
     Write-Host "`nAlternatively, download manually from:"
-    Write-Host "  https://github.com/$GitHubRepo/archive/refs/heads/$Branch.zip" -ForegroundColor Cyan
+    Write-Host "  https://github.com/$GitHubRepo/releases" -ForegroundColor Cyan
     exit 1
 }
 

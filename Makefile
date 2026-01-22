@@ -43,6 +43,7 @@ SYSTEM_DIR  := tests/system  # live/system tests (opt-in, uncached)
         test test-all test-live clean-tests \
         build upload version fetch-tags changelog changelog-md \
         release-show release release-patch release-minor release-major \
+        release-zip gh-release \
         clean run-cli sf-export sf-exportcheck-clean
 
 help:
@@ -61,10 +62,10 @@ help:
 	@echo "  make changelog           - show changes since last Git tag"
 	@echo "  make changelog-md        - write docs/CHANGELOG.md from Git history"
 	@echo "  make release-show        - show scm ver, installed ver, last Git tag"
-	@echo "  make release             - run tests, show changelog and tag (KIND=patch|minor|major)"
-	@echo "  make release-patch       - tag vX.Y.(Z+1)"
-	@echo "  make release-minor       - tag vX.(Y+1).0"
-	@echo "  make release-major       - tag v(X+1).0.0"
+	@echo "  make release             - run tests, tag, and create GitHub Release (KIND=patch|minor|major)"
+	@echo "  make release-patch       - tag vX.Y.(Z+1) + GitHub Release"
+	@echo "  make release-minor       - tag vX.(Y+1).0 + GitHub Release"
+	@echo "  make release-major       - tag v(X+1).0.0 + GitHub Release"
 	@echo "  make clean               - remove build artifacts"
 	@echo "  make run-cli             - run CLI entry point (pass CLI_ARGS=...)"
 	@echo "  make sf-export           - run make -f Makefile.export export-all"
@@ -229,25 +230,67 @@ check-clean:
 # Allow newline in tag messages
 NL := $(shell printf "\n")
 
+# Distribution ZIP directory
+DIST_DIR := dist
+ZIP_NAME = sfdump-$(1).zip
+
+# Create a clean distribution ZIP for releases
+# Usage: make release-zip VERSION=v2.1.1
+release-zip:
+	@if [ -z "$(VERSION)" ]; then \
+	  echo "ERROR: VERSION required. Usage: make release-zip VERSION=v2.1.1"; \
+	  exit 1; \
+	fi
+	@echo "=== Creating distribution ZIP for $(VERSION) ==="
+	mkdir -p $(DIST_DIR)
+	@# Create a clean ZIP excluding dev/build artifacts
+	git archive --format=zip --prefix=sfdump/ -o $(DIST_DIR)/sfdump-$(VERSION).zip HEAD
+	@echo "✅ Created $(DIST_DIR)/sfdump-$(VERSION).zip"
+
+# Create GitHub Release with ZIP attached (requires gh CLI)
+# Usage: make gh-release VERSION=v2.1.1
+gh-release:
+	@if [ -z "$(VERSION)" ]; then \
+	  echo "ERROR: VERSION required. Usage: make gh-release VERSION=v2.1.1"; \
+	  exit 1; \
+	fi
+	@if ! command -v gh >/dev/null 2>&1; then \
+	  echo "ERROR: GitHub CLI (gh) not installed. Install from: https://cli.github.com/"; \
+	  exit 1; \
+	fi
+	@echo "=== Creating GitHub Release $(VERSION) ==="
+	$(MAKE) release-zip VERSION=$(VERSION)
+	@echo "=== Uploading to GitHub ==="
+	gh release create $(VERSION) \
+	  $(DIST_DIR)/sfdump-$(VERSION).zip \
+	  --title "sfdump $(VERSION)" \
+	  --notes "$(CHANGELOG)" \
+	  --latest
+	@echo "✅ GitHub Release $(VERSION) created with ZIP attached"
+
 release-patch: fetch-tags check-clean
 	NEW=v$(MAJOR).$(MINOR).$$(($$(printf '%d' $(PATCH)) + 1))
 	git tag -a "$$NEW" -m "release: $$NEW$(NL)$(NL)$(CHANGELOG)"
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
+	$(MAKE) gh-release VERSION=$$NEW
 
 release-minor: fetch-tags check-clean
 	NEW=v$(MAJOR).$$(($$(printf '%d' $(MINOR)) + 1)).0
 	git tag -a "$$NEW" -m "release: $$NEW$(NL)$(NL)$(CHANGELOG)"
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
+	$(MAKE) gh-release VERSION=$$NEW
 
 release-major: fetch-tags check-clean
 	NEW=v$$(($$(printf '%d' $(MAJOR)) + 1)).0.0
 	git tag -a "$$NEW" -m "release: $$NEW$(NL)$(NL)$(CHANGELOG)"
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
+	$(MAKE) gh-release VERSION=$$NEW
 
 # Meta-release: run tests, show changelog, then dispatch to patch/minor/major
+# Creates git tag AND GitHub Release with downloadable ZIP
 release:
 	@echo "=== Running full test suite before release ==="
 	$(MAKE) test-all
@@ -283,3 +326,4 @@ clean:
 	rm -rf build dist .eggs *.egg-info .coverage htmlcov .pytest_cache coverage.xml
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
 	rm -rf $(STAMPS_DIR)
+	rm -rf $(DIST_DIR)
