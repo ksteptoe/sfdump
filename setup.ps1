@@ -102,27 +102,56 @@ function Install-Python {
         exit 1
     }
 
-    Write-Step "Installing Python (this may take a few minutes)..."
-    Write-Host "A security prompt may appear - please click 'Yes' to allow installation." -ForegroundColor Yellow
+    Write-Step "Installing Python for current user (no admin required)..."
+    Write-Host "This may take 2-5 minutes. Please wait..." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "    [" -NoNewline
 
-    # Install Python with PATH enabled
+    # Show a simple progress animation in background
+    $job = Start-Job -ScriptBlock {
+        while ($true) {
+            Write-Host "." -NoNewline
+            Start-Sleep -Seconds 3
+        }
+    }
+
+    # Per-user install - NO admin required
+    # InstallAllUsers=0 means current user only
+    # DefaultJustForMeTargetDir sets the install location
+    $userPythonPath = "$env:LOCALAPPDATA\Programs\Python\Python312"
     $installArgs = @(
         "/quiet",
         "InstallAllUsers=0",
         "PrependPath=1",
         "Include_launcher=1",
-        "Include_pip=1"
+        "Include_pip=1",
+        "DefaultJustForMeTargetDir=`"$userPythonPath`""
     )
 
-    Start-Process -FilePath $PythonInstallerPath -ArgumentList $installArgs -Wait -Verb RunAs
+    # Run WITHOUT elevation (no -Verb RunAs)
+    $process = Start-Process -FilePath $PythonInstallerPath -ArgumentList $installArgs -Wait -PassThru
+
+    # Stop progress animation
+    Stop-Job $job -ErrorAction SilentlyContinue
+    Remove-Job $job -Force -ErrorAction SilentlyContinue
+    Write-Host "] Done!" -ForegroundColor Green
+
+    if ($process.ExitCode -ne 0) {
+        Write-Host "ERROR: Python installation failed with exit code $($process.ExitCode)" -ForegroundColor Red
+        Write-Host "Please install Python manually from: https://www.python.org/downloads/" -ForegroundColor Yellow
+        exit 1
+    }
 
     # Clean up installer
     Remove-Item $PythonInstallerPath -Force -ErrorAction SilentlyContinue
 
-    # Refresh PATH
+    # Refresh PATH for current session
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
-    Write-Success "Python installed successfully!"
+    # Also add Python directly to current session PATH
+    $env:Path = "$userPythonPath;$userPythonPath\Scripts;$env:Path"
+
+    Write-Success "Python installed successfully to: $userPythonPath"
 }
 
 function Disable-WindowsStoreAlias {
@@ -150,9 +179,6 @@ Write-Host @"
 ============================================================
 "@ -ForegroundColor Cyan
 
-# Check for admin rights for Python installation
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-
 Write-Step "Checking Python installation..."
 
 $pythonPath = Test-PythonInstalled
@@ -175,13 +201,7 @@ if ($pythonPath) {
 
     $response = Read-Host "Would you like to install Python automatically? (Y/n)"
     if ($response -eq "" -or $response -match "^[Yy]") {
-        if (-not $isAdmin) {
-            Write-Warning "Installing Python requires administrator privileges."
-            Write-Host "Please run this script as Administrator, or install Python manually." -ForegroundColor Yellow
-            Write-Host "Download from: https://www.python.org/downloads/" -ForegroundColor Cyan
-            Write-Host "IMPORTANT: Check 'Add Python to PATH' during installation!" -ForegroundColor Yellow
-            exit 1
-        }
+        # Per-user install - no admin required
         Install-Python
         $pythonPath = Test-PythonInstalled
     } else {
@@ -211,24 +231,91 @@ try {
     & $pythonCmd -m pip install -e ".[dev]"
 
     if ($LASTEXITCODE -eq 0) {
+        # Check if .env exists
+        $envFile = Join-Path $scriptDir ".env"
+        $envExists = Test-Path $envFile
+
         Write-Success @"
 
 ============================================================
             Setup Complete!
 ============================================================
-
-You can now use sfdump from the command line:
-
-    sfdump --help
-
-Or run specific commands:
-
-    sfdump login          # Authenticate with Salesforce
-    sfdump files          # Export files
-    sfdump build-db       # Build SQLite database
-    sfdump db-viewer      # Launch web viewer
-
 "@
+
+        if (-not $envExists) {
+            Write-Host @"
+
+------------------------------------------------------------
+NEXT STEP: Configure Salesforce Connection
+------------------------------------------------------------
+
+You need to create a .env file with your Salesforce credentials.
+
+1. In the sfdump folder, create a new file called:  .env
+   (Note: The filename starts with a dot)
+
+2. Open it with Notepad and paste these lines:
+
+   SF_CLIENT_ID=your_consumer_key_here
+   SF_CLIENT_SECRET=your_consumer_secret_here
+   SF_HOST=login.salesforce.com
+   SF_USERNAME=your.email@company.com
+   SF_PASSWORD=your_password_here
+
+3. Replace the placeholder values with your actual Salesforce
+   Connected App credentials.
+
+Need help getting these values? Ask your Salesforce admin for:
+  - Consumer Key (SF_CLIENT_ID)
+  - Consumer Secret (SF_CLIENT_SECRET)
+  - Your Salesforce username and password
+
+"@ -ForegroundColor Yellow
+
+            # Offer to create template
+            $createEnv = Read-Host "Would you like me to create a template .env file for you? (Y/n)"
+            if ($createEnv -eq "" -or $createEnv -match "^[Yy]") {
+                $envTemplate = @"
+# Salesforce Connection Settings
+# Replace the values below with your actual credentials
+
+SF_CLIENT_ID=paste_your_consumer_key_here
+SF_CLIENT_SECRET=paste_your_consumer_secret_here
+SF_HOST=login.salesforce.com
+SF_USERNAME=your.email@company.com
+SF_PASSWORD=your_password_and_security_token
+
+# Optional: API version (default is v62.0)
+# SF_API_VERSION=v62.0
+"@
+                $envTemplate | Out-File -FilePath $envFile -Encoding UTF8
+                Write-Success "Created template .env file at: $envFile"
+                Write-Host "Open this file in Notepad and fill in your credentials." -ForegroundColor Cyan
+
+                # Try to open in notepad
+                $openNow = Read-Host "Open .env in Notepad now? (Y/n)"
+                if ($openNow -eq "" -or $openNow -match "^[Yy]") {
+                    Start-Process notepad.exe $envFile
+                }
+            }
+        } else {
+            Write-Host ".env file found - you're ready to go!" -ForegroundColor Green
+        }
+
+        Write-Host @"
+
+------------------------------------------------------------
+Available Commands
+------------------------------------------------------------
+
+    sfdump --help         Show all available commands
+    sfdump login          Test Salesforce connection
+    sfdump files          Export Attachments/ContentVersions
+    sfdump build-db       Build searchable SQLite database
+    sfdump db-viewer      Launch the web viewer
+
+"@ -ForegroundColor Cyan
+
     } else {
         throw "pip install failed"
     }
