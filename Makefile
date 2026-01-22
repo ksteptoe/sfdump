@@ -11,8 +11,64 @@
 SHELL := $(shell which bash)
 .SHELLFLAGS := -eu -o pipefail -c
 
-# Pick a Python: use 'python' if present, else Windows launcher 'py -3'
-PYTHON := $(shell command -v python >/dev/null 2>&1 && echo python || echo py -3)
+# --- Python Detection and Miniconda Installation ---
+# Local Miniconda installation directory (no admin rights needed)
+MINICONDA_DIR := .miniconda
+
+ifeq ($(OS),Windows_NT)
+    # Windows paths
+    MINICONDA_PYTHON := $(MINICONDA_DIR)/python.exe
+    MINICONDA_URL := https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe
+    MINICONDA_INSTALLER := miniconda-installer.exe
+else
+    # Unix paths (Linux/macOS)
+    MINICONDA_PYTHON := $(MINICONDA_DIR)/bin/python
+    UNAME_S := $(shell uname -s)
+    UNAME_M := $(shell uname -m)
+    ifeq ($(UNAME_S),Darwin)
+        ifeq ($(UNAME_M),arm64)
+            MINICONDA_URL := https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh
+        else
+            MINICONDA_URL := https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
+        endif
+    else
+        ifeq ($(UNAME_M),aarch64)
+            MINICONDA_URL := https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-aarch64.sh
+        else
+            MINICONDA_URL := https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+        endif
+    endif
+    MINICONDA_INSTALLER := miniconda-installer.sh
+endif
+
+# Detect system Python: check python3, python, py -3 in order
+# Returns empty string if none found
+DETECTED_PYTHON := $(shell \
+    command -v python3 >/dev/null 2>&1 && python3 --version >/dev/null 2>&1 && echo python3 || \
+    (command -v python >/dev/null 2>&1 && python --version >/dev/null 2>&1 && echo python || \
+    (command -v py >/dev/null 2>&1 && py -3 --version >/dev/null 2>&1 && echo "py -3" || echo "")))
+
+# SYS_PYTHON: use detected Python, or fall back to local Miniconda
+ifeq ($(DETECTED_PYTHON),)
+    SYS_PYTHON := $(MINICONDA_PYTHON)
+    NEED_MINICONDA := 1
+else
+    SYS_PYTHON := $(DETECTED_PYTHON)
+    NEED_MINICONDA := 0
+endif
+
+# Virtual environment settings - ALWAYS use .venv
+VENV_DIR := .venv
+ifeq ($(OS),Windows_NT)
+    VENV_PYTHON := $(VENV_DIR)/Scripts/python.exe
+    VENV_ACTIVATE := $(VENV_DIR)/Scripts/activate
+else
+    VENV_PYTHON := $(VENV_DIR)/bin/python
+    VENV_ACTIVATE := $(VENV_DIR)/bin/activate
+endif
+
+# PYTHON always points to the venv - never system/conda
+PYTHON := $(VENV_PYTHON)
 
 # Main code package
 CODE_DIRS   := src/sfdump
@@ -39,16 +95,16 @@ UNIT_DIR    := tests/unit
 INTEG_DIR   := tests/integration
 SYSTEM_DIR  := tests/system  # live/system tests (opt-in, uncached)
 
-.PHONY: help bootstrap precommit docs lint format \
+.PHONY: help bootstrap check-venv check-python install-miniconda precommit docs lint format \
         test test-all test-live clean-tests \
         build upload version fetch-tags changelog changelog-md \
         release-show release release-patch release-minor release-major \
         release-zip gh-release \
-        clean run-cli sf-export sf-exportcheck-clean
+        clean clean-venv clean-miniconda run-cli sf-export sf-exportcheck-clean
 
 help:
 	@echo "Common targets:"
-	@echo "  make bootstrap           - install .[dev]"
+	@echo "  make bootstrap           - create .venv and install .[dev] (installs Python if needed)"
 	@echo "  make precommit           - install pre-commit hook"
 	@echo "  make docs                - build Sphinx/MyST docs to docs/_build/html"
 	@echo "  make lint                - run Ruff checks"
@@ -70,9 +126,72 @@ help:
 	@echo "  make run-cli             - run CLI entry point (pass CLI_ARGS=...)"
 	@echo "  make sf-export           - run make -f Makefile.export export-all"
 
-bootstrap:
+# --- Miniconda Installation (if no Python found) ---
+# Install Miniconda locally if no system Python is available
+# Note: On Windows, Make runs under Git Bash, so we use bash-compatible commands
+$(MINICONDA_PYTHON):
+	@echo "=== No Python found. Installing Miniconda to $(MINICONDA_DIR) ==="
+	@echo "Downloading Miniconda installer..."
+ifeq ($(OS),Windows_NT)
+	@curl -fsSL -o $(MINICONDA_INSTALLER) $(MINICONDA_URL) || \
+	  powershell -Command "Invoke-WebRequest -Uri '$(MINICONDA_URL)' -OutFile '$(MINICONDA_INSTALLER)'"
+	@echo "Running installer (this may take a few minutes)..."
+	@cmd.exe /c 'start /wait "" $(MINICONDA_INSTALLER) /InstallationType=JustMe /RegisterPython=0 /S /D=$(shell pwd)/$(MINICONDA_DIR)'
+	@rm -f $(MINICONDA_INSTALLER)
+else
+	@if command -v curl >/dev/null 2>&1; then \
+	  curl -fsSL -o $(MINICONDA_INSTALLER) $(MINICONDA_URL); \
+	elif command -v wget >/dev/null 2>&1; then \
+	  wget -q -O $(MINICONDA_INSTALLER) $(MINICONDA_URL); \
+	else \
+	  echo "❌ Neither curl nor wget found. Please install one of them."; \
+	  exit 1; \
+	fi
+	@echo "Running installer (this may take a few minutes)..."
+	@bash $(MINICONDA_INSTALLER) -b -p $(MINICONDA_DIR)
+	@rm -f $(MINICONDA_INSTALLER)
+endif
+	@echo "✅ Miniconda installed to $(MINICONDA_DIR)"
+
+install-miniconda: $(MINICONDA_PYTHON)
+
+# Check if Python is available (either system or local Miniconda)
+check-python:
+ifeq ($(NEED_MINICONDA),1)
+	@if [ ! -f "$(MINICONDA_PYTHON)" ]; then \
+	  echo "❌ No Python found and Miniconda not installed."; \
+	  echo "   Run 'make bootstrap' to install Miniconda and set up the environment."; \
+	  exit 1; \
+	fi
+	@echo "Using local Miniconda Python: $(MINICONDA_PYTHON)"
+else
+	@echo "Using system Python: $(SYS_PYTHON)"
+endif
+
+# Create virtual environment if it doesn't exist
+# Depends on Miniconda if no system Python is available
+ifeq ($(NEED_MINICONDA),1)
+$(VENV_PYTHON): $(MINICONDA_PYTHON)
+else
+$(VENV_PYTHON):
+endif
+	@echo "=== Creating virtual environment in $(VENV_DIR) ==="
+	$(SYS_PYTHON) -m venv $(VENV_DIR)
+	@echo "✅ Virtual environment created"
+
+# Guard: refuse to run if venv Python doesn't exist (forces venv creation)
+check-venv:
+	@if [ ! -f "$(VENV_PYTHON)" ]; then \
+	  echo "❌ Virtual environment not found at $(VENV_DIR)"; \
+	  echo "   Run 'make bootstrap' to create it."; \
+	  exit 1; \
+	fi
+
+bootstrap: $(VENV_PYTHON)
+	@echo "=== Installing into $(VENV_DIR) (not system Python) ==="
 	$(PYTHON) -m pip install -U pip setuptools wheel
 	$(PYTHON) -m pip install -e ".[dev]"
+	@echo "✅ Installed. Activate with: source $(VENV_ACTIVATE)"
 
 precommit:
 	pre-commit install
@@ -327,3 +446,11 @@ clean:
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
 	rm -rf $(STAMPS_DIR)
 	rm -rf $(DIST_DIR)
+
+clean-venv:
+	rm -rf $(VENV_DIR)
+	@echo "✅ Virtual environment removed. Run 'make bootstrap' to recreate."
+
+clean-miniconda:
+	rm -rf $(MINICONDA_DIR)
+	@echo "✅ Local Miniconda removed."
