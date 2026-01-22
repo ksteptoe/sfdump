@@ -193,6 +193,21 @@ Push-Location $InstallDir
 try {
     # Run the PowerShell setup script
     & "$InstallDir\setup.ps1"
+} catch {
+    if ($_.Exception.Message -match "cannot be loaded because running scripts is disabled") {
+        Write-Err "`nERROR: PowerShell execution policy is blocking the setup script."
+        Write-Host ""
+        Write-Host "Run the setup script with bypass (recommended):" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Open PowerShell and run:" -ForegroundColor White
+        Write-Host "  powershell -ExecutionPolicy Bypass -File `"$InstallDir\setup.ps1`"" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Or use the batch file alternative:" -ForegroundColor Yellow
+        Write-Host "  $InstallDir\install.bat" -ForegroundColor Cyan
+        Write-Host ""
+    } else {
+        throw
+    }
 } finally {
     Pop-Location
 }
