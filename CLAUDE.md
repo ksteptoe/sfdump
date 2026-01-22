@@ -35,6 +35,7 @@ make docs          # Build Sphinx docs to docs/_build/html
 make build         # Build wheel + sdist
 make version       # Print setuptools_scm version
 make run-cli       # Run CLI with CLI_ARGS=...
+make release KIND=patch|minor|major  # Tag + GitHub Release with ZIP (requires gh CLI)
 ```
 
 ## Architecture
@@ -106,3 +107,12 @@ Tests use stamped caching (SHA1 hashes) for incremental execution. Coverage omit
 - Chunking parameters (`SFDUMP_FILES_CHUNK_TOTAL`, `SFDUMP_FILES_CHUNK_INDEX`) handle API limits
 - Reports support redaction via CLI flags for compliance
 - SQLite database enables local querying without API calls
+
+## Windows Installer
+
+For non-technical Windows users, there's a menu-driven installer:
+
+- `bootstrap.ps1` - One-liner install from GitHub (downloads latest release)
+- `install.bat` / `setup.ps1` - Interactive setup with Python installation, disk space check, .env configuration
+- Targets 40GB+ free disk space for Salesforce exports
+- No admin rights required (per-user Python install)
