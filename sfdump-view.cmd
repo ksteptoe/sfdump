@@ -10,7 +10,7 @@ REM Detect project root (folder containing this script)
 set SCRIPT_DIR=%~dp0
 
 REM Default exports folder
-set DEFAULT_EXPORTS="%USERPROFILE%\OneDrive - Example Company\SF\exports"
+set DEFAULT_EXPORTS="%USERPROFILE%\sfdump-exports"
 
 REM Choose export base (argument overrides default)
 if "%~1"=="" (

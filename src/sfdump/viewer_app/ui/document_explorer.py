@@ -78,14 +78,14 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
             "Account Name",
             value="",
             key=f"{key_prefix}_account",
-            help="Search for documents by Account name (e.g., 'VITEC', 'Aion')",
+            help="Search for documents by Account name (e.g., 'Acme', 'Beta')",
         ).strip()
     with c2:
         opp_search = st.text_input(
             "Opportunity Name",
             value="",
             key=f"{key_prefix}_opp",
-            help="Search for documents by Opportunity name (e.g., 'Degirum', 'NPI')",
+            help="Search for documents by Opportunity name (e.g., 'Project-Alpha', 'NPI')",
         ).strip()
 
     st.markdown("**Additional Filters:**")

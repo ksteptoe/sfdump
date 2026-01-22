@@ -105,11 +105,12 @@ latex_elements = {
 \usepackage{graphicx}
 \usepackage{float}
 
-\usepackage{draftwatermark}
-\SetWatermarkText{CONFIDENTIAL — EXAMPLE CORP}
-\SetWatermarkScale{0.25}
-\SetWatermarkColor[gray]{0.92}
-\SetWatermarkAngle{45}
+% Watermark disabled for public release
+% \usepackage{draftwatermark}
+% \SetWatermarkText{CONFIDENTIAL}
+% \SetWatermarkScale{0.25}
+% \SetWatermarkColor[gray]{0.92}
+% \SetWatermarkAngle{45}
 
 % Reduce excessive page breaks
 \usepackage{etoolbox}

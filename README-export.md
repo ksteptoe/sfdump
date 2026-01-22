@@ -30,7 +30,7 @@ By default, each export lives in a date-stamped directory:
 In the Makefile the key variables are:
 
 ```make
-BASE_EXPORT_ROOT ?= C:/Users/kevin/OneDrive - Example Company/SF
+BASE_EXPORT_ROOT ?= ./exports
 EXPORT_DATE      ?= $(shell date +%Y-%m-%d)
 EXPORT_ROOT      ?= $(BASE_EXPORT_ROOT)/export-$(EXPORT_DATE)
 
@@ -42,17 +42,17 @@ META_DIR         := $(EXPORT_ROOT)/meta
 So, for example, with:
 
 ```text
-BASE_EXPORT_ROOT = C:/Users/kevin/OneDrive - Example Company/SF
+BASE_EXPORT_ROOT = ./exports
 EXPORT_DATE      = 2025-11-15
 ```
 
 you get:
 
 ```text
-EXPORT_ROOT = C:/Users/kevin/OneDrive - Example Company/SF/export-2025-11-15
-CSV_DIR     = C:/Users/kevin/OneDrive - Example Company/SF/export-2025-11-15/csv
-FILES_DIR   = C:/Users/kevin/OneDrive - Example Company/SF/export-2025-11-15/files
-META_DIR    = C:/Users/kevin/OneDrive - Example Company/SF/export-2025-11-15/meta
+EXPORT_ROOT = ./exports/export-2025-11-15
+CSV_DIR     = ./exports/export-2025-11-15/csv
+FILES_DIR   = ./exports/export-2025-11-15/files
+META_DIR    = ./exports/export-2025-11-15/meta
 ```
 
 If needed, you can override `BASE_EXPORT_ROOT` per run:
@@ -241,7 +241,7 @@ This is ideal while iterating on the indexing logic (`build_files_index`,
 Each CSV export is represented by a `.done` sentinel in `CSV_DIR`, e.g.:
 
 ```text
-C:/Users/kevin/OneDrive - Example Company/SF/export-2025-11-15/csv/
+./exports/export-2025-11-15/csv/
   Account.csv
   Account.done
   Opportunity.csv
@@ -261,19 +261,19 @@ $(CSV_DIR)/%.done:
 So for the target:
 
 ```text
-C:/Users/kevin/OneDrive - Example Company/SF/export-2025-11-15/csv/Account.done
+./exports/export-2025-11-15/csv/Account.done
 ```
 
 the command is:
 
 ```bash
-sfdump csv --object Account --out "C:/Users/kevin/OneDrive - Example Company/SF/export-2025-11-15"
+sfdump csv --object Account --out "./exports/export-2025-11-15"
 ```
 
 and `sfdump` writes the file:
 
 ```text
-C:/Users/kevin/OneDrive - Example Company/SF/export-2025-11-15/csv/Account.csv
+./exports/export-2025-11-15/csv/Account.csv
 ```
 
 ---
@@ -309,9 +309,9 @@ make -f Makefile.export EXPORT_DATE=2025-11-15 csv-one OBJ=SalesforceInvoice
 Because exports are date-stamped, you can have multiple snapshots, e.g.:
 
 ```text
-C:/Users/kevin/OneDrive - Example Company/SF/export-2025-11-15/
-C:/Users/kevin/OneDrive - Example Company/SF/export-2025-11-16/
-C:/Users/kevin/OneDrive - Example Company/SF/export-2025-11-30/
+./exports/export-2025-11-15/
+./exports/export-2025-11-16/
+./exports/export-2025-11-30/
 ```
 
 To re-run or add objects for a particular day (say `2025-11-15`), always pass

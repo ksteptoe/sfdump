@@ -1,9 +1,5 @@
 # Database Viewer
 
-**Author:** Kevin Steptoe
-
-![AION Silicon Logo](../../src/logos/EXAMPLE-CORP-logo_black-on-white.jpg)
-
 The Database Viewer is an interactive web application for browsing Salesforce records, navigating relationships, and searching for documents. This is particularly valuable for organizations archiving data before shutdown.
 
 ## Overview
@@ -184,13 +180,13 @@ After selecting a record, the **Details** tab shows:
 ### Searching Records
 
 **Search by name:**
-1. In the sidebar search box, type part of the name (e.g., "VITEC")
+1. In the sidebar search box, type part of the name (e.g., "Acme Corp")
 2. Results filter as you type
 3. Select a record to view details
 
 **Example searches:**
-- Account name: "VITEC" → finds all VITEC-related accounts
-- Opportunity: "Degirum" → finds Degirum opportunities
+- Account name: "Acme Corp" → finds all Acme Corp-related accounts
+- Opportunity: "Beta Industries" → finds Beta Industries opportunities
 - Invoice: "SIN003926" → finds specific invoice
 
 **Note:** Search is automatically disabled when navigating to ensure the target record is always displayed.
@@ -265,13 +261,13 @@ You can navigate through multiple levels of relationships:
 *Screenshot: Opportunity Children tab showing Invoice relationship*
 
 **Example navigation path:**
-1. Start at Account: VITEC SA
-2. Navigate to Opportunity: Vitec_Change_Order_CNN036
+1. Start at Account: Acme Corp SA
+2. Navigate to Opportunity: Acme_Change_Order_CNN036
 3. Navigate to Invoice: SIN003926
 
 **Full breadcrumb trail maintains:**
-- Account: VITEC SA
-- Opportunity: Vitec_Change_Order_CNN036
+- Account: Acme Corp SA
+- Opportunity: Acme_Change_Order_CNN036
 - c2g__codaInvoice__c: SIN003926
 
 ### Parent Document Inclusion
@@ -303,13 +299,13 @@ The **Document Explorer** tab provides powerful search across all documents in y
 
 **To find all documents for an account:**
 
-1. In "Account Name" field, type the account name (e.g., "VITEC")
+1. In "Account Name" field, type the account name (e.g., "Acme Corp")
 2. Results update automatically
 3. Shows all documents related to that account across all records
 
 **Example:**
-- Search: "VITEC"
-- Results: All documents related to VITEC accounts and opportunities
+- Search: "Acme Corp"
+- Results: All documents related to Acme Corp accounts and opportunities
 
 ### Search by Opportunity
 
@@ -319,15 +315,15 @@ The **Document Explorer** tab provides powerful search across all documents in y
 2. Results show all documents linked to matching opportunities
 
 **Example:**
-- Search: "Degirum"
-- Results: All documents across Degirum opportunities
+- Search: "Beta Industries"
+- Results: All documents across Beta Industries opportunities
 
 ### Combined Search
 
 You can combine multiple filters:
 
-**Example: Find all VITEC PDFs from Q2 2020**
-1. Account Name: "VITEC"
+**Example: Find all Acme Corp PDFs from Q2 2020**
+1. Account Name: "Acme Corp"
 2. Opportunity Name: "Q2_2020"
 3. Check "PDF first (only .pdf)"
 4. Results: Specific PDFs for that deal
@@ -366,12 +362,12 @@ The Documents section includes inline PDF preview (requires PyMuPDF):
 
 ### Workflow 1: Find All Documents for an Account
 
-**Scenario:** Finance team needs all invoices and contracts for "VITEC SA"
+**Scenario:** Finance team needs all invoices and contracts for "Acme Corp SA"
 
 **Steps:**
 1. Launch viewer: `sfdump db-viewer --db exports/.../meta/sfdata.db`
 2. Click **Document Explorer** tab
-3. Type "VITEC" in **Account Name**
+3. Type "Acme Corp" in **Account Name**
 4. Check results (73 documents found)
 5. Filter to PDFs only if needed
 6. Preview or note file paths for extraction
@@ -384,7 +380,7 @@ The Documents section includes inline PDF preview (requires PyMuPDF):
 
 **Steps:**
 1. Select **Account** object
-2. Search for account name (e.g., "VITEC")
+2. Search for account name (e.g., "Acme Corp")
 3. Click **Children** tab
 4. Expand **Opportunity** relationship
 5. Select desired opportunity, click **Open**
@@ -482,7 +478,7 @@ pip install pymupdf
 
 Check:
 1. Is the account/opportunity name spelled correctly?
-2. Try partial match (e.g., "VIT" instead of "VITEC SA")
+2. Try partial match (e.g., "VIT" instead of "Acme Corp SA")
 3. Uncheck "PDF first" to see all file types
 4. Check if documents were exported (verify files/ directory)
 

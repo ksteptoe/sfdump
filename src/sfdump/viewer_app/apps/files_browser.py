@@ -15,15 +15,15 @@ def guess_exports_base() -> Path:
     """Try to guess where the 'exports' root lives.
 
     Preference order:
-      1. ~/OneDrive - Example Company/SF/exports
-      2. <current working dir>/exports
-      3. <repo>/exports (one level above scripts)
+      1. <current working dir>/exports
+      2. <repo>/exports (one level above scripts)
+      3. ~/sfdump-exports
     """
     home = Path.home()
     candidates = [
-        home / "OneDrive - Example Company" / "SF" / "exports",
         Path.cwd() / "exports",
         SCRIPT_DIR.parent / "exports",
+        home / "sfdump-exports",
     ]
 
     for c in candidates:

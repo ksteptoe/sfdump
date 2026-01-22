@@ -52,18 +52,18 @@ This is the **most common task** - finding all documents for a specific customer
 2. **Type the customer name** in the "Account Name" box
 
    Example customer names:
-   - VITEC
-   - Example Corp
-   - Continental
-   - Freescale
+   - Acme Corp
+   - Beta Industries
+   - Example Inc
+   - Global Tech
 
 <!-- Screenshot: Account Name search box (user-03-account-search.png) -->
 
 3. **Results appear automatically** as you type
 
-   Example: Typing "VITEC" shows **73 documents**
+   Example: Typing "Acme Corp" shows **73 documents**
 
-<!-- Screenshot: Search results showing 73 VITEC documents (user-04-search-results.png) -->
+<!-- Screenshot: Search results showing 73 Acme Corp documents (user-04-search-results.png) -->
 
 4. **Review the results table**
 
@@ -103,22 +103,22 @@ If you know the **opportunity** or **project name**, use this method.
 2. **Type the project name** in the "Opportunity Name" box
 
    Example opportunity names:
-   - Degirum_ORCA1.1_NPI_SOW_Q2_22
-   - VITEC_BE-NPI-SC_Q2_2020
-   - ETV Spitfire2
+   - Beta Industries_ORCA1.1_NPI_SOW_Q2_22
+   - Acme Corp_BE-NPI-SC_Q2_2020
+   - Project_Alpha
 
 <!-- Screenshot: Opportunity Name search box (user-06-opp-search.png) -->
 
 3. **Results show all documents for that deal**
 
-   Example: "Degirum" shows **75 documents**
+   Example: "Beta Industries" shows **75 documents**
 
 ### Combined Search
 
 You can search by **both** customer and deal:
 
-**Example:** Find all VITEC documents from Q2 2020
-1. Account Name: **VITEC**
+**Example:** Find all Acme Corp documents from Q2 2020
+1. Account Name: **Acme Corp**
 2. Opportunity Name: **Q2_2020**
 3. Results narrow to specific deal
 
@@ -220,12 +220,12 @@ Contracts are typically attached to Opportunities or Accounts.
 ### Account vs Opportunity
 
 **Account** = Customer company
-- Example: "VITEC SA"
+- Example: "Acme Corp SA"
 - Long-term relationship
 - May have many deals/projects
 
 **Opportunity** = Specific deal/project
-- Example: "VITEC_BE-NPI-SC_Q2_2020"
+- Example: "Acme Corp_BE-NPI-SC_Q2_2020"
 - One-time sale or project
 - Belongs to an Account
 
@@ -253,12 +253,12 @@ Don't worry - this doesn't mean data is lost, just that it was never created.
 ### Partial Name Matching
 
 You don't need to type the full name:
-- Searching "VIT" finds "VITEC SA", "VITEC France", etc.
-- Searching "Deg" finds "Degirum" opportunities
+- Searching "VIT" finds "Acme Corp SA", "Acme Corp France", etc.
+- Searching "Deg" finds "Beta Industries" opportunities
 
 ### Case Doesn't Matter
 
-- "vitec" = "VITEC" = "Vitec"
+- "acme" = "ACME" = "Acme"
 - Search is case-insensitive
 
 ### PDF Preview Not Working?

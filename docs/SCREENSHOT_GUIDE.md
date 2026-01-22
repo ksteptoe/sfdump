@@ -32,7 +32,7 @@ This guide lists all screenshots needed for the documentation. Please capture th
 
 **02-interface.png** - Main viewer interface
 - Open the viewer in browser
-- Select any Account (e.g., search for "VITEC")
+- Select any Account (e.g., search for "Acme Corp")
 - Show all three panels: Sidebar, Record List, Details
 - This is the "overview" shot showing the whole interface
 
@@ -44,19 +44,19 @@ This guide lists all screenshots needed for the documentation. Please capture th
 ### Section 2: Browsing Records
 
 **04-search-records.png** - Searching for records
-- In sidebar search box, type "VITEC"
+- In sidebar search box, type "Acme Corp"
 - Show the filtered results in the middle panel
 - Highlight that results update as you type
 
 **05-record-details.png** - Account record details tab
-- Select a VITEC account
+- Select a Acme Corp account
 - Show the Details tab selected
 - Display showing account fields (Name, Type, etc.)
 
 ### Section 3: Navigating Relationships
 
 **06-children-tab.png** - Children tab with relationships
-- Still viewing a VITEC Account
+- Still viewing a Acme Corp Account
 - Click the Children tab
 - Expand one relationship (e.g., Opportunity)
 - Show the relationship name and count
@@ -68,7 +68,7 @@ This guide lists all screenshots needed for the documentation. Please capture th
 - Optional: Include breadcrumbs at top
 
 **08-contextual-message.png** - Closed Lost opportunity message
-- Navigate to Opportunity: VITEC_BE-NPI-SC_Q2_2020
+- Navigate to Opportunity: Acme Corp_BE-NPI-SC_Q2_2020
 - Click Children tab
 - Expand c2g__codaInvoice__c relationship
 - **Capture the contextual message**:
@@ -85,20 +85,20 @@ This guide lists all screenshots needed for the documentation. Please capture th
 - Highlight: "Search by Account or Opportunity" section
 - Show all the filter options
 
-**10-search-account.png** - Search by Account (VITEC)
-- Type "VITEC" in Account Name field
+**10-search-account.png** - Search by Account (Acme Corp)
+- Type "Acme Corp" in Account Name field
 - Show "Matches: 65" (or whatever number shows)
 - Show results table with account_name and opp_name columns visible
 - Make sure columns are wide enough to read
 
-**11-search-opportunity.png** - Search by Opportunity (Degirum)
+**11-search-opportunity.png** - Search by Opportunity (Beta Industries)
 - Clear Account search
-- Type "Degirum" in Opportunity Name field
+- Type "Beta Industries" in Opportunity Name field
 - Show "Matches: 75" (or whatever number)
 - Results table visible
 
 **12-pdf-preview.png** - PDF preview showing document
-- Search for "RFP Response Vitec"
+- Search for "RFP Response Acme"
 - Select the document from dropdown
 - Scroll down to show the PDF preview
 - Capture the PDF rendering inline (at least first page visible)
@@ -124,8 +124,8 @@ This guide lists all screenshots needed for the documentation. Please capture th
 - Maybe show cursor in the field or partially typed name
 - Make it clear this is where to type
 
-**user-04-search-results.png** - Search results after typing VITEC
-- Results showing for VITEC
+**user-04-search-results.png** - Search results after typing Acme Corp
+- Results showing for Acme Corp
 - Clear view of the "Matches: 73" counter
 - Results table visible with account_name column
 
