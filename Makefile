@@ -48,8 +48,26 @@ DETECTED_PYTHON := $(shell \
     (command -v python >/dev/null 2>&1 && python --version >/dev/null 2>&1 && echo python || \
     (command -v py >/dev/null 2>&1 && py -3 --version >/dev/null 2>&1 && echo "py -3" || echo "")))
 
-# SYS_PYTHON: use detected Python, or fall back to local Miniconda
+# Check if detected Python can actually create venvs (Debian/Ubuntu often lack ensurepip)
+# We test by creating a temporary venv - --help passes even when ensurepip is missing
+PYTHON_HAS_VENV := $(shell \
+    if [ -n "$(DETECTED_PYTHON)" ]; then \
+      tmpdir=$$(mktemp -d 2>/dev/null || mktemp -d -t 'venvtest'); \
+      if $(DETECTED_PYTHON) -m venv "$$tmpdir/test" >/dev/null 2>&1; then \
+        rm -rf "$$tmpdir"; echo 1; \
+      else \
+        rm -rf "$$tmpdir"; echo 0; \
+      fi; \
+    else \
+      echo 0; \
+    fi)
+
+# SYS_PYTHON: use detected Python only if it has venv, otherwise fall back to Miniconda
 ifeq ($(DETECTED_PYTHON),)
+    SYS_PYTHON := $(MINICONDA_PYTHON)
+    NEED_MINICONDA := 1
+else ifeq ($(PYTHON_HAS_VENV),0)
+    # Python exists but lacks venv module - use Miniconda
     SYS_PYTHON := $(MINICONDA_PYTHON)
     NEED_MINICONDA := 1
 else
@@ -159,7 +177,10 @@ install-miniconda: $(MINICONDA_PYTHON)
 check-python:
 ifeq ($(NEED_MINICONDA),1)
 	@if [ ! -f "$(MINICONDA_PYTHON)" ]; then \
-	  echo "❌ No Python found and Miniconda not installed."; \
+	  echo "❌ No usable Python found. Miniconda will be installed automatically."; \
+	  if [ -n "$(DETECTED_PYTHON)" ]; then \
+	    echo "   (System Python '$(DETECTED_PYTHON)' exists but lacks venv module)"; \
+	  fi; \
 	  echo "   Run 'make bootstrap' to install Miniconda and set up the environment."; \
 	  exit 1; \
 	fi
