@@ -41,12 +41,70 @@
 sfdump
 ======
 
+Salesforce data export and archival tool for bulk downloading Attachments and
+ContentVersions, with verification, retry mechanisms, searchable SQLite database
+creation, and a Streamlit web viewer.
 
-    Add a short description here!
+Installation
+============
 
+Windows (Recommended for Non-Technical Users)
+---------------------------------------------
 
-A longer description of your project goes here...
+**Option 1: One-Click Install**
 
+1. Download or clone this repository
+2. Double-click ``install.bat``
+3. Follow the prompts (Python will be installed if needed)
+
+**Option 2: PowerShell**
+
+Right-click ``setup.ps1`` and select "Run with PowerShell", or run::
+
+    powershell -ExecutionPolicy Bypass -File setup.ps1
+
+**Troubleshooting: "Python was not found" Error**
+
+If you see this error, the Microsoft Store Python alias is interfering:
+
+1. Open Windows Settings (Win + I)
+2. Go to: Apps > Advanced app settings > App execution aliases
+3. Turn OFF both ``python.exe`` and ``python3.exe`` aliases
+4. Install Python from https://www.python.org/downloads/
+5. **Important**: Check "Add Python to PATH" during installation
+
+macOS / Linux
+-------------
+
+::
+
+    # Requires Python 3.12+
+    pip install -e ".[dev]"
+
+    # Or using make
+    make bootstrap
+
+Quick Start
+===========
+
+After installation::
+
+    sfdump --help          # Show available commands
+    sfdump login           # Authenticate with Salesforce
+    sfdump files           # Export Attachments/ContentVersions
+    sfdump build-db        # Build searchable SQLite database
+    sfdump db-viewer       # Launch the web viewer
+
+Configuration
+=============
+
+Create a ``.env`` file in your working directory::
+
+    SF_CLIENT_ID=<your_consumer_key>
+    SF_CLIENT_SECRET=<your_consumer_secret>
+    SF_HOST=login.salesforce.com
+    SF_USERNAME=user@example.com
+    SF_PASSWORD=<password+security_token>
 
 .. _pyscaffold-notes:
 
