@@ -48,37 +48,43 @@ creation, and a Streamlit web viewer.
 Installation
 ============
 
-Windows (Recommended for Non-Technical Users)
----------------------------------------------
+Windows (Starting from Nothing)
+-------------------------------
 
-**Option 1: One-Click Install**
+**Option 1: One-Line Install (Recommended)**
 
-1. Download or clone this repository
-2. Double-click ``install.bat``
-3. Follow the prompts (Python will be installed if needed)
+Open PowerShell (press Win+R, type ``powershell``, press Enter) and paste::
 
-**Option 2: PowerShell**
+    irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex
 
-Right-click ``setup.ps1`` and select "Run with PowerShell", or run::
+This downloads and installs everything automatically.
 
-    powershell -ExecutionPolicy Bypass -File setup.ps1
+**Option 2: Manual Download**
 
-**Troubleshooting: "Python was not found" Error**
+1. Go to https://github.com/ksteptoe/sfdump
+2. Click the green "Code" button > "Download ZIP"
+3. Extract the ZIP file
+4. Double-click ``install.bat``
 
-If you see this error, the Microsoft Store Python alias is interfering:
+**Detailed Instructions**
 
-1. Open Windows Settings (Win + I)
-2. Go to: Apps > Advanced app settings > App execution aliases
-3. Turn OFF both ``python.exe`` and ``python3.exe`` aliases
-4. Install Python from https://www.python.org/downloads/
-5. **Important**: Check "Add Python to PATH" during installation
+See `INSTALL.md <INSTALL.md>`_ for step-by-step instructions with screenshots
+and troubleshooting tips.
+
+**Requirements**
+
+- Windows 10 or 11
+- 40 GB free disk space (for Salesforce exports)
+- Internet connection
+- No administrator rights required
 
 macOS / Linux
 -------------
 
 ::
 
-    # Requires Python 3.12+
+    git clone https://github.com/ksteptoe/sfdump.git
+    cd sfdump
     pip install -e ".[dev]"
 
     # Or using make
