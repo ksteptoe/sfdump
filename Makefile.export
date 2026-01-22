@@ -489,7 +489,7 @@ csv-one:
 
 view:
 	@echo "Launching SFdump Viewer..."
-	@"$(HOME)/OneDrive/py/sfdump/sfdump-view.cmd" "$(BASE_EXPORT_ROOT)"
+	@./sfdump-view.cmd "$(BASE_EXPORT_ROOT)"
 
 # --------------------------------------------------------------------
 # CFO REPORT PIPELINE
