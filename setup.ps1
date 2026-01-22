@@ -113,11 +113,15 @@ function Test-PythonInstalled {
         }
     }
 
-    # Try py launcher
+    # Try py launcher - but verify it actually has a Python installation
     try {
         $pyPath = (Get-Command py -ErrorAction SilentlyContinue).Source
         if ($pyPath -and -not ($pyPath -like "*WindowsApps*")) {
-            return "py"
+            # Verify py launcher can actually find Python
+            $pyVersion = & py --version 2>&1
+            if ($LASTEXITCODE -eq 0 -and $pyVersion -match "Python \d+\.\d+") {
+                return "py"
+            }
         }
     } catch {}
 
