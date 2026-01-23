@@ -1,6 +1,6 @@
 # Audit Results & Data Completeness (Template)
 
-> ⚠️ **This template contains no proprietary data.**
+> **Warning:** **This template contains no proprietary data.**
 > Actual results will be included at build time from `_generated/`.
 
 ## Overview

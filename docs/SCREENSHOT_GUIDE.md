@@ -73,7 +73,7 @@ This guide lists all screenshots needed for the documentation. Please capture th
 - Expand c2g__codaInvoice__c relationship
 - **Capture the contextual message**:
   ```
-  ℹ️ No invoices found. This is expected for Closed Lost opportunities
+  **Note:** No invoices found. This is expected for Closed Lost opportunities
   (Stage: Closed Lost), as they typically don't generate invoices.
   ```
 

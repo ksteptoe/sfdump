@@ -108,8 +108,10 @@ Launching Streamlit viewer for exports/export-2025-12-31/meta/sfdata.db ...
 
 The viewer has a clean, two-column layout designed for efficient navigation:
 
-![Initial Viewer](..//_static/viewer/01-initial-viewer-account.png)
+<!-- TODO: Add screenshot when available
+![Initial Viewer](../_static/viewer/01-initial-viewer-account.png)
 *Screenshot: Initial viewer showing Account object with clean layout*
+-->
 
 **Layout:**
 - **Left (40%)**: Record details & relationships
@@ -162,8 +164,10 @@ Four tabs provide different views of the selected record:
 
 After selecting a record, the **Details** tab shows:
 
+<!-- TODO: Add screenshot when available
 ![Account Details](/_static/viewer/02-account-details-important-fields.png)
 *Screenshot: Account Details tab showing only important fields (7-10 key fields instead of 100+)*
+-->
 
 **Key Features:**
 - **Important fields only** by default - Name, Type, Industry, BillingCountry, Website, Phone
@@ -213,8 +217,10 @@ Account
 2. Click the **Children** tab
 3. Expand any relationship to see child records
 
+<!-- TODO: Add screenshot when available
 ![Children Navigation](/_static/viewer/03-children-navigation.png)
 *Screenshot: Children tab showing Opportunity relationship with navigation controls*
+-->
 
 **Each relationship shows:**
 - Relationship name (e.g., "Opportunity via AccountId")
@@ -237,8 +243,10 @@ To drill down into a child record:
 - **Navigation breadcrumbs** appear in sidebar
 - **Back** and **Reset** buttons become available
 
+<!-- TODO: Add screenshot when available
 ![Opportunity After Navigation](/_static/viewer/04-opportunity-after-navigation.png)
 *Screenshot: After navigating to Opportunity - Object dropdown auto-syncs, breadcrumbs appear*
+-->
 
 ### Contextual Messages
 
@@ -247,7 +255,7 @@ When viewing records with expected empty relationships, helpful messages explain
 **Example: Closed Lost Opportunity with no invoices**
 
 ```
-ℹ️ No invoices found. This is expected for Closed Lost opportunities
+**Note:** No invoices found. This is expected for Closed Lost opportunities
 (Stage: Closed Lost), as they typically don't generate invoices.
 ```
 
@@ -257,8 +265,10 @@ This prevents confusion about "missing" data that's actually expected business l
 
 You can navigate through multiple levels of relationships:
 
+<!-- TODO: Add screenshot when available
 ![Opportunity Children - Invoices](/_static/viewer/05-opportunity-children-invoices.png)
 *Screenshot: Opportunity Children tab showing Invoice relationship*
+-->
 
 **Example navigation path:**
 1. Start at Account: Acme Corp SA
@@ -274,15 +284,17 @@ You can navigate through multiple levels of relationships:
 
 **KEY FEATURE:** When viewing any record, the Documents section automatically includes files from all parent records in the navigation chain.
 
+<!-- TODO: Add screenshot when available
 ![Invoice with Parent Documents](/_static/viewer/06-invoice-full-parent-chain.png)
 *Screenshot: Invoice view showing full navigation chain (Account → Opportunity → Invoice) with documents from all parent records*
+-->
 
 **Example:** Viewing invoice SIN003926 shows:
 - Documents attached to the Invoice itself
 - Documents attached to the parent Opportunity
 - Documents attached to the parent Account
 
-The record count displays: **"📊 4 records across 4 types │ 📄 2 documents"**
+The record count displays: **"[Stats] 4 records across 4 types │ [Docs] 2 documents"**
 
 This eliminates the need to navigate back to parent records to find related documents!
 
@@ -510,14 +522,14 @@ This may be expected:
 ## Key Features Summary
 
 The Database Viewer provides:
-- ✅ **Default to Account object** - Starts with the most commonly used object
-- ✅ **Compact field display** - Shows only 7-10 important fields instead of 100+
-- ✅ **Smart navigation** - Object dropdown auto-syncs with navigation state
-- ✅ **Breadcrumb trail** - Full navigation path with Back/Reset buttons
-- ✅ **Parent document inclusion** - Automatically shows documents from navigation chain
-- ✅ **Powerful document search** - Find files by Account/Opportunity across entire database
-- ✅ **PDF preview** - View documents inline without downloads
-- ✅ **Contextual help** - Explains why data may be missing
+- - **Default to Account object** - Starts with the most commonly used object
+- - **Compact field display** - Shows only 7-10 important fields instead of 100+
+- - **Smart navigation** - Object dropdown auto-syncs with navigation state
+- - **Breadcrumb trail** - Full navigation path with Back/Reset buttons
+- - **Parent document inclusion** - Automatically shows documents from navigation chain
+- - **Powerful document search** - Find files by Account/Opportunity across entire database
+- - **PDF preview** - View documents inline without downloads
+- - **Contextual help** - Explains why data may be missing
 
 ### Recent Improvements (2026-01)
 

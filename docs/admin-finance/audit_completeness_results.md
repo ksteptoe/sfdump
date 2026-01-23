@@ -1,6 +1,6 @@
 # Audit Completeness — Actual Results
 
-> ⚠️ Real data is included from `_generated/audit/`, not stored in the repo.
+> **Warning:** Real data is included from `_generated/audit/`, not stored in the repo.
 
 ## Summary Statistics
 

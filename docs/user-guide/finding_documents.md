@@ -237,7 +237,7 @@ Contracts are typically attached to Opportunities or Accounts.
 
 You might see messages like:
 ```
-ℹ️ No invoices found. This is expected for Closed Lost opportunities
+**Note:** No invoices found. This is expected for Closed Lost opportunities
 (Stage: Closed Lost), as they typically don't generate invoices.
 ```
 
@@ -346,11 +346,11 @@ If text is too small:
 ## Summary
 
 The document viewer makes it easy to:
-- ✅ Find all documents for any customer instantly
-- ✅ Search by deal/project name
-- ✅ Preview PDFs without downloading
-- ✅ Locate invoices and contracts
-- ✅ Access archived data after Salesforce shutdown
+- - Find all documents for any customer instantly
+- - Search by deal/project name
+- - Preview PDFs without downloading
+- - Locate invoices and contracts
+- - Access archived data after Salesforce shutdown
 
 **You don't need technical skills - just type and click!**
 

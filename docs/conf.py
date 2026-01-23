@@ -64,14 +64,14 @@ html_static_path = ["_static"]
 # ------------------------------------------------------------
 # PDF / LaTeX Output Enhancements
 # ------------------------------------------------------------
-latex_engine = "xelatex"
+latex_engine = "pdflatex"
 
 latex_elements = {
     "papersize": "a4paper",
     "pointsize": "11pt",
     "preamble": r"""
-\usepackage{fontspec}
-\setmainfont{Times New Roman}
+\usepackage[T1]{fontenc}
+\usepackage{tgtermes}  % TeX Gyre Termes (Times-like font)
 
 \usepackage{geometry}
 \geometry{

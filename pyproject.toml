@@ -44,6 +44,17 @@ dev = [
     "linkify-it-py>=2.0",
 ]
 
+# PDF generation requires system LaTeX packages (not installable via pip):
+#   Ubuntu/Debian: sudo apt-get install texlive-latex-base texlive-xetex \
+#                  texlive-fonts-recommended texlive-fonts-extra latexmk \
+#                  tex-gyre fonts-freefont-ttf
+#   macOS:         brew install --cask mactex-no-gui
+#   Windows:       Install MiKTeX from https://miktex.org/
+pdf = [
+    "sphinx>=8",
+    "myst-parser>=2",
+]
+
 [project.urls]
 Homepage = "https://example.com/sfdump"
 Repository = "https://github.com/example/sfdump"

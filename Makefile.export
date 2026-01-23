@@ -75,7 +75,7 @@ INDEX_BY_FLAGS := $(foreach obj,$(FILE_INDEX_OBJECTS),--index-by $(obj))
         export-all export-core-crm export-crm-all export-ffa export-hr export-psa \
         export-files export-files-index-only export-doc-index export-meta \
         export-all-objects export-archive export-clean export-show-config \
-        csv-one view changelog fix-orphans cfo \
+        csv-one view changelog fix-orphans cfo audit-docs \
         export-audit export-audit-lite export-audit-no-pdf
 
 help:
@@ -497,8 +497,9 @@ view:
 
 CFO_MD  := docs/admin-finance/cfo_report_dynamic.md
 CFO_PDF := docs/_build/latex/sfdump.pdf
+AUDIT_GEN_DIR := docs/_generated/audit
 
-cfo:
+cfo: audit-docs
 	@echo ">>> Running CFO dynamic report generator..."
 	@echo ">>> Using export dir: $(FILES_DIR)"
 	@sfdump cfo-generate-docs --export-dir "$(FILES_DIR)" --redact
@@ -506,6 +507,17 @@ cfo:
 	@echo ">>> Building CFO PDF with Sphinx..."
 	@$(MAKE) -C docs pdf
 	@echo ">>> CFO PDF ready at: $(CFO_PDF)"
+
+# Generate audit documentation (summary_stats.md + missing_file_analysis.md)
+audit-docs:
+	@echo ">>> Generating audit documentation..."
+	@mkdir -p "$(AUDIT_GEN_DIR)"
+	@sfdump build-audit-docs --export-dir "$(EXPORT_ROOT)" --out-dir "$(AUDIT_GEN_DIR)" -v \
+		|| echo ">>> Warning: build-audit-docs failed; continuing with placeholders."
+	@# Ensure files exist even if command failed (prevents Sphinx include errors)
+	@test -f "$(AUDIT_GEN_DIR)/summary_stats.md" || echo "No audit statistics available." > "$(AUDIT_GEN_DIR)/summary_stats.md"
+	@test -f "$(AUDIT_GEN_DIR)/missing_file_analysis.md" || echo "No missing file analysis available." > "$(AUDIT_GEN_DIR)/missing_file_analysis.md"
+	@echo ">>> Audit docs generated at: $(AUDIT_GEN_DIR)"
 
 # --------------------------------------------------------------------
 # CHANGELOG AUTO-GENERATION
