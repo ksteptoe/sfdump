@@ -60,6 +60,7 @@ Homepage = "https://example.com/sfdump"
 Repository = "https://github.com/example/sfdump"
 
 [project.scripts]
+sf = "sfdump.cli_simple:cli"
 sfdump = "sfdump.cli:cli"
 
 [tool.setuptools_scm]
