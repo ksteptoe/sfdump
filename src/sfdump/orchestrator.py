@@ -208,6 +208,18 @@ def run_full_export(
         _print_success()
     except Exception as e:
         _print_error(str(e))
+        error_msg = str(e)
+        if "SF_CLIENT_ID" in error_msg or "SF_CLIENT_SECRET" in error_msg:
+            print()
+            print("Setup required: Create a .env file with your Salesforce credentials:")
+            print()
+            print("  SF_CLIENT_ID=your_connected_app_consumer_key")
+            print("  SF_CLIENT_SECRET=your_connected_app_consumer_secret")
+            print("  SF_USERNAME=your_salesforce_username")
+            print("  SF_PASSWORD=your_password_and_security_token")
+            print()
+            print("See: https://github.com/ksteptoe/sfdump#setup")
+            print()
         return ExportResult(
             success=False,
             export_path=export_path,
@@ -231,47 +243,18 @@ def run_full_export(
     # Step 2: Export files (Attachments + ContentVersions)
     report_progress(2, "Exporting files (Attachments + Documents)...")
     try:
-        # Query attachments
-        att_soql = "SELECT Id, ParentId, Name, ContentType, BodyLength FROM Attachment"
-        att_rows = list(api.query_all_iter(att_soql))
-        print(f"\n      Found {len(att_rows)} Attachments")
+        # dump_attachments and dump_content_versions query internally and return stats
+        print()
+        print("      Downloading Attachments...")
+        att_stats = dump_attachments(api, str(export_path))
+        att_count = att_stats.get("discovered", 0)
 
-        # Query content versions
-        cv_soql = (
-            "SELECT Id, ContentDocumentId, Title, FileExtension, VersionData, "
-            "ContentSize, Checksum FROM ContentVersion WHERE IsLatest = true"
-        )
-        cv_rows = list(api.query_all_iter(cv_soql))
-        print(f"      Found {len(cv_rows)} ContentVersions")
+        print("      Downloading ContentVersions...")
+        cv_stats = dump_content_versions(api, str(export_path))
+        cv_count = cv_stats.get("discovered", 0)
 
-        total_files = len(att_rows) + len(cv_rows)
-
-        # Download attachments
-        if att_rows:
-            print("      Downloading Attachments...")
-            att_results = dump_attachments(api, att_rows, str(export_path))
-            # Write metadata CSV
-            att_meta_path = links_dir / "attachments.csv"
-            if att_results:
-                with open(att_meta_path, "w", newline="", encoding="utf-8") as f:
-                    writer = csv.DictWriter(f, fieldnames=att_results[0].keys())
-                    writer.writeheader()
-                    writer.writerows(att_results)
-
-        # Download content versions
-        if cv_rows:
-            print("      Downloading ContentVersions...")
-            cv_results = dump_content_versions(api, cv_rows, str(export_path))
-            # Write metadata CSV
-            cv_meta_path = links_dir / "content_versions.csv"
-            if cv_results:
-                with open(cv_meta_path, "w", newline="", encoding="utf-8") as f:
-                    writer = csv.DictWriter(f, fieldnames=cv_results[0].keys())
-                    writer.writeheader()
-                    writer.writerows(cv_results)
-
-        files_exported = total_files
-        _print_success(f"{total_files} files")
+        files_exported = att_count + cv_count
+        _print_success(f"{files_exported} files")
 
     except Exception as e:
         _print_error(str(e))
@@ -286,7 +269,7 @@ def run_full_export(
         try:
             if verbose:
                 print(f"      Exporting {obj_name}...")
-            dump_object_to_csv(api, obj_name, str(export_path))
+            dump_object_to_csv(api, obj_name, str(csv_dir))
             objects_exported += 1
         except Exception as e:
             if verbose:
