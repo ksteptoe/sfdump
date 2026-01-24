@@ -90,23 +90,36 @@ source = ["src/sfdump"]
 omit = [
   "tests/*",
 
-  # ignore entrypoints / interactive Streamlit apps
-  "*__main__.py",
-  "*db_app.py",
-  "*files_app.py",
+  # Entrypoints
+  "*/__main__.py",
+  "*/db_app.py",
+  "*/files_app.py",
 
-  # CLI entry points - tested via E2E tests, not unit tests
-  "src/sfdump/cli_simple.py",
-  "src/sfdump/orchestrator.py",
+  # Streamlit UI code - requires integration/e2e testing
+  "*/viewer_app/apps/*",
+  "*/viewer_app/ui/*",
+  "*/viewer_app/preview/*",
+  "*/viewer_app/navigation/*",
+  "*/viewer_app/config.py",
 
-  # Streamlit UI code - requires integration/e2e testing, not unit tests
-  "src/sfdump/viewer_app/apps/*",
-  "src/sfdump/viewer_app/ui/*",
-  "src/sfdump/viewer_app/preview/*",
-  "src/sfdump/viewer_app/navigation/*",
-  "src/sfdump/viewer_app/services/traversal.py",
-  "src/sfdump/viewer_app/config.py",
-  "src/sfdump/download_missing_files.py",
+  # Complex scripts needing integration tests
+  "*/download_missing_files.py",
+
+  # CLI command files - Click wiring, tested via integration
+  "*/command_*.py",
+
+  # CLI entry points
+  "*/cli.py",
+  "*/cli_simple.py",
+
+  # Orchestrator - high-level workflow, tested via E2E
+  "*/orchestrator.py",
+
+  # Traversal service - tested via E2E
+  "*/services/traversal.py",
+
+  # Probe summary - complex visualization
+  "*/probe_summary.py",
 ]
 
 [tool.coverage.report]
