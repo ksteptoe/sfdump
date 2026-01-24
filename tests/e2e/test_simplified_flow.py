@@ -163,9 +163,13 @@ class TestSimplifiedExportFlow:
 
         assert len(column_names) > 0, f"Table {table} has no columns"
 
-        # Verify Id column exists (Salesforce standard)
-        id_columns = [c for c in column_names if c.lower() == "id"]
-        assert len(id_columns) > 0, f"Table {table} missing Id column"
+        # Internal/index tables that don't follow Salesforce Id convention
+        internal_tables = {"record_documents", "sqlite_sequence"}
+
+        # Verify Id column exists (Salesforce standard) - skip internal tables
+        if table.lower() not in internal_tables:
+            id_columns = [c for c in column_names if c.lower() == "id"]
+            assert len(id_columns) > 0, f"Table {table} missing Id column"
 
     def _verify_file_metadata(self):
         """Verify file metadata CSVs in links directory."""
