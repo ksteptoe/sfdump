@@ -247,11 +247,11 @@ def run_full_export(
         print()
         print("      Downloading Attachments...")
         att_stats = dump_attachments(api, str(export_path))
-        att_count = att_stats.get("discovered", 0)
+        att_count = att_stats.get("count", 0)
 
         print("      Downloading ContentVersions...")
         cv_stats = dump_content_versions(api, str(export_path))
-        cv_count = cv_stats.get("discovered", 0)
+        cv_count = cv_stats.get("count", 0)
 
         files_exported = att_count + cv_count
         _print_success(f"{files_exported} files")
