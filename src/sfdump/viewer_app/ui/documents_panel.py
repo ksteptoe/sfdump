@@ -72,6 +72,14 @@ def _render_documents_panel_rows(
         st.info("Documents found but none have usable labels.")
         return
 
+    # Show summary of documents with/without local files
+    with_path = sum(1 for r in rows if _rel_path(r))
+    without_path = len(rows) - with_path
+    if without_path > 0:
+        st.caption(
+            f"📄 {with_path} downloaded, ⚠️ {without_path} not downloaded"
+        )
+
     sel = st.selectbox(
         "Preview Doc",
         labels,
@@ -81,7 +89,21 @@ def _render_documents_panel_rows(
     rel_path = _rel_path(row)
 
     if not rel_path:
-        st.warning("Selected document has no path in index.")
+        # Show diagnostic info about why path is missing
+        file_id = row.get("file_id") or row.get("Id") or "(unknown)"
+        file_source = row.get("file_source") or "(unknown)"
+        st.warning(
+            f"This document was not downloaded. "
+            f"The export may have been run in 'light' mode or with chunking limits."
+        )
+        with st.expander("Debug info", expanded=False):
+            st.text(f"File ID: {file_id}")
+            st.text(f"Source: {file_source}")
+            st.text(f"Row data: {row}")
+        st.info(
+            "To download all files, run a full export: `sf dump` "
+            "(ensure SFDUMP_FILES_CHUNK_TOTAL env var is not set)"
+        )
         return
 
     c1, c2, c3 = st.columns([1, 1, 6])

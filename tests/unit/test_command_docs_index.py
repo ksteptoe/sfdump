@@ -95,10 +95,12 @@ def test_build_master_index_happy_path(tmp_path: Path) -> None:
     )
 
     # --- run builder ---
-    out_path = _build_master_index(export_root)
+    out_path, docs_with_path, docs_missing_path = _build_master_index(export_root)
 
     assert out_path == export_root / "meta" / "master_documents_index.csv"
     assert out_path.exists()
+    assert docs_with_path == 1  # One document with a valid path
+    assert docs_missing_path == 0  # No missing documents
 
     df = pd.read_csv(out_path, dtype=str).fillna("")
 
@@ -179,3 +181,129 @@ def test_docs_index_cli_builds_master_index(tmp_path: Path) -> None:
     df = pd.read_csv(master_path, dtype=str).fillna("")
     assert len(df) == 1
     assert df.loc[0, "file_name"] == "Contract.pdf"
+
+
+def test_build_master_index_detects_missing_files(tmp_path: Path) -> None:
+    """_build_master_index returns counts of documents with/without local paths.
+
+    This tests the validation that detects incomplete exports where documents
+    are indexed but the actual files were not downloaded (e.g., due to chunking).
+    """
+    export_root = tmp_path / "export-test"
+    links_dir = export_root / "links"
+
+    # Create an index with 3 files: 1 Attachment with path, 2 Files without paths
+    _write_csv(
+        links_dir / "Opportunity_files_index.csv",
+        [
+            # Attachment with a valid path
+            {
+                "object_type": "Opportunity",
+                "record_id": "OPP1",
+                "record_name": "Deal 1",
+                "file_source": "Attachment",
+                "file_id": "ATT1",
+                "file_link_id": "",
+                "file_name": "Contract.pdf",
+                "file_extension": "pdf",
+            },
+            # File (ContentVersion) - will have no path because content_versions.csv
+            # doesn't have this ContentDocumentId
+            {
+                "object_type": "Opportunity",
+                "record_id": "OPP1",
+                "record_name": "Deal 1",
+                "file_source": "File",
+                "file_id": "DOC1",
+                "file_link_id": "CDL1",
+                "file_name": "Proposal.docx",
+                "file_extension": "docx",
+            },
+            # Another File without a matching content_versions entry
+            {
+                "object_type": "Opportunity",
+                "record_id": "OPP2",
+                "record_name": "Deal 2",
+                "file_source": "File",
+                "file_id": "DOC2",
+                "file_link_id": "CDL2",
+                "file_name": "Report.xlsx",
+                "file_extension": "xlsx",
+            },
+        ],
+    )
+
+    # Attachments metadata with valid path
+    _write_csv(
+        links_dir / "attachments.csv",
+        [
+            {
+                "Id": "ATT1",
+                "local_path": "files_legacy/00/ATT1_Contract.pdf",
+            }
+        ],
+    )
+
+    # Content versions CSV is empty - simulating incomplete export
+    # where ContentVersions were not downloaded
+    _write_csv(links_dir / "content_versions.csv", [])
+
+    # Run builder
+    out_path, docs_with_path, docs_missing_path = _build_master_index(export_root)
+
+    assert out_path.exists()
+    assert docs_with_path == 1  # Only the Attachment has a path
+    assert docs_missing_path == 2  # The two Files have no paths
+
+    # Verify the CSV content
+    df = pd.read_csv(out_path, dtype=str).fillna("")
+    assert len(df) == 3
+
+    # Check that the attachment has a path
+    att_row = df[df["file_source"] == "Attachment"].iloc[0]
+    assert att_row["local_path"] != ""
+    assert "ATT1_Contract.pdf" in att_row["local_path"]
+
+    # Check that the Files have empty paths
+    file_rows = df[df["file_source"] == "File"]
+    assert len(file_rows) == 2
+    for _, row in file_rows.iterrows():
+        assert row["local_path"] == ""
+
+
+def test_docs_index_cli_warns_on_missing_files(tmp_path: Path) -> None:
+    """CLI shows warning when documents are missing local files."""
+    export_root = tmp_path / "export-test"
+    links_dir = export_root / "links"
+    csv_dir = export_root / "csv"
+
+    # Create index with files that have no content_versions match
+    _write_csv(
+        links_dir / "Opportunity_files_index.csv",
+        [
+            {
+                "object_type": "Opportunity",
+                "record_id": "OPP1",
+                "record_name": "Deal",
+                "file_source": "File",
+                "file_id": "DOC1",
+                "file_link_id": "CDL1",
+                "file_name": "Missing.pdf",
+                "file_extension": "pdf",
+            },
+        ],
+    )
+    _write_csv(links_dir / "attachments.csv", [])
+    _write_csv(links_dir / "content_versions.csv", [])
+    csv_dir.mkdir(parents=True, exist_ok=True)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["docs-index", "--export-root", str(export_root)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "WARNING" in result.output
+    assert "1/1" in result.output  # 1 out of 1 documents missing
+    assert "no local file" in result.output

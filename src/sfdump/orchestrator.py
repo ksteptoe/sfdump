@@ -260,13 +260,23 @@ def run_full_export(
     # Step 2: Export files (Attachments + ContentVersions)
     report_progress(2, "Exporting files (Attachments + Documents)...")
     try:
-        # In light mode, limit file downloads for CI testing
+        # IMPORTANT: Clear any leftover chunking env vars from previous runs
+        # These can cause incomplete exports if not cleared
         if light:
-            # Set env var to limit files (chunking mechanism)
+            # In light mode, limit file downloads for CI testing
             file_limit = max_files or 50
             os.environ["SFDUMP_FILES_CHUNK_TOTAL"] = str(file_limit)
             os.environ["SFDUMP_FILES_CHUNK_INDEX"] = "1"
             print(f"\n      [Light mode: limiting to ~{file_limit} files per type]")
+        else:
+            # Clear any stale chunking env vars to ensure full export
+            if os.environ.get("SFDUMP_FILES_CHUNK_TOTAL"):
+                _logger.warning(
+                    "Clearing stale SFDUMP_FILES_CHUNK_TOTAL=%s env var",
+                    os.environ.get("SFDUMP_FILES_CHUNK_TOTAL"),
+                )
+            os.environ.pop("SFDUMP_FILES_CHUNK_TOTAL", None)
+            os.environ.pop("SFDUMP_FILES_CHUNK_INDEX", None)
 
         # dump_attachments and dump_content_versions query internally and return stats
         print()
@@ -319,6 +329,7 @@ def run_full_export(
     # Step 4: Build document indexes
     step_num = 4
     report_progress(step_num, "Building document indexes...")
+    docs_missing_path = 0
     try:
         from .command_files import build_files_index
 
@@ -332,8 +343,22 @@ def run_full_export(
         # Build master documents index
         from .command_docs_index import _build_master_index
 
-        _build_master_index(export_path)
+        _, docs_with_path, docs_missing_path = _build_master_index(export_path)
         _print_success()
+
+        # Warn if many documents are missing local files
+        if docs_missing_path > 0:
+            total = docs_with_path + docs_missing_path
+            pct = (docs_missing_path / total) * 100 if total > 0 else 0
+            print(
+                f"      ⚠️  {docs_missing_path}/{total} indexed documents ({pct:.0f}%) "
+                f"have no local file"
+            )
+            if pct > 10:
+                print(
+                    "      This may indicate an incomplete export. "
+                    "Check if SFDUMP_FILES_CHUNK_* env vars were set."
+                )
     except Exception as e:
         _print_error(str(e))
         _logger.exception("Index building failed")

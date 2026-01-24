@@ -22,6 +22,7 @@ dependencies = [
     "pandas",
     "pypandoc",
     "pymupdf",
+    "streamlit>=1.30",
 ]
 
 [project.optional-dependencies]

@@ -27,11 +27,32 @@ def _export_root_from_db_path(db_path: Path) -> Optional[Path]:
 
 
 def _initial_db_path_from_argv() -> Optional[Path]:
-    # When launched via: streamlit run <entry> -- <db-path>
+    import os
+
+    # First check environment variable (set by orchestrator)
+    env_db = os.environ.get("SFDUMP_DB_PATH")
+    if env_db:
+        return Path(env_db)
+
+    # Check command line: streamlit run <entry> -- <db-path>
     args = sys.argv[1:]
     for arg in args:
         if not arg.startswith("-"):
             return Path(arg)
+
+    # Fallback: find the latest export with a database
+    exports_dir = Path("./exports")
+    if exports_dir.exists():
+        exports = sorted(
+            [d for d in exports_dir.iterdir() if d.is_dir() and d.name.startswith("export-")],
+            key=lambda d: d.name,
+            reverse=True,
+        )
+        for export in exports:
+            db_path = export / "meta" / "sfdata.db"
+            if db_path.exists():
+                return db_path
+
     return None
 
 

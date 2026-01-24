@@ -354,8 +354,25 @@ def _build_master_index(export_root: Path) -> Path:
     master = master[key_cols + other_cols]
     master.to_csv(out_path, index=False)
 
+    # ------------------------------------------------------------------
+    # 6) Validate: check for documents without local files
+    # ------------------------------------------------------------------
+    total_docs = len(master)
+    docs_with_path = len(master[master["local_path"].str.strip() != ""])
+    docs_missing_path = total_docs - docs_with_path
+
+    if docs_missing_path > 0:
+        missing_pct = (docs_missing_path / total_docs) * 100 if total_docs > 0 else 0
+        _logger.warning(
+            "Master index has %d/%d documents (%.1f%%) without local files. "
+            "This may indicate an incomplete export (chunking was enabled?).",
+            docs_missing_path,
+            total_docs,
+            missing_pct,
+        )
+
     _logger.info("Master documents index written to %s (%d rows).", out_path, len(master))
-    return out_path
+    return out_path, docs_with_path, docs_missing_path
 
 
 @click.command("docs-index")
@@ -373,5 +390,15 @@ def docs_index_cmd(export_root: Path) -> None:
         raise click.ClickException(f"EXPORT_ROOT does not exist: {export_root}")
 
     click.echo(f"Building master documents index under: {export_root}")
-    out_path = _build_master_index(export_root)
+    out_path, docs_with_path, docs_missing_path = _build_master_index(export_root)
     click.echo(f"Master documents index written to: {out_path}")
+
+    if docs_missing_path > 0:
+        total = docs_with_path + docs_missing_path
+        click.echo(
+            click.style(
+                f"WARNING: {docs_missing_path}/{total} documents have no local file. "
+                f"Export may be incomplete.",
+                fg="yellow",
+            )
+        )
