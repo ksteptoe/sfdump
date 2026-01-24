@@ -21,6 +21,9 @@ make test-all      # Run all non-live tests without caching
 make test-live     # Run live tests (requires SF_LIVE_TESTS=true)
 pytest tests/unit/test_api_client.py -v       # Run single test file
 pytest tests/unit/test_api_client.py::test_function_name -v  # Run single test
+
+# E2E tests (NOT run in CI - requires live Salesforce credentials)
+SF_E2E_TESTS=true pytest tests/e2e/ -v
 ```
 
 ### Code Quality
@@ -98,8 +101,14 @@ SF_API_VERSION=v62.0  # optional
 - **tests/unit/** - Mocked, fast tests
 - **tests/integration/** - Fixture-based tests
 - **tests/system/** - Live API tests (opt-in via `SF_LIVE_TESTS=true`)
+- **tests/e2e/** - Full end-to-end tests with real Salesforce connection (opt-in via `SF_E2E_TESTS=true`)
 
 Tests use stamped caching (SHA1 hashes) for incremental execution. Coverage omits UI/Streamlit code.
+
+E2E tests verify the complete `sf dump` flow including:
+- Full export pipeline (auth, files, CSV, indexes, database)
+- Database integrity (tables, relationships, no duplicate IDs)
+- File accessibility (paths in metadata point to actual files)
 
 ## Key Patterns
 

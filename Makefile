@@ -306,6 +306,12 @@ test-all:
 test-live:
 	SF_LIVE_TESTS=true $(PYTHON) -m pytest -v -m live $(PYTEST_WARN) --timeout=180 --cov=src/sfdump --cov-report=xml
 
+# E2E tests - full export pipeline with real Salesforce (NOT for CI)
+# Requires valid .env credentials and network access
+test-e2e:
+	@echo "=== Running E2E tests (requires live Salesforce credentials) ==="
+	SF_E2E_TESTS=true $(PYTHON) -m pytest tests/e2e/ -v $(PYTEST_WARN) --timeout=1800
+
 clean-tests:
 	rm -rf $(STAMPS_DIR)
 

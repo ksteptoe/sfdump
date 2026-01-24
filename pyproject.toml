@@ -79,8 +79,10 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "-ra -q --disable-warnings"
+addopts = "-ra -q --disable-warnings --ignore=tests/e2e"
 testpaths = ["tests"]
+# E2E tests are excluded by default. To run them:
+#   SF_E2E_TESTS=true pytest tests/e2e/ -v
 
 [tool.coverage.run]
 branch = true
