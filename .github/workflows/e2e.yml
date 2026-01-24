@@ -13,11 +13,13 @@ on:
         type: boolean
 
 env:
+  SF_AUTH_FLOW: ${{ secrets.SF_AUTH_FLOW }}
   SF_CLIENT_ID: ${{ secrets.SF_CLIENT_ID }}
   SF_CLIENT_SECRET: ${{ secrets.SF_CLIENT_SECRET }}
+  SF_LOGIN_URL: ${{ secrets.SF_LOGIN_URL }}
+  # Username/password only needed for password auth flow
   SF_USERNAME: ${{ secrets.SF_USERNAME }}
   SF_PASSWORD: ${{ secrets.SF_PASSWORD }}
-  SF_LOGIN_URL: ${{ secrets.SF_LOGIN_URL }}
 
 jobs:
   e2e-linux:

@@ -329,8 +329,13 @@ SF_PASSWORD=testpass
         assert result.exit_code in (0, 1)
         assert "Testing Salesforce Connection" in result.output
 
+    @pytest.mark.skipif(IS_LIGHT_MODE, reason="CLI dump test skipped in light mode (use test_full_export_pipeline instead)")
     def test_sf_dump_full_export(self):
-        """Test sf dump command runs full export."""
+        """Test sf dump command runs full export.
+
+        Skipped in light mode - CLI doesn't support light mode flag.
+        The test_full_export_pipeline test covers export functionality with light mode.
+        """
         from click.testing import CliRunner
 
         from sfdump.cli_simple import cli
