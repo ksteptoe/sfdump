@@ -195,7 +195,8 @@ def run_full_export(
         export_path = get_default_export_path()
 
     export_path = Path(export_path).resolve()
-    total_steps = 6 if retry else 5
+    # Always show 6 steps - step 6 runs automatically if files are missing
+    total_steps = 6
 
     # Track results
     files_exported = 0
@@ -375,17 +376,33 @@ def run_full_export(
         _logger.exception("Database build failed")
         database_path = None
 
-    # Step 6 (optional): Verify and retry
-    if retry:
+    # Step 6: Verify and retry missing files
+    # Always run when missing docs detected OR when --retry flag is used
+    # Skip in light mode since missing files are expected
+    should_retry = retry or (docs_missing_path > 0 and not light)
+    if not should_retry:
         step_num = 6
-        report_progress(step_num, "Verifying and retrying failed downloads...")
+        report_progress(step_num, "Verification...")
+        _print_success("all files present")
+
+    if should_retry:
+        step_num = 6
+        if docs_missing_path > 0:
+            report_progress(step_num, f"Recovering {docs_missing_path} missing files...")
+        else:
+            report_progress(step_num, "Verifying and retrying failed downloads...")
 
         try:
-            from .retry import retry_missing_attachments, retry_missing_content_versions
+            from .retry import (
+                merge_recovered_into_metadata,
+                retry_missing_attachments,
+                retry_missing_content_versions,
+            )
             from .verify import verify_attachments, verify_content_versions
 
             att_meta = links_dir / "attachments.csv"
             cv_meta = links_dir / "content_versions.csv"
+            recovered_any = False
 
             # Verify attachments
             if att_meta.exists():
@@ -398,6 +415,15 @@ def run_full_export(
                         retry_missing_attachments(
                             api, missing_att, str(export_path), str(links_dir)
                         )
+                        # Merge recovered paths back into original metadata
+                        retry_csv = links_dir / "attachments_missing_retry.csv"
+                        if retry_csv.exists():
+                            count = merge_recovered_into_metadata(
+                                str(att_meta), str(retry_csv)
+                            )
+                            if count > 0:
+                                recovered_any = True
+                                print(f"      Merged {count} recovered attachment paths")
 
             # Verify content versions
             if cv_meta.exists():
@@ -410,6 +436,28 @@ def run_full_export(
                         retry_missing_content_versions(
                             api, missing_cv, str(export_path), str(links_dir)
                         )
+                        # Merge recovered paths back into original metadata
+                        retry_csv = links_dir / "content_versions_missing_retry.csv"
+                        if retry_csv.exists():
+                            count = merge_recovered_into_metadata(
+                                str(cv_meta), str(retry_csv)
+                            )
+                            if count > 0:
+                                recovered_any = True
+                                print(f"      Merged {count} recovered content version paths")
+
+            # If files were recovered, rebuild index and database
+            if recovered_any:
+                print("      Rebuilding document index...")
+                from .command_docs_index import _build_master_index
+
+                _, docs_with_path_new, docs_missing_path_new = _build_master_index(export_path)
+
+                print("      Rebuilding database...")
+                database_path = meta_dir / "sfdata.db"
+                build_sqlite_from_export(str(export_path), str(database_path))
+
+                docs_missing_path = docs_missing_path_new
 
             # Re-verify to get final count
             files_missing = 0
@@ -427,7 +475,7 @@ def run_full_export(
             if files_missing == 0:
                 _print_success("100% complete")
             else:
-                print(f"      {files_missing} files still missing")
+                print(f"      {files_missing} files still missing (may be deleted in Salesforce)")
 
         except Exception as e:
             _print_error(str(e))

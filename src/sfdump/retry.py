@@ -12,6 +12,80 @@ from tqdm import tqdm
 _logger = logging.getLogger(__name__)
 
 
+def merge_recovered_into_metadata(
+    original_csv: str,
+    retry_csv: str,
+    id_field: str = "Id",
+    path_field: str = "path",
+) -> int:
+    """
+    Merge recovered file paths from retry CSV back into original metadata CSV.
+
+    After retry, files that were successfully recovered have paths in retry_csv
+    but the original metadata CSV still has empty paths. This function updates
+    the original CSV with paths from recovered files.
+
+    Args:
+        original_csv: Path to original metadata CSV (e.g., attachments.csv)
+        retry_csv: Path to retry results CSV (e.g., attachments_missing_retry.csv)
+        id_field: Field name for record ID
+        path_field: Field name for file path
+
+    Returns:
+        Number of records updated
+    """
+    if not os.path.exists(original_csv) or not os.path.exists(retry_csv):
+        return 0
+
+    # Load retry results and build lookup of recovered paths
+    recovered_paths: Dict[str, str] = {}
+    with open(retry_csv, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            if row.get("retry_status") == "recovered":
+                record_id = row.get(id_field, "")
+                path = row.get(path_field, "")
+                if record_id and path:
+                    recovered_paths[record_id] = path
+
+    if not recovered_paths:
+        _logger.info("No recovered files to merge from %s", retry_csv)
+        return 0
+
+    # Load original CSV
+    rows = []
+    fieldnames = []
+    with open(original_csv, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames or []
+        rows = list(reader)
+
+    # Update paths for recovered files
+    updated_count = 0
+    for row in rows:
+        record_id = row.get(id_field, "")
+        if record_id in recovered_paths:
+            current_path = row.get(path_field, "")
+            # Only update if currently empty
+            if not current_path or current_path.strip() == "":
+                row[path_field] = recovered_paths[record_id]
+                updated_count += 1
+
+    # Write back
+    if updated_count > 0:
+        with open(original_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        _logger.info(
+            "Merged %d recovered paths from %s into %s",
+            updated_count,
+            retry_csv,
+            original_csv,
+        )
+
+    return updated_count
+
+
 def load_missing_csv(path: str) -> List[Dict[str, str]]:
     """Load a missing-files CSV produced by verify-files."""
     rows = []

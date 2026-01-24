@@ -7,6 +7,7 @@ from sfdump.retry import (
     _attempt_download,
     _write_retry_results,
     load_missing_csv,
+    merge_recovered_into_metadata,
     retry_missing_attachments,
     retry_missing_content_versions,
 )
@@ -276,3 +277,97 @@ class TestRetryMissingContentVersions:
         # Check the URL used
         call_args = mock_api.download_path_to_file.call_args
         assert "/sobjects/ContentVersion/CV001/VersionData" in call_args[0][0]
+
+
+class TestMergeRecoveredIntoMetadata:
+    """Tests for merge_recovered_into_metadata function."""
+
+    def test_merges_recovered_paths(self, tmp_path):
+        """Successfully merges recovered paths into original metadata."""
+        # Create original metadata with empty path
+        original_csv = tmp_path / "attachments.csv"
+        original_csv.write_text("Id,path,sha256\nATT001,,abc123\nATT002,files/existing.pdf,def456\n")
+
+        # Create retry results with recovered file
+        retry_csv = tmp_path / "attachments_missing_retry.csv"
+        retry_csv.write_text(
+            "Id,path,retry_status\n"
+            "ATT001,files/recovered.pdf,recovered\n"
+        )
+
+        count = merge_recovered_into_metadata(str(original_csv), str(retry_csv))
+
+        assert count == 1
+
+        # Verify original was updated
+        with original_csv.open() as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        assert len(rows) == 2
+        assert rows[0]["Id"] == "ATT001"
+        assert rows[0]["path"] == "files/recovered.pdf"
+        assert rows[1]["Id"] == "ATT002"
+        assert rows[1]["path"] == "files/existing.pdf"  # Unchanged
+
+    def test_does_not_overwrite_existing_paths(self, tmp_path):
+        """Does not overwrite paths that already exist."""
+        original_csv = tmp_path / "attachments.csv"
+        original_csv.write_text("Id,path,sha256\nATT001,files/original.pdf,abc123\n")
+
+        retry_csv = tmp_path / "retry.csv"
+        retry_csv.write_text("Id,path,retry_status\nATT001,files/recovered.pdf,recovered\n")
+
+        count = merge_recovered_into_metadata(str(original_csv), str(retry_csv))
+
+        assert count == 0  # No updates because path already exists
+
+        with original_csv.open() as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        assert rows[0]["path"] == "files/original.pdf"  # Unchanged
+
+    def test_skips_non_recovered_status(self, tmp_path):
+        """Only merges files with 'recovered' status."""
+        original_csv = tmp_path / "attachments.csv"
+        original_csv.write_text("Id,path,sha256\nATT001,,abc123\nATT002,,def456\n")
+
+        retry_csv = tmp_path / "retry.csv"
+        retry_csv.write_text(
+            "Id,path,retry_status\n"
+            "ATT001,files/doc1.pdf,recovered\n"
+            "ATT002,files/doc2.pdf,forbidden\n"
+        )
+
+        count = merge_recovered_into_metadata(str(original_csv), str(retry_csv))
+
+        assert count == 1  # Only ATT001 was merged
+
+        with original_csv.open() as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        assert rows[0]["path"] == "files/doc1.pdf"  # Updated
+        assert rows[1]["path"] == ""  # Not updated (forbidden status)
+
+    def test_returns_zero_for_missing_files(self, tmp_path):
+        """Returns 0 when files don't exist."""
+        count = merge_recovered_into_metadata(
+            str(tmp_path / "nonexistent.csv"),
+            str(tmp_path / "also_nonexistent.csv"),
+        )
+
+        assert count == 0
+
+    def test_returns_zero_when_no_recovered(self, tmp_path):
+        """Returns 0 when no files were recovered."""
+        original_csv = tmp_path / "attachments.csv"
+        original_csv.write_text("Id,path,sha256\nATT001,,abc123\n")
+
+        retry_csv = tmp_path / "retry.csv"
+        retry_csv.write_text("Id,path,retry_status\nATT001,files/doc.pdf,forbidden\n")
+
+        count = merge_recovered_into_metadata(str(original_csv), str(retry_csv))
+
+        assert count == 0
