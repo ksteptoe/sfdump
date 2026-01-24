@@ -23,6 +23,19 @@ from typing import Callable
 
 _logger = logging.getLogger(__name__)
 
+# Lightweight objects for CI testing - core financial data only
+# Used when SF_E2E_LIGHT=true to keep exports small (~1-2GB)
+ESSENTIAL_OBJECTS_LIGHT = [
+    "Account",
+    "Contact",
+    "Opportunity",
+    "c2g__codaInvoice__c",
+    "c2g__codaInvoiceLineItem__c",
+    "c2g__codaTransaction__c",
+    "c2g__codaPurchaseInvoice__c",
+    "User",
+]
+
 # Essential objects for finance users - covers CRM, Finance, and HR
 ESSENTIAL_OBJECTS = [
     # Core CRM
@@ -155,6 +168,8 @@ def run_full_export(
     retry: bool = False,
     progress_callback: Callable[[ExportProgress], None] | None = None,
     verbose: bool = False,
+    light: bool = False,
+    max_files: int | None = None,
 ) -> ExportResult:
     """
     Run the complete export pipeline.
@@ -164,6 +179,8 @@ def run_full_export(
         retry: Whether to retry failed file downloads
         progress_callback: Optional callback for progress updates
         verbose: Show detailed output
+        light: Use lightweight object list for CI testing (faster, less data)
+        max_files: Limit number of files to download (for CI testing)
 
     Returns:
         ExportResult with summary of what was exported
@@ -243,6 +260,14 @@ def run_full_export(
     # Step 2: Export files (Attachments + ContentVersions)
     report_progress(2, "Exporting files (Attachments + Documents)...")
     try:
+        # In light mode, limit file downloads for CI testing
+        if light:
+            # Set env var to limit files (chunking mechanism)
+            file_limit = max_files or 50
+            os.environ["SFDUMP_FILES_CHUNK_TOTAL"] = str(file_limit)
+            os.environ["SFDUMP_FILES_CHUNK_INDEX"] = "1"
+            print(f"\n      [Light mode: limiting to ~{file_limit} files per type]")
+
         # dump_attachments and dump_content_versions query internally and return stats
         print()
         print("      Downloading Attachments...")
@@ -256,6 +281,11 @@ def run_full_export(
         files_exported = att_count + cv_count
         _print_success(f"{files_exported} files")
 
+        # Clean up env vars
+        if light:
+            os.environ.pop("SFDUMP_FILES_CHUNK_TOTAL", None)
+            os.environ.pop("SFDUMP_FILES_CHUNK_INDEX", None)
+
     except Exception as e:
         _print_error(str(e))
         _logger.exception("File export failed")
@@ -265,7 +295,10 @@ def run_full_export(
     report_progress(3, "Exporting data (Accounts, Opportunities, Invoices...)...")
     print()
 
-    for obj_name in ESSENTIAL_OBJECTS:
+    # Use lightweight list for CI testing
+    objects_to_export = ESSENTIAL_OBJECTS_LIGHT if light else ESSENTIAL_OBJECTS
+
+    for obj_name in objects_to_export:
         try:
             if verbose:
                 print(f"      Exporting {obj_name}...")

@@ -1,14 +1,18 @@
 """
 End-to-end test for the simplified SF export flow.
 
-This test is NOT run in CI. To run manually:
+This test is NOT run in CI by default. To run manually:
 
     SF_E2E_TESTS=true pytest tests/e2e/ -v
 
+For CI (lightweight mode - fewer objects, limited files):
+
+    SF_E2E_TESTS=true SF_E2E_LIGHT=true pytest tests/e2e/ -v
+
 Requirements:
-    - Valid Salesforce credentials in .env file
+    - Valid Salesforce credentials in .env file or environment
     - Network access to Salesforce
-    - Sufficient disk space for exports
+    - Sufficient disk space for exports (~2GB light, ~50GB full)
 """
 
 from __future__ import annotations
@@ -16,7 +20,6 @@ from __future__ import annotations
 import csv
 import os
 import sqlite3
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -26,6 +29,9 @@ pytestmark = pytest.mark.skipif(
     os.environ.get("SF_E2E_TESTS", "").lower() not in ("1", "true", "yes"),
     reason="E2E tests disabled. Set SF_E2E_TESTS=true to run.",
 )
+
+# Check if running in light mode (for CI)
+IS_LIGHT_MODE = os.environ.get("SF_E2E_LIGHT", "").lower() in ("1", "true", "yes")
 
 
 class TestSimplifiedExportFlow:
@@ -48,15 +54,23 @@ class TestSimplifiedExportFlow:
         4. Index building
         5. Database building
         6. Verify all artifacts
+
+        In light mode (SF_E2E_LIGHT=true), uses fewer objects and limits files
+        for faster CI runs (~2GB instead of ~50GB).
         """
         from sfdump.orchestrator import run_full_export
 
-        # Run the full export
+        # Run the export (light mode for CI, full mode for manual testing)
         result = run_full_export(
             export_path=self.export_path,
             retry=False,
             verbose=True,
+            light=IS_LIGHT_MODE,
+            max_files=50 if IS_LIGHT_MODE else None,
         )
+
+        if IS_LIGHT_MODE:
+            print("\n[Running in LIGHT mode - limited objects and files]")
 
         # Basic assertions on result
         assert result.success, f"Export failed: {result.error}"
@@ -217,7 +231,7 @@ class TestSimplifiedExportFlow:
             total_found += found
             total_missing += missing
 
-        print(f"\nFile accessibility summary:")
+        print("\nFile accessibility summary:")
         print(f"  Total checked: {total_checked}")
         print(f"  Found: {total_found}")
         print(f"  Missing: {total_missing}")
@@ -359,6 +373,8 @@ class TestDatabaseIntegrity:
             export_path=export_path,
             retry=False,
             verbose=False,
+            light=IS_LIGHT_MODE,
+            max_files=50 if IS_LIGHT_MODE else None,
         )
 
         if not result.success:

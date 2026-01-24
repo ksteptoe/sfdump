@@ -1,0 +1,164 @@
+name: E2E Tests (Scheduled)
+
+# Run every 3 days at midnight UTC, or manually
+on:
+  schedule:
+    - cron: '0 0 */3 * *'
+  workflow_dispatch:
+    inputs:
+      full_mode:
+        description: 'Run full export (not light mode)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  SF_CLIENT_ID: ${{ secrets.SF_CLIENT_ID }}
+  SF_CLIENT_SECRET: ${{ secrets.SF_CLIENT_SECRET }}
+  SF_USERNAME: ${{ secrets.SF_USERNAME }}
+  SF_PASSWORD: ${{ secrets.SF_PASSWORD }}
+  SF_LOGIN_URL: ${{ secrets.SF_LOGIN_URL }}
+
+jobs:
+  e2e-linux:
+    name: E2E Tests (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Check credentials
+        run: |
+          if [ -z "$SF_CLIENT_ID" ]; then
+            echo "::error::Missing SF_CLIENT_ID secret"
+            exit 1
+          fi
+          echo "Credentials configured"
+
+      - name: Run E2E tests (Light mode)
+        if: ${{ github.event.inputs.full_mode != 'true' }}
+        run: |
+          SF_E2E_TESTS=true SF_E2E_LIGHT=true pytest tests/e2e/ -v --timeout=1800
+        env:
+          SF_E2E_LIGHT: 'true'
+
+      - name: Run E2E tests (Full mode)
+        if: ${{ github.event.inputs.full_mode == 'true' }}
+        run: |
+          SF_E2E_TESTS=true pytest tests/e2e/ -v --timeout=3600
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-linux-logs
+          path: |
+            pytest.log
+            exports/
+          retention-days: 7
+
+  e2e-windows:
+    name: E2E Tests (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Check credentials
+        shell: pwsh
+        run: |
+          if (-not $env:SF_CLIENT_ID) {
+            Write-Error "Missing SF_CLIENT_ID secret"
+            exit 1
+          }
+          Write-Host "Credentials configured"
+
+      - name: Run E2E tests (Light mode)
+        if: ${{ github.event.inputs.full_mode != 'true' }}
+        shell: pwsh
+        run: |
+          $env:SF_E2E_TESTS = 'true'
+          $env:SF_E2E_LIGHT = 'true'
+          pytest tests/e2e/ -v --timeout=1800
+
+      - name: Run E2E tests (Full mode)
+        if: ${{ github.event.inputs.full_mode == 'true' }}
+        shell: pwsh
+        run: |
+          $env:SF_E2E_TESTS = 'true'
+          pytest tests/e2e/ -v --timeout=3600
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-windows-logs
+          path: |
+            pytest.log
+            exports/
+          retention-days: 7
+
+  notify:
+    name: Notify on Failure
+    needs: [e2e-linux, e2e-windows]
+    runs-on: ubuntu-latest
+    if: failure()
+
+    steps:
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `E2E Tests Failed - ${new Date().toISOString().split('T')[0]}`;
+            const body = `
+            ## E2E Test Failure
+
+            The scheduled E2E tests have failed.
+
+            - **Workflow Run:** [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+            - **Triggered:** ${context.eventName}
+
+            Please investigate the failure and fix any issues.
+            `;
+
+            // Check if similar issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'e2e-failure'
+            });
+
+            if (issues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['e2e-failure', 'bug']
+              });
+            }

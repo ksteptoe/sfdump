@@ -95,11 +95,16 @@ omit = [
   "*db_app.py",
   "*files_app.py",
 
+  # CLI entry points - tested via E2E tests, not unit tests
+  "src/sfdump/cli_simple.py",
+  "src/sfdump/orchestrator.py",
+
   # Streamlit UI code - requires integration/e2e testing, not unit tests
   "src/sfdump/viewer_app/apps/*",
   "src/sfdump/viewer_app/ui/*",
   "src/sfdump/viewer_app/preview/*",
   "src/sfdump/viewer_app/navigation/*",
+  "src/sfdump/viewer_app/services/traversal.py",
   "src/sfdump/viewer_app/config.py",
   "src/sfdump/download_missing_files.py",
 ]
