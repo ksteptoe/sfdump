@@ -98,15 +98,15 @@ def verify_attachments(meta_csv: str, export_root: str) -> None:
 
     if missing:
         _write_csv(missing_csv, missing, sorted(missing[0].keys()))
-        _logger.warning("Attachment verification: %d missing files → %s", len(missing), missing_csv)
+        _logger.info("Attachment verification: %d missing files", len(missing))
     else:
-        _logger.info("Attachment verification: no missing files.")
+        _logger.debug("Attachment verification: all files present")
 
     if corrupt:
         _write_csv(corrupt_csv, corrupt, sorted(corrupt[0].keys()))
-        _logger.warning("Attachment verification: %d corrupt files → %s", len(corrupt), corrupt_csv)
+        _logger.info("Attachment verification: %d corrupt files", len(corrupt))
     else:
-        _logger.info("Attachment verification: no corrupt files.")
+        _logger.debug("Attachment verification: no corrupt files")
 
 
 def verify_content_versions(meta_csv: str, export_root: str) -> None:
@@ -121,19 +121,15 @@ def verify_content_versions(meta_csv: str, export_root: str) -> None:
 
     if missing:
         _write_csv(missing_csv, missing, sorted(missing[0].keys()))
-        _logger.warning(
-            "ContentVersion verification: %d missing files → %s", len(missing), missing_csv
-        )
+        _logger.info("ContentVersion verification: %d missing files", len(missing))
     else:
-        _logger.info("ContentVersion verification: no missing files.")
+        _logger.debug("ContentVersion verification: all files present")
 
     if corrupt:
         _write_csv(corrupt_csv, corrupt, sorted(corrupt[0].keys()))
-        _logger.warning(
-            "ContentVersion verification: %d corrupt files → %s", len(corrupt), corrupt_csv
-        )
+        _logger.info("ContentVersion verification: %d corrupt files", len(corrupt))
     else:
-        _logger.info("ContentVersion verification: no corrupt files.")
+        _logger.debug("ContentVersion verification: no corrupt files")
 
 
 def load_missing_csv(path: Path) -> list[dict]:

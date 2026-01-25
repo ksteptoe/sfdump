@@ -129,7 +129,7 @@ def retry_missing_attachments(api, rows: List[dict], export_root: str, links_dir
 
     results = []
 
-    for r in tqdm(rows, desc="Retry Attachments"):
+    for r in tqdm(rows, desc="        Attachments", unit="file", ncols=80):
         attach_id = r.get("Id")
         rel_path = r.get("path") or ""
         out_path = os.path.join(export_root, rel_path) if rel_path else None
@@ -185,7 +185,7 @@ def retry_missing_content_versions(api, rows: List[dict], export_root: str, link
 
     results = []
 
-    for r in tqdm(rows, desc="Retry ContentVersions"):
+    for r in tqdm(rows, desc="        Documents", unit="file", ncols=80):
         cv_id = r.get("Id")
         rel_path = r.get("path") or ""
         out_path = os.path.join(export_root, rel_path) if rel_path else None

@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
+from tqdm import tqdm
+
 if TYPE_CHECKING:
     from .api import SalesforceAPI
 
@@ -135,6 +137,7 @@ def run_backfill(
     dry_run: bool = False,
     progress_callback: Callable[[int, int, int, int], None] | None = None,
     progress_interval: int = 100,
+    show_progress: bool = True,
 ) -> BackfillResult:
     """
     Download missing files from master_documents_index.csv.
@@ -149,6 +152,7 @@ def run_backfill(
         dry_run: If True, don't actually download, just report what would happen
         progress_callback: Optional callback(processed, total, downloaded, failed)
         progress_interval: How often to call progress_callback (every N files)
+        show_progress: If True, show tqdm progress bar
 
     Returns:
         BackfillResult with counts of what happened
@@ -209,7 +213,18 @@ def run_backfill(
     failed = 0
     skipped = 0
 
-    for i, row in enumerate(todo):
+    # Use tqdm for visual progress
+    iterator = todo
+    if show_progress and not dry_run:
+        iterator = tqdm(
+            todo,
+            desc="        Downloading",
+            unit="file",
+            leave=True,
+            ncols=80,
+        )
+
+    for i, row in enumerate(iterator):
         file_id = str(row.get("file_id") or "").strip()
         name = str(row.get("file_name") or "").strip()
         ext = str(row.get("file_extension") or "").strip()
@@ -256,7 +271,7 @@ def run_backfill(
         else:
             failed += 1
 
-        # Progress callback
+        # Legacy progress callback (for backward compat)
         processed = i + 1
         if progress_callback and (processed % progress_interval == 0 or processed == len(todo)):
             progress_callback(processed, len(todo), downloaded, failed)

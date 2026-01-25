@@ -421,83 +421,75 @@ def run_full_export(
             master_index = meta_dir / "master_documents_index.csv"
             recovered_any = False
 
-            # Check what's missing from master index (the source of truth)
+            # Scan for missing files from all sources
             print()  # Newline for spinner
             missing_in_index = []
-            with spinner("Scanning for missing files..."):
+            missing_attachments = []
+            missing_content_versions = []
+
+            with spinner("Verifying downloaded files..."):
+                # Check master index (comprehensive list)
                 if master_index.exists():
                     missing_in_index = load_missing_from_index(master_index)
 
-                # Also check metadata CSVs for missing files
-                metadata_missing = 0
+                # Check metadata CSVs (detailed file info for retry)
                 if att_meta.exists():
                     verify_attachments(str(att_meta), str(export_path))
                     missing_csv = links_dir / "attachments_missing.csv"
                     if missing_csv.exists():
-                        metadata_missing += len(_load_csv_rows(missing_csv))
+                        missing_attachments = _load_csv_rows(missing_csv)
+
                 if cv_meta.exists():
                     verify_content_versions(str(cv_meta), str(export_path))
                     missing_csv = links_dir / "content_versions_missing.csv"
                     if missing_csv.exists():
-                        metadata_missing += len(_load_csv_rows(missing_csv))
+                        missing_content_versions = _load_csv_rows(missing_csv)
 
-            total_missing = len(missing_in_index) + metadata_missing
+            # Calculate totals (index is comprehensive, includes metadata missing)
+            total_missing = len(missing_in_index)
+            metadata_missing = len(missing_attachments) + len(missing_content_versions)
 
-            if total_missing == 0:
-                _print_success("all files present")
+            if total_missing == 0 and metadata_missing == 0:
+                _print_success("all files verified")
             else:
-                # Recover missing files automatically
-                print()
+                # Use the larger count (index is usually more comprehensive)
+                files_to_recover = max(total_missing, metadata_missing)
+                print(f"      {files_to_recover:,} files to download")
+
                 recovered_count = 0
 
-                # First-pass: retry from metadata CSVs (attachments + content_versions)
-                if metadata_missing > 0:
-                    with spinner(f"Recovering {metadata_missing} files..."):
-                        # Retry attachments
-                        if att_meta.exists():
-                            missing_att_csv = links_dir / "attachments_missing.csv"
-                            if missing_att_csv.exists():
-                                missing_att = _load_csv_rows(missing_att_csv)
-                                if missing_att:
-                                    retry_missing_attachments(
-                                        api, missing_att, str(export_path), str(links_dir)
-                                    )
-                                    retry_csv = links_dir / "attachments_missing_retry.csv"
-                                    if retry_csv.exists():
-                                        count = merge_recovered_into_metadata(
-                                            str(att_meta), str(retry_csv)
-                                        )
-                                        if count > 0:
-                                            recovered_any = True
-                                            recovered_count += count
+                # First-pass: retry from metadata CSVs (has detailed info)
+                # tqdm progress bars display inside retry functions
+                if missing_attachments:
+                    retry_missing_attachments(
+                        api, missing_attachments, str(export_path), str(links_dir)
+                    )
+                    retry_csv = links_dir / "attachments_missing_retry.csv"
+                    if retry_csv.exists():
+                        count = merge_recovered_into_metadata(str(att_meta), str(retry_csv))
+                        if count > 0:
+                            recovered_any = True
+                            recovered_count += count
 
-                        # Retry content versions
-                        if cv_meta.exists():
-                            missing_cv_csv = links_dir / "content_versions_missing.csv"
-                            if missing_cv_csv.exists():
-                                missing_cv = _load_csv_rows(missing_cv_csv)
-                                if missing_cv:
-                                    retry_missing_content_versions(
-                                        api, missing_cv, str(export_path), str(links_dir)
-                                    )
-                                    retry_csv = links_dir / "content_versions_missing_retry.csv"
-                                    if retry_csv.exists():
-                                        count = merge_recovered_into_metadata(
-                                            str(cv_meta), str(retry_csv)
-                                        )
-                                        if count > 0:
-                                            recovered_any = True
-                                            recovered_count += count
+                if missing_content_versions:
+                    retry_missing_content_versions(
+                        api, missing_content_versions, str(export_path), str(links_dir)
+                    )
+                    retry_csv = links_dir / "content_versions_missing_retry.csv"
+                    if retry_csv.exists():
+                        count = merge_recovered_into_metadata(str(cv_meta), str(retry_csv))
+                        if count > 0:
+                            recovered_any = True
+                            recovered_count += count
 
-                # Second-pass: backfill from master index
+                # Second-pass: backfill remaining from master index
                 if missing_in_index:
-                    with spinner(f"Downloading {len(missing_in_index)} additional files..."):
-                        backfill_result = run_backfill(
-                            api,
-                            export_path,
-                            progress_callback=None,  # Silent - spinner shows activity
-                            progress_interval=50,
-                        )
+                    # tqdm progress bar handles display
+                    backfill_result = run_backfill(
+                        api,
+                        export_path,
+                        show_progress=True,
+                    )
 
                     if backfill_result.downloaded > 0 or backfill_result.skipped > 0:
                         recovered_any = True
