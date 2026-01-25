@@ -55,6 +55,7 @@ def cli() -> None:
       sf dump     # Export everything from Salesforce
       sf view     # Browse your exported data
       sf status   # Show available exports
+      sf usage    # Check API usage and limits
 
     For advanced options, use 'sfdump' instead.
     """
@@ -141,9 +142,9 @@ def dump(export_dir: Path | None, retry: bool, verbose: bool) -> None:
         click.echo("in 2-4 hours as capacity frees up.")
         click.echo()
         click.echo("To check current usage:")
-        click.echo("  Salesforce Setup > System Overview > API Usage")
+        click.echo("  sf usage")
         click.echo()
-        click.echo("Retry later:")
+        click.echo("Retry when capacity is available:")
         click.echo("  sf dump")
         click.echo()
         sys.exit(1)
@@ -339,6 +340,98 @@ def test() -> None:
         click.echo(f"Error: {e}")
         click.echo()
         click.echo("Check your credentials in .env and try again.")
+        sys.exit(1)
+
+
+@cli.command()
+def usage() -> None:
+    """
+    Show Salesforce API usage and limits.
+
+    Displays your current API request usage against daily limits.
+    Useful to check before running a large export.
+    """
+    click.echo()
+    click.echo("Salesforce API Usage")
+    click.echo("=" * 50)
+
+    env_path = Path(".env")
+    if not env_path.exists():
+        click.echo("No .env file found. Run 'sf setup' first.")
+        sys.exit(1)
+
+    try:
+        from .api import SalesforceAPI
+
+        click.echo("Connecting...", nl=False)
+        api = SalesforceAPI()
+        api.connect()
+        click.echo(" OK")
+        click.echo()
+
+        # Get limits
+        try:
+            limits = api.get_limits()
+        except RateLimitError:
+            click.echo()
+            click.echo("Status: LIMIT REACHED")
+            click.echo()
+            click.echo("Cannot query usage - API limit exceeded.")
+            click.echo("The limit resets on a rolling 24-hour window.")
+            click.echo("Try again in 2-4 hours.")
+            click.echo()
+            sys.exit(1)
+
+        # Daily API requests
+        daily = limits.get("DailyApiRequests", {})
+        used = daily.get("Max", 0) - daily.get("Remaining", 0)
+        max_limit = daily.get("Max", 0)
+        remaining = daily.get("Remaining", 0)
+
+        if max_limit > 0:
+            pct_used = (used / max_limit) * 100
+            pct_remaining = (remaining / max_limit) * 100
+
+            click.echo("Daily API Requests (rolling 24-hour window):")
+            click.echo(f"  Used:      {used:>10,} ({pct_used:.1f}%)")
+            click.echo(f"  Remaining: {remaining:>10,} ({pct_remaining:.1f}%)")
+            click.echo(f"  Limit:     {max_limit:>10,}")
+            click.echo()
+
+            # Visual bar
+            bar_width = 40
+            filled = int((used / max_limit) * bar_width)
+            bar = "█" * filled + "░" * (bar_width - filled)
+            click.echo(f"  [{bar}] {pct_used:.0f}%")
+            click.echo()
+
+            # Status message
+            if pct_used >= 100:
+                click.echo("  Status: LIMIT REACHED - wait 2-4 hours to retry")
+            elif pct_used >= 90:
+                click.echo("  Status: WARNING - approaching limit")
+            elif pct_used >= 75:
+                click.echo("  Status: Moderate usage")
+            else:
+                click.echo("  Status: OK - plenty of capacity")
+        else:
+            click.echo("Could not retrieve API limits.")
+
+        click.echo()
+
+    except RateLimitError:
+        click.echo()
+        click.echo("Status: LIMIT REACHED")
+        click.echo()
+        click.echo("Cannot connect - API limit exceeded.")
+        click.echo("The limit resets on a rolling 24-hour window.")
+        click.echo("Try again in 2-4 hours.")
+        click.echo()
+        sys.exit(1)
+    except Exception as e:
+        click.echo(" FAILED")
+        click.echo()
+        click.echo(f"Error: {e}")
         sys.exit(1)
 
 
