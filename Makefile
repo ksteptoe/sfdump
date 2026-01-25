@@ -85,8 +85,13 @@ else
     VENV_ACTIVATE := $(VENV_DIR)/bin/activate
 endif
 
-# PYTHON always points to the venv - never system/conda
-PYTHON := $(VENV_PYTHON)
+# PYTHON: In CI environments (where CI=true), use system Python directly.
+# Otherwise, use the venv Python.
+ifdef CI
+    PYTHON := $(DETECTED_PYTHON)
+else
+    PYTHON := $(VENV_PYTHON)
+endif
 
 # Main code package
 CODE_DIRS   := src/sfdump
