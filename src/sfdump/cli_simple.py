@@ -10,12 +10,30 @@ For advanced options, use the full `sfdump` command.
 
 from __future__ import annotations
 
+import signal
 import sys
 from pathlib import Path
 
 import click
 
 from .orchestrator import find_latest_export, launch_viewer, run_full_export
+
+# Track if first Ctrl+C was pressed
+_interrupted_once = False
+
+
+def _handle_sigint(signum, frame):
+    """Handle Ctrl+C gracefully."""
+    global _interrupted_once
+    if _interrupted_once:
+        # Second Ctrl+C - force exit immediately
+        click.echo("\n\nForce quit.", err=True)
+        sys.exit(130)
+    else:
+        _interrupted_once = True
+        click.echo("\n\nCancelling... (press Ctrl+C again to force quit)", err=True)
+        # Raise KeyboardInterrupt to stop current operation
+        raise KeyboardInterrupt()
 
 
 @click.group()
@@ -44,6 +62,12 @@ def cli() -> None:
 
 @cli.command()
 @click.option(
+    "--export-dir",
+    "-d",
+    type=click.Path(path_type=Path),
+    help="Export directory (default: ./exports/export-YYYY-MM-DD).",
+)
+@click.option(
     "--retry",
     is_flag=True,
     default=False,
@@ -56,7 +80,7 @@ def cli() -> None:
     default=False,
     help="Show detailed progress for each object.",
 )
-def dump(retry: bool, verbose: bool) -> None:
+def dump(export_dir: Path | None, retry: bool, verbose: bool) -> None:
     """
     Export all data from Salesforce.
 
@@ -65,12 +89,20 @@ def dump(retry: bool, verbose: bool) -> None:
 
     \b
     Examples:
-      sf dump           # Standard export
-      sf dump --retry   # Export and retry any failed downloads
-      sf dump -v        # Verbose output showing each object
+      sf dump                       # Standard export
+      sf dump --retry               # Export and retry any failed downloads
+      sf dump -v                    # Verbose output showing each object
+      sf dump -d ./my-export        # Export to custom directory
     """
+    global _interrupted_once
+    _interrupted_once = False
+
+    # Install graceful Ctrl+C handler (works on Windows and Linux)
+    original_handler = signal.signal(signal.SIGINT, _handle_sigint)
+
     try:
         result = run_full_export(
+            export_path=export_dir,
             retry=retry,
             verbose=verbose,
         )
@@ -80,11 +112,21 @@ def dump(retry: bool, verbose: bool) -> None:
             sys.exit(1)
 
     except KeyboardInterrupt:
-        click.echo("\nExport cancelled.")
+        click.echo()
+        click.echo("=" * 50)
+        click.echo("Export cancelled.")
+        click.echo("=" * 50)
+        click.echo()
+        click.echo("Partial data may have been saved to the export directory.")
+        click.echo("Run 'sf dump' again to resume where you left off.")
+        click.echo()
         sys.exit(130)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+    finally:
+        # Restore original signal handler
+        signal.signal(signal.SIGINT, original_handler)
 
 
 @cli.command()
