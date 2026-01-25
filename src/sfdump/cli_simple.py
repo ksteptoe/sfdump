@@ -19,6 +19,48 @@ import click
 from .exceptions import RateLimitError
 from .orchestrator import find_latest_export, launch_viewer, run_full_export
 
+
+def _display_usage_info() -> bool:
+    """Display API usage info. Returns True if successful, False otherwise."""
+    try:
+        from .api import SalesforceAPI
+
+        api = SalesforceAPI()
+        api.connect()
+
+        try:
+            limits = api.get_limits()
+        except RateLimitError:
+            click.echo()
+            click.echo("Cannot query usage details - API limit exceeded.")
+            return False
+
+        daily = limits.get("DailyApiRequests", {})
+        used = daily.get("Max", 0) - daily.get("Remaining", 0)
+        max_limit = daily.get("Max", 0)
+        remaining = daily.get("Remaining", 0)
+
+        if max_limit > 0:
+            pct_used = (used / max_limit) * 100
+            pct_remaining = (remaining / max_limit) * 100
+
+            click.echo("Current API Usage:")
+            click.echo(f"  Used:      {used:>10,} ({pct_used:.1f}%)")
+            click.echo(f"  Remaining: {remaining:>10,} ({pct_remaining:.1f}%)")
+            click.echo(f"  Limit:     {max_limit:>10,}")
+            click.echo()
+
+            # Visual bar
+            bar_width = 40
+            filled = int((used / max_limit) * bar_width)
+            bar = "█" * filled + "░" * (bar_width - filled)
+            click.echo(f"  [{bar}] {pct_used:.0f}%")
+            return True
+        return False
+    except Exception:
+        return False
+
+
 # Track if first Ctrl+C was pressed
 _interrupted_once = False
 
@@ -137,12 +179,13 @@ def dump(export_dir: Path | None, retry: bool, verbose: bool) -> None:
             pct = (e.used / e.max_limit) * 100 if e.max_limit > 0 else 0
             click.echo(f"  At {pct:.0f}% of daily limit")
             click.echo()
+        else:
+            # Try to fetch and display current usage
+            _display_usage_info()
+            click.echo()
         click.echo("The limit resets on a rolling 24-hour window.")
         click.echo("Oldest requests drop off continuously, so you can retry")
         click.echo("in 2-4 hours as capacity frees up.")
-        click.echo()
-        click.echo("To check current usage:")
-        click.echo("  sf usage")
         click.echo()
         click.echo("Retry when capacity is available:")
         click.echo("  sf dump")
