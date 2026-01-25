@@ -1,0 +1,107 @@
+name: windows-install
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags (for setuptools_scm)
+        run: git fetch --tags --force --prune
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install project
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e ".[dev]"
+          python -V
+          pip list
+
+      - name: Verify sf command exists
+        run: sf --version
+
+      - name: Test sf --help
+        run: |
+          $output = sf --help
+          Write-Host $output
+          if ($output -notmatch "setup") { throw "Missing 'setup' command" }
+          if ($output -notmatch "test") { throw "Missing 'test' command" }
+          if ($output -notmatch "dump") { throw "Missing 'dump' command" }
+          if ($output -notmatch "view") { throw "Missing 'view' command" }
+          if ($output -notmatch "status") { throw "Missing 'status' command" }
+          Write-Host "All documented commands present"
+        shell: pwsh
+
+      - name: Test sf setup --help
+        run: |
+          $output = sf setup --help
+          Write-Host $output
+          if ($output -notmatch "Configure Salesforce credentials") { throw "Missing description" }
+          Write-Host "sf setup help OK"
+        shell: pwsh
+
+      - name: Test sf test --help
+        run: |
+          $output = sf test --help
+          Write-Host $output
+          if ($output -notmatch "Test Salesforce connection") { throw "Missing description" }
+          Write-Host "sf test help OK"
+        shell: pwsh
+
+      - name: Test sf dump --help
+        run: |
+          $output = sf dump --help
+          Write-Host $output
+          if ($output -notmatch "--export-dir") { throw "Missing --export-dir option" }
+          if ($output -notmatch "--retry") { throw "Missing --retry option" }
+          if ($output -notmatch "--verbose") { throw "Missing --verbose option" }
+          Write-Host "sf dump help OK - all documented options present"
+        shell: pwsh
+
+      - name: Test sf view --help
+        run: |
+          $output = sf view --help
+          Write-Host $output
+          if ($output -notmatch "Browse exported Salesforce data") { throw "Missing description" }
+          Write-Host "sf view help OK"
+        shell: pwsh
+
+      - name: Test sf status --help
+        run: |
+          $output = sf status --help
+          Write-Host $output
+          if ($output -notmatch "Show status of exports") { throw "Missing description" }
+          Write-Host "sf status help OK"
+        shell: pwsh
+
+      - name: Test sf status with no exports
+        run: |
+          $output = sf status
+          Write-Host $output
+          if ($output -notmatch "No exports found") { throw "Expected 'No exports found' message" }
+          Write-Host "sf status handles empty state correctly"
+        shell: pwsh
+
+      - name: Run unit tests on Windows
+        run: pytest tests/unit/ -v --tb=short -x
+        shell: pwsh
+
+      - name: Test documentation alignment
+        run: pytest tests/unit/test_docs_cli_match.py -v
+        shell: pwsh
