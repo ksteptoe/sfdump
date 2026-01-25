@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 
 from tqdm import tqdm
 
+from .exceptions import RateLimitError
 from .progress import SPINNER_CHARS, ProgressBar, Spinner
 from .utils import ensure_dir, sanitize_filename, sha256_of_file, write_csv
 
@@ -229,6 +230,8 @@ def dump_content_versions(
                     r["sha256"] = sha256_of_file(target)
                     total_bytes += size
                     downloaded_count += 1
+                except RateLimitError:
+                    raise  # Stop immediately on rate limit
                 except Exception as e:  # keep going; record failure
                     r["path"] = ""
                     r["sha256"] = ""
@@ -459,6 +462,8 @@ def dump_attachments(
                     r["sha256"] = sha256_of_file(target)
                     total_bytes += size
                     downloaded_count += 1
+                except RateLimitError:
+                    raise  # Stop immediately on rate limit
                 except Exception as e:
                     r["path"] = ""
                     r["sha256"] = ""

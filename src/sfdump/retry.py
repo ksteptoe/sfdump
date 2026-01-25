@@ -9,6 +9,8 @@ from typing import Dict, List, Tuple
 
 from tqdm import tqdm
 
+from .exceptions import RateLimitError
+
 _logger = logging.getLogger(__name__)
 
 
@@ -102,10 +104,15 @@ def _attempt_download(api, rel_url: str, out_path: str) -> Tuple[bool, str]:
     """
     Attempt a single download.
     Returns: (success: bool, error_message: str)
+
+    Raises:
+        RateLimitError: If API rate limit is exceeded (must be handled by caller)
     """
     try:
         api.download_path_to_file(rel_url, out_path)
         return True, ""
+    except RateLimitError:
+        raise  # Re-raise to stop the retry loop
     except Exception as e:
         return False, str(e)
 

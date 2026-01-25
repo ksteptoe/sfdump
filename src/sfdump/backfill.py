@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Callable
 
 from tqdm import tqdm
 
+from .exceptions import RateLimitError
+
 if TYPE_CHECKING:
     from .api import SalesforceAPI
 
@@ -91,12 +93,17 @@ def resolve_content_version_id(api: SalesforceAPI, content_document_id: str) -> 
 
     Returns:
         The LatestPublishedVersionId, or None if not found
+
+    Raises:
+        RateLimitError: If API rate limit is exceeded
     """
     url = f"/services/data/{api.api_version}/sobjects/ContentDocument/{content_document_id}"
     try:
         resp = api._get(f"{api.instance_url}{url}")
         data = resp.json()
         return data.get("LatestPublishedVersionId")
+    except RateLimitError:
+        raise  # Re-raise to stop processing
     except Exception as e:
         _logger.debug("Failed to resolve %s: %s", content_document_id, e)
         return None
@@ -117,6 +124,9 @@ def _download_content_version(
 
     Returns:
         True if successful, False otherwise
+
+    Raises:
+        RateLimitError: If API rate limit is exceeded
     """
     rel_path = (
         f"/services/data/{api.api_version}/sobjects/ContentVersion/{content_version_id}/VersionData"
@@ -124,6 +134,8 @@ def _download_content_version(
     try:
         api.download_path_to_file(rel_path, str(target_path))
         return True
+    except RateLimitError:
+        raise  # Re-raise to stop processing
     except Exception as e:
         _logger.debug("Failed to download %s: %s", content_version_id, e)
         return False
