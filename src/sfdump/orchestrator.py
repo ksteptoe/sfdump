@@ -23,6 +23,7 @@ from datetime import date
 from pathlib import Path
 from typing import Callable
 
+from .exceptions import RateLimitError
 from .progress import ProgressReporter
 
 _logger = logging.getLogger(__name__)
@@ -287,6 +288,8 @@ def run_full_export(
             os.environ.pop("SFDUMP_FILES_CHUNK_TOTAL", None)
             os.environ.pop("SFDUMP_FILES_CHUNK_INDEX", None)
 
+    except RateLimitError:
+        raise  # Re-raise to stop the export
     except Exception as e:
         ui.step_error(str(e))
         _logger.exception("File export failed")
@@ -309,6 +312,8 @@ def run_full_export(
                 _logger.info(f"Exporting {obj_name}...")
                 dump_object_to_csv(api, obj_name, str(csv_dir))
                 objects_exported += 1
+            except RateLimitError:
+                raise  # Re-raise to stop the export
             except Exception as e:
                 objects_failed.append(obj_name)
                 _logger.debug(f"Failed to export {obj_name}: {e}")
@@ -337,6 +342,8 @@ def run_full_export(
             for obj_name in FILE_INDEX_OBJECTS:
                 try:
                     build_files_index(api, obj_name, str(export_path))
+                except RateLimitError:
+                    raise  # Re-raise to stop the export
                 except Exception:
                     pass  # Object may not have files
 
@@ -349,6 +356,8 @@ def run_full_export(
                 docs_missing_path,
                 docs_with_path + docs_missing_path,
             )
+    except RateLimitError:
+        raise  # Re-raise to stop the export
     except Exception as e:
         ui.step_error(str(e))
         _logger.exception("Index building failed")
@@ -366,6 +375,8 @@ def run_full_export(
 
         with ui.spinner("Creating SQLite database"):
             build_sqlite_from_export(str(export_path), str(database_path))
+    except RateLimitError:
+        raise  # Re-raise to stop the export
     except Exception as e:
         ui.step_error(str(e))
         _logger.exception("Database build failed")
@@ -495,6 +506,8 @@ def run_full_export(
                         files_missing,
                     )
 
+        except RateLimitError:
+            raise  # Re-raise to stop the export
         except Exception as e:
             ui.step_error(str(e))
             _logger.exception("Verification failed")
