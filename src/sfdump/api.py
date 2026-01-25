@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 import requests
 
 from .env_loader import load_env_files
-from .exceptions import MissingCredentialsError
+from .exceptions import MissingCredentialsError, RateLimitError
 
 __author__ = "Kevin Steptoe"
 __copyright__ = "Kevin Steptoe"
@@ -275,6 +275,22 @@ class SalesforceAPI:
                 detail = r.json()
             except Exception:
                 detail = r.text
+
+            # Check for rate limit error (403 + REQUEST_LIMIT_EXCEEDED)
+            if r.status_code == 403:
+                error_code = None
+                if isinstance(detail, list) and len(detail) > 0:
+                    error_code = detail[0].get("errorCode", "")
+                elif isinstance(detail, dict):
+                    error_code = detail.get("errorCode", "")
+
+                if error_code == "REQUEST_LIMIT_EXCEEDED" or (
+                    isinstance(detail, str) and "REQUEST_LIMIT_EXCEEDED" in detail
+                ):
+                    raise RateLimitError(
+                        "Salesforce daily API request limit exceeded. "
+                        "The limit resets on a rolling 24-hour window."
+                    )
 
             # Short, high-level message (no giant JSON blob)
             _logger.error("HTTP %s error for %s", r.status_code, url)

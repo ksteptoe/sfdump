@@ -16,6 +16,7 @@ from pathlib import Path
 
 import click
 
+from .exceptions import RateLimitError
 from .orchestrator import find_latest_export, launch_viewer, run_full_export
 
 # Track if first Ctrl+C was pressed
@@ -121,6 +122,23 @@ def dump(export_dir: Path | None, retry: bool, verbose: bool) -> None:
         click.echo("Run 'sf dump' again to resume where you left off.")
         click.echo()
         sys.exit(130)
+    except RateLimitError:
+        click.echo()
+        click.echo()
+        click.echo("=" * 50)
+        click.echo("Salesforce API Limit Reached")
+        click.echo("=" * 50)
+        click.echo()
+        click.echo("Your Salesforce org has exceeded its daily API request limit.")
+        click.echo("This limit resets on a rolling 24-hour window.")
+        click.echo()
+        click.echo("To check your usage:")
+        click.echo("  Salesforce Setup > System Overview > API Usage")
+        click.echo()
+        click.echo("You can safely retry later:")
+        click.echo("  sf dump")
+        click.echo()
+        sys.exit(1)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
