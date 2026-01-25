@@ -218,9 +218,7 @@ class TestSimplifiedExportFlow:
         # Check attachments
         attachments_csv = links_dir / "attachments.csv"
         if attachments_csv.exists():
-            checked, found, missing = self._verify_file_paths(
-                attachments_csv, "attachments"
-            )
+            checked, found, missing = self._verify_file_paths(attachments_csv, "attachments")
             total_checked += checked
             total_found += found
             total_missing += missing
@@ -228,9 +226,7 @@ class TestSimplifiedExportFlow:
         # Check content versions
         cv_csv = links_dir / "content_versions.csv"
         if cv_csv.exists():
-            checked, found, missing = self._verify_file_paths(
-                cv_csv, "content_versions"
-            )
+            checked, found, missing = self._verify_file_paths(cv_csv, "content_versions")
             total_checked += checked
             total_found += found
             total_missing += missing
@@ -246,9 +242,7 @@ class TestSimplifiedExportFlow:
             # Allow some tolerance for very large exports
             assert success_rate >= 95.0, f"Too many missing files: {success_rate:.1f}%"
 
-    def _verify_file_paths(
-        self, csv_path: Path, file_type: str
-    ) -> tuple[int, int, int]:
+    def _verify_file_paths(self, csv_path: Path, file_type: str) -> tuple[int, int, int]:
         """
         Verify file paths in a metadata CSV point to actual files.
 
@@ -333,7 +327,10 @@ SF_PASSWORD=testpass
         assert result.exit_code in (0, 1)
         assert "Testing Salesforce Connection" in result.output
 
-    @pytest.mark.skipif(IS_LIGHT_MODE, reason="CLI dump test skipped in light mode (use test_full_export_pipeline instead)")
+    @pytest.mark.skipif(
+        IS_LIGHT_MODE,
+        reason="CLI dump test skipped in light mode (use test_full_export_pipeline instead)",
+    )
     def test_sf_dump_full_export(self):
         """Test sf dump command runs full export.
 
@@ -417,17 +414,11 @@ class TestDatabaseIntegrity:
                 parent_lower = parent_table.lower()
 
                 # Find matching tables (case-insensitive)
-                child_match = next(
-                    (t for t in tables if t.lower() == child_lower), None
-                )
-                parent_match = next(
-                    (t for t in tables if t.lower() == parent_lower), None
-                )
+                child_match = next((t for t in tables if t.lower() == child_lower), None)
+                parent_match = next((t for t in tables if t.lower() == parent_lower), None)
 
                 if child_match and parent_match:
-                    self._verify_relationship(
-                        cur, child_match, fk_col, parent_match, pk_col
-                    )
+                    self._verify_relationship(cur, child_match, fk_col, parent_match, pk_col)
 
         finally:
             conn.close()
@@ -450,9 +441,7 @@ class TestDatabaseIntegrity:
             return
 
         # Find the actual column name (case may differ)
-        actual_fk_col = next(
-            c for c in child_columns if c.lower() == fk_col.lower()
-        )
+        actual_fk_col = next(c for c in child_columns if c.lower() == fk_col.lower())
 
         # Count orphaned records
         query = f"""
@@ -481,9 +470,7 @@ class TestDatabaseIntegrity:
 
                 # Some orphans are expected (deleted parents, etc.)
                 # But should be less than 50%
-                assert orphan_pct < 50, (
-                    f"Too many orphaned records in {child_table}.{fk_col}"
-                )
+                assert orphan_pct < 50, f"Too many orphaned records in {child_table}.{fk_col}"
 
         except sqlite3.OperationalError as e:
             print(f"  Could not verify {child_table}.{fk_col}: {e}")
@@ -523,9 +510,7 @@ class TestDatabaseIntegrity:
                     )
                     duplicates = cur.fetchall()
 
-                    assert len(duplicates) == 0, (
-                        f"Table {table} has duplicate Ids: {duplicates}"
-                    )
+                    assert len(duplicates) == 0, f"Table {table} has duplicate Ids: {duplicates}"
 
         finally:
             conn.close()
@@ -559,12 +544,8 @@ class TestDatabaseIntegrity:
             assert "account" in tables, "Account table missing from database"
 
             # Count how many essential objects are present
-            essential_found = sum(
-                1 for obj in ESSENTIAL_OBJECTS if obj.lower() in tables
-            )
-            print(
-                f"Essential objects found: {essential_found}/{len(ESSENTIAL_OBJECTS)}"
-            )
+            essential_found = sum(1 for obj in ESSENTIAL_OBJECTS if obj.lower() in tables)
+            print(f"Essential objects found: {essential_found}/{len(ESSENTIAL_OBJECTS)}")
 
         finally:
             conn.close()

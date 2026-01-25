@@ -148,7 +148,9 @@ def status() -> None:
         csv_dir = export_path / "csv"
 
         # Count files and CSVs
-        file_count = sum(1 for _ in files_dir.rglob("*") if _.is_file()) if files_dir.exists() else 0
+        file_count = (
+            sum(1 for _ in files_dir.rglob("*") if _.is_file()) if files_dir.exists() else 0
+        )
         csv_count = sum(1 for _ in csv_dir.glob("*.csv")) if csv_dir.exists() else 0
         has_db = db_path.exists()
 

@@ -72,8 +72,7 @@ def load_missing_from_index(index_path: Path) -> list[dict]:
         if (r.get("file_source") == "File")
         and (r.get("local_path") or "") == ""
         and (
-            (r.get("file_id") or "").startswith("069")
-            or (r.get("file_id") or "").startswith("068")
+            (r.get("file_id") or "").startswith("069") or (r.get("file_id") or "").startswith("068")
         )
     ]
 
@@ -117,7 +116,9 @@ def _download_content_version(
     Returns:
         True if successful, False otherwise
     """
-    rel_path = f"/services/data/{api.api_version}/sobjects/ContentVersion/{content_version_id}/VersionData"
+    rel_path = (
+        f"/services/data/{api.api_version}/sobjects/ContentVersion/{content_version_id}/VersionData"
+    )
     try:
         api.download_path_to_file(rel_path, str(target_path))
         return True
@@ -184,8 +185,7 @@ def run_backfill(
         if (r.get("file_source") == "File")
         and (r.get("local_path") or "") == ""
         and (
-            (r.get("file_id") or "").startswith("069")
-            or (r.get("file_id") or "").startswith("068")
+            (r.get("file_id") or "").startswith("069") or (r.get("file_id") or "").startswith("068")
         )
     ]
 

@@ -169,9 +169,7 @@ class TestRunBackfill:
 
         result = run_backfill(mock_api, tmp_path)
 
-        assert result == BackfillResult(
-            total_missing=0, downloaded=0, failed=0, skipped=0
-        )
+        assert result == BackfillResult(total_missing=0, downloaded=0, failed=0, skipped=0)
 
     def test_returns_empty_when_no_missing(self, tmp_path):
         """Returns zeros when all files have local_path."""
@@ -205,8 +203,7 @@ class TestRunBackfill:
         index_path = tmp_path / "meta" / "master_documents_index.csv"
         index_path.parent.mkdir(parents=True)
         index_path.write_text(
-            "file_id,file_name,file_extension,file_source,local_path\n"
-            "069ABC,document,pdf,File,\n"
+            "file_id,file_name,file_extension,file_source,local_path\n069ABC,document,pdf,File,\n"
         )
 
         result = run_backfill(mock_api, tmp_path)
@@ -255,8 +252,7 @@ class TestRunBackfill:
         index_path = tmp_path / "meta" / "master_documents_index.csv"
         index_path.parent.mkdir(parents=True)
         index_path.write_text(
-            "file_id,file_name,file_extension,file_source,local_path\n"
-            "069ABC,document,pdf,File,\n"
+            "file_id,file_name,file_extension,file_source,local_path\n069ABC,document,pdf,File,\n"
         )
 
         result = run_backfill(mock_api, tmp_path, dry_run=True)
@@ -278,8 +274,7 @@ class TestRunBackfill:
         index_path = tmp_path / "meta" / "master_documents_index.csv"
         index_path.parent.mkdir(parents=True)
         index_path.write_text(
-            "file_id,file_name,file_extension,file_source,local_path\n"
-            "069ABC,document,pdf,File,\n"
+            "file_id,file_name,file_extension,file_source,local_path\n069ABC,document,pdf,File,\n"
         )
 
         # Pre-create the file
@@ -307,8 +302,7 @@ class TestRunBackfill:
         index_path = tmp_path / "meta" / "master_documents_index.csv"
         index_path.parent.mkdir(parents=True)
         index_path.write_text(
-            "file_id,file_name,file_extension,file_source,local_path\n"
-            "069ABC,document,pdf,File,\n"
+            "file_id,file_name,file_extension,file_source,local_path\n069ABC,document,pdf,File,\n"
         )
 
         run_backfill(mock_api, tmp_path)
@@ -390,8 +384,7 @@ class TestRunBackfill:
         index_path = tmp_path / "meta" / "master_documents_index.csv"
         index_path.parent.mkdir(parents=True)
         index_path.write_text(
-            "file_id,file_name,file_extension,file_source,local_path\n"
-            "068ABC,document,pdf,File,\n"
+            "file_id,file_name,file_extension,file_source,local_path\n068ABC,document,pdf,File,\n"
         )
 
         result = run_backfill(mock_api, tmp_path)
@@ -410,8 +403,7 @@ class TestRunBackfill:
         index_path = tmp_path / "meta" / "master_documents_index.csv"
         index_path.parent.mkdir(parents=True)
         index_path.write_text(
-            "file_id,file_name,file_extension,file_source,local_path\n"
-            "069ABC,document,pdf,File,\n"
+            "file_id,file_name,file_extension,file_source,local_path\n069ABC,document,pdf,File,\n"
         )
 
         result = run_backfill(mock_api, tmp_path)

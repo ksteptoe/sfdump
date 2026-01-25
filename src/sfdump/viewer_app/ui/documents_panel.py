@@ -76,9 +76,7 @@ def _render_documents_panel_rows(
     with_path = sum(1 for r in rows if _rel_path(r))
     without_path = len(rows) - with_path
     if without_path > 0:
-        st.caption(
-            f"📄 {with_path} downloaded, ⚠️ {without_path} not downloaded"
-        )
+        st.caption(f"📄 {with_path} downloaded, ⚠️ {without_path} not downloaded")
 
     sel = st.selectbox(
         "Preview Doc",
@@ -93,8 +91,8 @@ def _render_documents_panel_rows(
         file_id = row.get("file_id") or row.get("Id") or "(unknown)"
         file_source = row.get("file_source") or "(unknown)"
         st.warning(
-            f"This document was not downloaded. "
-            f"The export may have been run in 'light' mode or with chunking limits."
+            "This document was not downloaded. "
+            "The export may have been run in 'light' mode or with chunking limits."
         )
         with st.expander("Debug info", expanded=False):
             st.text(f"File ID: {file_id}")

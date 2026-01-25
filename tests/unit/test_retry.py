@@ -286,14 +286,13 @@ class TestMergeRecoveredIntoMetadata:
         """Successfully merges recovered paths into original metadata."""
         # Create original metadata with empty path
         original_csv = tmp_path / "attachments.csv"
-        original_csv.write_text("Id,path,sha256\nATT001,,abc123\nATT002,files/existing.pdf,def456\n")
+        original_csv.write_text(
+            "Id,path,sha256\nATT001,,abc123\nATT002,files/existing.pdf,def456\n"
+        )
 
         # Create retry results with recovered file
         retry_csv = tmp_path / "attachments_missing_retry.csv"
-        retry_csv.write_text(
-            "Id,path,retry_status\n"
-            "ATT001,files/recovered.pdf,recovered\n"
-        )
+        retry_csv.write_text("Id,path,retry_status\nATT001,files/recovered.pdf,recovered\n")
 
         count = merge_recovered_into_metadata(str(original_csv), str(retry_csv))
 

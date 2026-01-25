@@ -6,12 +6,11 @@ These tests verify:
 2. Without chunking env vars, all files are processed
 3. The orchestrator clears stale chunking env vars
 """
+
 from __future__ import annotations
 
 import os
 from unittest import mock
-
-import pytest
 
 from sfdump.files import _order_and_chunk_rows
 
@@ -93,8 +92,9 @@ class TestOrchestratorClearsChunkingEnvVars:
         """
         # We can't easily test the full orchestrator without mocking Salesforce,
         # but we can verify the clearing logic exists in the code
-        from sfdump import orchestrator
         import inspect
+
+        from sfdump import orchestrator
 
         source = inspect.getsource(orchestrator.run_full_export)
 
