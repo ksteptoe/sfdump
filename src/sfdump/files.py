@@ -226,7 +226,7 @@ def dump_content_versions(
                 total=len(futs),
                 desc="        Downloading",
                 unit="file",
-                ncols=70,
+                ncols=90,
                 ascii="░█",
             ):
                 r, target = futs[fut]
@@ -456,7 +456,7 @@ def dump_attachments(
                 total=len(futs),
                 desc="        Downloading",
                 unit="file",
-                ncols=70,
+                ncols=90,
                 ascii="░█",
             ):
                 r, target = futs[fut]
