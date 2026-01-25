@@ -139,6 +139,8 @@ class Spinner:
             self._stop_event.wait(0.1)
 
     def __enter__(self) -> "Spinner":
+        # Print newline to ensure spinner is on its own line
+        print(file=self.output)
         self._thread = threading.Thread(target=self._animate, daemon=True)
         self._thread.start()
         return self
@@ -147,9 +149,8 @@ class Spinner:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=0.5)
-        # Clear the spinner line
-        clear_len = len(self.indent) + len(self.message) + 10
-        print("\r" + " " * clear_len + "\r", end="", flush=True, file=self.output)
+        # Clear the entire line (use terminal width or generous estimate)
+        print("\r" + " " * 80 + "\r", end="", flush=True, file=self.output)
 
 
 @dataclass

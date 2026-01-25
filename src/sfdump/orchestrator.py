@@ -209,7 +209,7 @@ def run_full_export(
         with ui.spinner("Connecting"):
             api = SalesforceAPI()
             api.connect()
-        ui.step_done()
+        ui.substep("done")
     except Exception as e:
         ui.step_error(str(e))
         error_msg = str(e)
