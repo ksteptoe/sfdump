@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 from tqdm import tqdm
 
-from .progress import ProgressBar
+from .progress import ProgressBar, Spinner
 from .utils import ensure_dir, sanitize_filename, sha256_of_file, write_csv
 
 _logger = logging.getLogger(__name__)
@@ -133,14 +133,14 @@ def dump_content_versions(
     _logger.info("dump_content_versions SOQL: %s", soql)
 
     # Query phase
-    print("        Querying Salesforce...", end="", flush=True)
-    rows = list(api.query_all_iter(soql))
-    rows = _order_and_chunk_rows(rows, kind="content_version")
+    with Spinner("Querying Salesforce", indent="        "):
+        rows = list(api.query_all_iter(soql))
+        rows = _order_and_chunk_rows(rows, kind="content_version")
     meta_rows: List[dict] = []
     total_bytes = 0
 
     discovered_initial = len(rows)
-    print(f" {discovered_initial:,} documents found", flush=True)
+    print(f"        {discovered_initial:,} documents found", flush=True)
     _logger.info(
         "dump_content_versions: discovered %d ContentVersion rows (where=%r)",
         discovered_initial,
@@ -359,14 +359,14 @@ def dump_attachments(
         soql += f" WHERE {where}"
 
     # Query phase
-    print("        Querying Salesforce...", end="", flush=True)
-    rows = list(api.query_all_iter(soql))
-    rows = _order_and_chunk_rows(rows, kind="attachment")
+    with Spinner("Querying Salesforce", indent="        "):
+        rows = list(api.query_all_iter(soql))
+        rows = _order_and_chunk_rows(rows, kind="attachment")
     meta_rows: List[dict] = []
     total_bytes = 0
 
     discovered_initial = len(rows)
-    print(f" {discovered_initial:,} attachments found", flush=True)
+    print(f"        {discovered_initial:,} attachments found", flush=True)
     _logger.info(
         "dump_attachments: discovered %d Attachment rows (where=%r)",
         discovered_initial,
