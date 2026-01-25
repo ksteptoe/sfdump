@@ -149,27 +149,40 @@ def dump_content_versions(
     downloaded_count = 0
     error_count = 0
 
+    # First pass: check which files already exist (with progress feedback)
+    print("        Checking local files...", end="", flush=True)
+    to_download = []
+    check_count = 0
+    last_pct = -1
+
+    for r in rows:
+        r.pop("attributes", None)
+        ext = f".{(r.get('FileType') or '').lower()}" if r.get("FileType") else ""
+        fname = f"{r['ContentDocumentId']}_{sanitize_filename(r.get('Title') or 'file')}{ext}"
+        target = _safe_target(files_root, fname)
+
+        check_count += 1
+        pct = (check_count * 100) // len(rows) if rows else 0
+        if pct >= last_pct + 10:
+            print(f" {pct}%", end="", flush=True)
+            last_pct = pct
+
+        # Resume-awareness: skip files that already exist and are non-empty
+        if os.path.exists(target) and os.path.getsize(target) > 0:
+            r["path"] = os.path.relpath(target, out_dir)
+            r["sha256"] = sha256_of_file(target)
+            skipped_existing += 1
+            meta_rows.append(r)
+            continue
+
+        to_download.append((r, target))
+
+    print(" done", flush=True)
+
+    # Second pass: download missing files
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {}
-        for r in rows:
-            r.pop("attributes", None)
-            ext = f".{(r.get('FileType') or '').lower()}" if r.get("FileType") else ""
-            fname = f"{r['ContentDocumentId']}_{sanitize_filename(r.get('Title') or 'file')}{ext}"
-            target = _safe_target(files_root, fname)
-
-            # Resume-awareness: skip files that already exist and are non-empty
-            if os.path.exists(target) and os.path.getsize(target) > 0:
-                r["path"] = os.path.relpath(target, out_dir)
-                r["sha256"] = sha256_of_file(target)
-                skipped_existing += 1
-                meta_rows.append(r)
-                _logger.debug(
-                    "dump_content_versions: skipping existing file for ContentDocumentId=%s at %s",
-                    r.get("ContentDocumentId") or r.get("Id"),
-                    target,
-                )
-                continue
-
+        for r, target in to_download:
             rel = f"/services/data/{api.api_version}/sobjects/ContentVersion/{r['Id']}/VersionData"
             futs[ex.submit(api.download_path_to_file, rel, target)] = (r, target)
 
@@ -342,26 +355,39 @@ def dump_attachments(
     downloaded_count = 0
     error_count = 0
 
+    # First pass: check which files already exist (with progress feedback)
+    print("        Checking local files...", end="", flush=True)
+    to_download = []
+    check_count = 0
+    last_pct = -1
+
+    for r in rows:
+        r.pop("attributes", None)
+        fname = f"{r['Id']}_{sanitize_filename(r.get('Name') or 'attachment')}"
+        target = _safe_target(files_root, fname)
+
+        check_count += 1
+        pct = (check_count * 100) // len(rows) if rows else 0
+        if pct >= last_pct + 10:
+            print(f" {pct}%", end="", flush=True)
+            last_pct = pct
+
+        # Resume-awareness: skip files that already exist and are non-empty
+        if os.path.exists(target) and os.path.getsize(target) > 0:
+            r["path"] = os.path.relpath(target, out_dir)
+            r["sha256"] = sha256_of_file(target)
+            skipped_existing += 1
+            meta_rows.append(r)
+            continue
+
+        to_download.append((r, target))
+
+    print(" done", flush=True)
+
+    # Second pass: download missing files
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {}
-        for r in rows:
-            r.pop("attributes", None)
-            fname = f"{r['Id']}_{sanitize_filename(r.get('Name') or 'attachment')}"
-            target = _safe_target(files_root, fname)
-
-            # Resume-awareness: skip files that already exist and are non-empty
-            if os.path.exists(target) and os.path.getsize(target) > 0:
-                r["path"] = os.path.relpath(target, out_dir)
-                r["sha256"] = sha256_of_file(target)
-                skipped_existing += 1
-                meta_rows.append(r)
-                _logger.debug(
-                    "dump_attachments: skipping existing Attachment %s at %s",
-                    r.get("Id"),
-                    target,
-                )
-                continue
-
+        for r, target in to_download:
             rel = f"/services/data/{api.api_version}/sobjects/Attachment/{r['Id']}/Body"
             futs[ex.submit(api.download_path_to_file, rel, target)] = (r, target)
 
