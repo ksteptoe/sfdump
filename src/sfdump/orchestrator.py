@@ -376,23 +376,18 @@ def run_full_export(
         _logger.exception("Database build failed")
         database_path = None
 
-    # Step 6: Verify and retry missing files
-    # Always run when missing docs detected OR when --retry flag is used
-    # Skip in light mode since missing files are expected
-    should_retry = retry or (docs_missing_path > 0 and not light)
-    if not should_retry:
-        step_num = 6
+    # Step 6: Verify files and recover any missing
+    # This step runs automatically - no flags needed
+    # Skip in light mode since missing files are expected (CI testing)
+    step_num = 6
+    if light:
         report_progress(step_num, "Verification...")
-        _print_success("all files present")
-
-    if should_retry:
-        step_num = 6
-        if docs_missing_path > 0:
-            report_progress(step_num, f"Recovering {docs_missing_path} missing files...")
-        else:
-            report_progress(step_num, "Verifying and retrying failed downloads...")
+        _print_success("skipped (light mode)")
+    else:
+        report_progress(step_num, "Checking files...")
 
         try:
+            from .backfill import load_missing_from_index, run_backfill
             from .retry import (
                 merge_recovered_into_metadata,
                 retry_missing_attachments,
@@ -402,126 +397,129 @@ def run_full_export(
 
             att_meta = links_dir / "attachments.csv"
             cv_meta = links_dir / "content_versions.csv"
+            master_index = meta_dir / "master_documents_index.csv"
             recovered_any = False
 
-            # Verify attachments
-            if att_meta.exists():
-                verify_attachments(str(att_meta), str(export_path))
-                missing_att_csv = links_dir / "attachments_missing.csv"
-                if missing_att_csv.exists():
-                    missing_att = _load_csv_rows(missing_att_csv)
-                    if missing_att:
-                        print(f"\n      Retrying {len(missing_att)} missing attachments...")
-                        retry_missing_attachments(
-                            api, missing_att, str(export_path), str(links_dir)
-                        )
-                        # Merge recovered paths back into original metadata
-                        retry_csv = links_dir / "attachments_missing_retry.csv"
-                        if retry_csv.exists():
-                            count = merge_recovered_into_metadata(
-                                str(att_meta), str(retry_csv)
-                            )
-                            if count > 0:
-                                recovered_any = True
-                                print(f"      Merged {count} recovered attachment paths")
+            # Check what's missing from master index (the source of truth)
+            missing_in_index = []
+            if master_index.exists():
+                missing_in_index = load_missing_from_index(master_index)
 
-            # Verify content versions
-            if cv_meta.exists():
-                verify_content_versions(str(cv_meta), str(export_path))
-                missing_cv_csv = links_dir / "content_versions_missing.csv"
-                if missing_cv_csv.exists():
-                    missing_cv = _load_csv_rows(missing_cv_csv)
-                    if missing_cv:
-                        print(f"      Retrying {len(missing_cv)} missing content versions...")
-                        retry_missing_content_versions(
-                            api, missing_cv, str(export_path), str(links_dir)
-                        )
-                        # Merge recovered paths back into original metadata
-                        retry_csv = links_dir / "content_versions_missing_retry.csv"
-                        if retry_csv.exists():
-                            count = merge_recovered_into_metadata(
-                                str(cv_meta), str(retry_csv)
-                            )
-                            if count > 0:
-                                recovered_any = True
-                                print(f"      Merged {count} recovered content version paths")
-
-            # If files were recovered, rebuild index and database
-            if recovered_any:
-                print("      Rebuilding document index...")
-                from .command_docs_index import _build_master_index
-
-                _, docs_with_path_new, docs_missing_path_new = _build_master_index(export_path)
-
-                print("      Rebuilding database...")
-                database_path = meta_dir / "sfdata.db"
-                build_sqlite_from_export(str(export_path), str(database_path))
-
-                docs_missing_path = docs_missing_path_new
-
-            # Re-verify to get final count
-            files_missing = 0
+            # Also check metadata CSVs for missing files
+            metadata_missing = 0
             if att_meta.exists():
                 verify_attachments(str(att_meta), str(export_path))
                 missing_csv = links_dir / "attachments_missing.csv"
                 if missing_csv.exists():
-                    files_missing += len(_load_csv_rows(missing_csv))
+                    metadata_missing += len(_load_csv_rows(missing_csv))
             if cv_meta.exists():
                 verify_content_versions(str(cv_meta), str(export_path))
                 missing_csv = links_dir / "content_versions_missing.csv"
                 if missing_csv.exists():
-                    files_missing += len(_load_csv_rows(missing_csv))
+                    metadata_missing += len(_load_csv_rows(missing_csv))
 
-            if files_missing == 0:
-                _print_success("100% complete")
+            total_missing = len(missing_in_index) + metadata_missing
+
+            if total_missing == 0:
+                _print_success("all files present")
             else:
-                print(f"      {files_missing} files still missing (may be deleted in Salesforce)")
+                print(f" found {total_missing} files to recover")
+                print()
 
-            # Step 6b: Second-pass backfill from master_documents_index.csv
-            # This recovers files not recorded in content_versions.csv due to chunking
-            master_index = meta_dir / "master_documents_index.csv"
-            if master_index.exists() and files_missing > 0:
-                from .backfill import load_missing_from_index, run_backfill
+                # First-pass: retry from metadata CSVs (attachments + content_versions)
+                if metadata_missing > 0:
+                    print("      Recovering from metadata...")
 
-                missing_in_index = load_missing_from_index(master_index)
+                    # Retry attachments
+                    if att_meta.exists():
+                        missing_att_csv = links_dir / "attachments_missing.csv"
+                        if missing_att_csv.exists():
+                            missing_att = _load_csv_rows(missing_att_csv)
+                            if missing_att:
+                                print(f"      - {len(missing_att)} attachments...")
+                                retry_missing_attachments(
+                                    api, missing_att, str(export_path), str(links_dir)
+                                )
+                                retry_csv = links_dir / "attachments_missing_retry.csv"
+                                if retry_csv.exists():
+                                    count = merge_recovered_into_metadata(
+                                        str(att_meta), str(retry_csv)
+                                    )
+                                    if count > 0:
+                                        recovered_any = True
+
+                    # Retry content versions
+                    if cv_meta.exists():
+                        missing_cv_csv = links_dir / "content_versions_missing.csv"
+                        if missing_cv_csv.exists():
+                            missing_cv = _load_csv_rows(missing_cv_csv)
+                            if missing_cv:
+                                print(f"      - {len(missing_cv)} documents...")
+                                retry_missing_content_versions(
+                                    api, missing_cv, str(export_path), str(links_dir)
+                                )
+                                retry_csv = links_dir / "content_versions_missing_retry.csv"
+                                if retry_csv.exists():
+                                    count = merge_recovered_into_metadata(
+                                        str(cv_meta), str(retry_csv)
+                                    )
+                                    if count > 0:
+                                        recovered_any = True
+
+                # Second-pass: backfill from master index (catches chunking gaps)
                 if missing_in_index:
-                    print(f"\n      Second-pass recovery: {len(missing_in_index)} files...")
+                    print(f"      Recovering from index: {len(missing_in_index)} files...")
+
+                    last_pct = -1
 
                     def show_backfill_progress(
                         processed: int, total: int, downloaded: int, failed: int
                     ) -> None:
-                        pct = (processed / total) * 100 if total > 0 else 0
-                        print(
-                            f"      [{processed}/{total}] {pct:.0f}% - "
-                            f"OK:{downloaded} Fail:{failed}"
-                        )
+                        nonlocal last_pct
+                        pct = int((processed / total) * 100) if total > 0 else 0
+                        # Only show every 10% to reduce noise
+                        if pct >= last_pct + 10 or processed == total:
+                            print(
+                                f"      [{processed}/{total}] {pct}% complete "
+                                f"({downloaded} recovered, {failed} failed)"
+                            )
+                            last_pct = pct
 
                     backfill_result = run_backfill(
                         api,
                         export_path,
                         progress_callback=show_backfill_progress,
-                        progress_interval=100,
+                        progress_interval=50,
                     )
 
-                    if backfill_result.downloaded > 0:
+                    if backfill_result.downloaded > 0 or backfill_result.skipped > 0:
                         recovered_any = True
-                        print(
-                            f"      Backfill complete: {backfill_result.downloaded} recovered, "
-                            f"{backfill_result.failed} failed"
-                        )
 
-                        # Rebuild index and database
-                        print("      Rebuilding document index...")
-                        _, docs_with_path_new, docs_missing_path_new = _build_master_index(
-                            export_path
-                        )
+                # Rebuild index and database if anything was recovered
+                if recovered_any:
+                    print()
+                    print("      Updating search database...")
+                    from .command_docs_index import _build_master_index
 
-                        print("      Rebuilding database...")
-                        database_path = meta_dir / "sfdata.db"
-                        build_sqlite_from_export(str(export_path), str(database_path))
+                    _, docs_with_path_final, docs_missing_final = _build_master_index(
+                        export_path
+                    )
+                    database_path = meta_dir / "sfdata.db"
+                    build_sqlite_from_export(str(export_path), str(database_path))
 
-                        docs_missing_path = docs_missing_path_new
-                        files_missing = docs_missing_path_new
+                    files_missing = docs_missing_final
+                else:
+                    files_missing = total_missing
+
+                # Final status message
+                print()
+                if files_missing == 0:
+                    print("      All files recovered successfully.")
+                else:
+                    print(
+                        f"      {files_missing} files could not be recovered "
+                        "(may have been deleted from Salesforce)."
+                    )
 
         except Exception as e:
             _print_error(str(e))
