@@ -131,12 +131,14 @@ def dump_content_versions(
 
     _logger.info("dump_content_versions SOQL: %s", soql)
 
+    print("        Querying Salesforce for documents...", flush=True)
     rows = list(api.query_all_iter(soql))
     rows = _order_and_chunk_rows(rows, kind="content_version")
     meta_rows: List[dict] = []
     total_bytes = 0
 
     discovered_initial = len(rows)
+    print(f"        Found {discovered_initial} documents", flush=True)
     _logger.info(
         "dump_content_versions: discovered %d ContentVersion rows (where=%r)",
         discovered_initial,
@@ -173,10 +175,19 @@ def dump_content_versions(
 
         # Only iterate futures for files that actually need downloading
         if futs:
+            if skipped_existing > 0:
+                print(
+                    f"        Skipping {skipped_existing} already downloaded, "
+                    f"downloading {len(futs)}...",
+                    flush=True,
+                )
+            else:
+                print(f"        Downloading {len(futs)} documents...", flush=True)
             for fut in tqdm(
                 as_completed(futs),
                 total=len(futs),
-                desc="Files (ContentVersion)",
+                desc="        Documents",
+                unit="file",
             ):
                 r, target = futs[fut]
                 try:
@@ -197,6 +208,8 @@ def dump_content_versions(
                         e,
                     )
                 meta_rows.append(r)
+        elif skipped_existing > 0:
+            print(f"        All {skipped_existing} documents already downloaded", flush=True)
 
     # Links (which record a file is attached to)
     doc_ids = {r.get("ContentDocumentId") for r in meta_rows if r.get("ContentDocumentId")}
@@ -311,12 +324,14 @@ def dump_attachments(
     if where:
         soql += f" WHERE {where}"
 
+    print("        Querying Salesforce for attachments...", flush=True)
     rows = list(api.query_all_iter(soql))
     rows = _order_and_chunk_rows(rows, kind="attachment")
     meta_rows: List[dict] = []
     total_bytes = 0
 
     discovered_initial = len(rows)
+    print(f"        Found {discovered_initial} attachments", flush=True)
     _logger.info(
         "dump_attachments: discovered %d Attachment rows (where=%r)",
         discovered_initial,
@@ -352,10 +367,19 @@ def dump_attachments(
 
         # Only iterate futures for files that actually need downloading
         if futs:
+            if skipped_existing > 0:
+                print(
+                    f"        Skipping {skipped_existing} already downloaded, "
+                    f"downloading {len(futs)}...",
+                    flush=True,
+                )
+            else:
+                print(f"        Downloading {len(futs)} attachments...", flush=True)
             for fut in tqdm(
                 as_completed(futs),
                 total=len(futs),
-                desc="Files (Attachment)",
+                desc="        Attachments",
+                unit="file",
             ):
                 r, target = futs[fut]
                 try:
@@ -376,6 +400,8 @@ def dump_attachments(
                         e,
                     )
                 meta_rows.append(r)
+        elif skipped_existing > 0:
+            print(f"        All {skipped_existing} attachments already downloaded", flush=True)
 
     links_dir = os.path.join(out_dir, "links")
     ensure_dir(links_dir)
