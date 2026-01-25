@@ -477,6 +477,52 @@ def run_full_export(
             else:
                 print(f"      {files_missing} files still missing (may be deleted in Salesforce)")
 
+            # Step 6b: Second-pass backfill from master_documents_index.csv
+            # This recovers files not recorded in content_versions.csv due to chunking
+            master_index = meta_dir / "master_documents_index.csv"
+            if master_index.exists() and files_missing > 0:
+                from .backfill import load_missing_from_index, run_backfill
+
+                missing_in_index = load_missing_from_index(master_index)
+                if missing_in_index:
+                    print(f"\n      Second-pass recovery: {len(missing_in_index)} files...")
+
+                    def show_backfill_progress(
+                        processed: int, total: int, downloaded: int, failed: int
+                    ) -> None:
+                        pct = (processed / total) * 100 if total > 0 else 0
+                        print(
+                            f"      [{processed}/{total}] {pct:.0f}% - "
+                            f"OK:{downloaded} Fail:{failed}"
+                        )
+
+                    backfill_result = run_backfill(
+                        api,
+                        export_path,
+                        progress_callback=show_backfill_progress,
+                        progress_interval=100,
+                    )
+
+                    if backfill_result.downloaded > 0:
+                        recovered_any = True
+                        print(
+                            f"      Backfill complete: {backfill_result.downloaded} recovered, "
+                            f"{backfill_result.failed} failed"
+                        )
+
+                        # Rebuild index and database
+                        print("      Rebuilding document index...")
+                        _, docs_with_path_new, docs_missing_path_new = _build_master_index(
+                            export_path
+                        )
+
+                        print("      Rebuilding database...")
+                        database_path = meta_dir / "sfdata.db"
+                        build_sqlite_from_export(str(export_path), str(database_path))
+
+                        docs_missing_path = docs_missing_path_new
+                        files_missing = docs_missing_path_new
+
         except Exception as e:
             _print_error(str(e))
             _logger.exception("Verification failed")

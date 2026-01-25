@@ -1,16 +1,29 @@
+"""
+Standalone script for downloading missing Salesforce Files.
+
+This script provides a standalone CLI for backfilling missing files from
+master_documents_index.csv. It uses urllib directly (no requests dependency)
+and handles authentication independently.
+
+Note: The orchestrator (`sf dump --retry`) includes equivalent functionality
+via the backfill module for integrated workflows.
+"""
+
 from __future__ import annotations
 
 import argparse
 import csv
 import json
 import os
-import re
 import sys
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Iterable, Optional, Tuple
+
+# Import shared utilities from backfill module
+from .backfill import _safe_filename
 
 
 def _configure_stdio() -> None:
@@ -237,18 +250,6 @@ def _request_bytes(
                 continue
 
             raise
-
-
-def _safe_filename(stem: str, ext: str) -> str:
-    stem = (stem or "").strip()
-    stem = re.sub(r"[^\w\-. ()]+", "_", stem)
-    stem = re.sub(r"\s+", " ", stem).strip()
-    if not stem:
-        stem = "file"
-    if len(stem) > 120:
-        stem = stem[:120].rstrip()
-    ext = (ext or "").lstrip(".")
-    return f"{stem}.{ext}" if ext else stem
 
 
 def _get_latest_published_version_id(
