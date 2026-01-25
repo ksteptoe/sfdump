@@ -525,16 +525,55 @@ def run_full_export(
             _print_error(str(e))
             _logger.exception("Verification failed")
 
+    # Build reconciliation summary from master index
+    master_index = meta_dir / "master_documents_index.csv"
+    total_expected = 0
+    total_downloaded = 0
+    total_missing = 0
+
+    if master_index.exists():
+        index_rows = _load_csv_rows(master_index)
+        for row in index_rows:
+            total_expected += 1
+            if (row.get("local_path") or "").strip():
+                total_downloaded += 1
+            else:
+                total_missing += 1
+
     # Print summary
     print()
     print("=" * 50)
-    print("Export complete!")
+    print("Export Summary")
+    print("=" * 50)
     print()
-    print(f"  Location:  {export_path}")
-    print(f"  Files:     {files_exported}")
-    print(f"  Objects:   {objects_exported}")
+    print(f"  Location:   {export_path}")
+    print()
+
+    # Reconciliation
+    if total_expected > 0:
+        pct_complete = (total_downloaded / total_expected) * 100
+        print("  Files:")
+        print(f"    Expected:   {total_expected:,}")
+        print(f"    Downloaded: {total_downloaded:,}")
+        if total_missing > 0:
+            print(f"    Missing:    {total_missing:,}")
+        print(f"    Complete:   {pct_complete:.1f}%")
+        print()
+
+        if pct_complete >= 100:
+            print("  Status: COMPLETE - All files downloaded successfully")
+        elif pct_complete >= 99:
+            print(f"  Status: NEARLY COMPLETE - {total_missing:,} files could not be retrieved")
+            print("          (These may have been deleted from Salesforce)")
+        else:
+            print(f"  Status: INCOMPLETE - {total_missing:,} files still missing")
+            print("          Run 'sf dump' again to continue downloading")
+    else:
+        print(f"  Files:      {files_exported}")
+
+    print(f"  Objects:    {objects_exported}")
     if database_path and database_path.exists():
-        print(f"  Database:  {database_path}")
+        print(f"  Database:   {database_path}")
     print()
     print("To browse your data:")
     print("  sf view")
