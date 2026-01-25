@@ -65,6 +65,39 @@ This automatically:
 
 Output is saved to `./exports/export-YYYY-MM-DD/`.
 
+### What Success Looks Like
+
+After `sf dump` completes, you'll see a summary like this:
+
+```
+==================================================
+Export Summary
+==================================================
+
+  Location:    ./exports/export-2026-01-25
+
+  Files
+    Expected:    12,479
+    Downloaded:  12,456
+    Missing:     23
+    Complete:    99.8%
+
+  NEARLY COMPLETE - 23 files could not be retrieved
+  (These may have been deleted from Salesforce)
+
+  Objects:  38
+  Database: ./exports/export-2026-01-25/meta/sfdata.db
+
+  To browse your data:
+    sf view
+```
+
+**Understanding the summary:**
+
+- **Downloaded** — Files successfully saved to your computer
+- **Missing** — Files that no longer exist in Salesforce (this is normal)
+- **Complete %** — 99%+ is excellent; 100% is rare due to normal deletions
+
 ## Step 4: Browse Your Data
 
 Launch the viewer:
@@ -97,6 +130,25 @@ This opens a web browser where you can:
 **"Connection failed"** — Check your credentials with `sf test`. Verify your password includes the security token.
 
 **Export incomplete** — Run `sf dump` again. It automatically retries failed downloads.
+
+### Quick Troubleshooting Guide
+
+```
+Problem?
+   │
+   ├─ "SF_CLIENT_ID not set"
+   │     └─ Run: sf setup
+   │
+   ├─ "Connection failed"
+   │     ├─ Check password includes security token
+   │     └─ Run: sf test
+   │
+   ├─ Export incomplete (< 95%)
+   │     └─ Run: sf dump (again - it retries automatically)
+   │
+   └─ Viewer not loading
+         └─ Keep terminal open, run: sf view
+```
 
 ## Next Steps
 
