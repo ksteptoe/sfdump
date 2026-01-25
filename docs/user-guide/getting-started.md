@@ -49,6 +49,11 @@ Wait for completion. This downloads all files and data.
 
 When complete, you'll see a summary showing how many files were downloaded.
 
+**Custom location:** To export to a specific folder:
+```
+sf dump -d /path/to/my-export
+```
+
 ## 5. Find Documents
 
 Launch the viewer:

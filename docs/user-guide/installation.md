@@ -60,4 +60,7 @@ make bootstrap
 
 ## Next Steps
 
-Once installed, see the [Quickstart Guide](quickstart.md) to run your first export.
+Once installed:
+
+- [Getting Started](getting-started.md) — 10-minute guide to your first export
+- [Quickstart](quickstart.md) — Detailed walkthrough with explanations
