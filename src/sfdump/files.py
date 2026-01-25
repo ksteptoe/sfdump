@@ -131,38 +131,49 @@ def dump_content_versions(
 
     _logger.info("dump_content_versions SOQL: %s", soql)
 
-    print("        Querying Salesforce for documents...", flush=True)
+    # Query phase
+    print("        Querying Salesforce...", end="", flush=True)
     rows = list(api.query_all_iter(soql))
     rows = _order_and_chunk_rows(rows, kind="content_version")
     meta_rows: List[dict] = []
     total_bytes = 0
 
     discovered_initial = len(rows)
-    print(f"        Found {discovered_initial} documents", flush=True)
+    print(f" {discovered_initial:,} documents found", flush=True)
     _logger.info(
         "dump_content_versions: discovered %d ContentVersion rows (where=%r)",
         discovered_initial,
         where,
     )
 
+    if discovered_initial == 0:
+        return {
+            "kind": "content_version",
+            "meta_csv": None,
+            "links_csv": None,
+            "errors_csv": None,
+            "count": 0,
+            "bytes": 0,
+            "root": files_root,
+        }
+
     skipped_existing = 0
     downloaded_count = 0
     error_count = 0
 
-    # First pass: check which files already exist (with progress feedback)
+    # Check phase: see which files already exist locally
     print("        Checking local files...", end="", flush=True)
     to_download = []
-    check_count = 0
     last_pct = -1
 
-    for r in rows:
+    for i, r in enumerate(rows):
         r.pop("attributes", None)
         ext = f".{(r.get('FileType') or '').lower()}" if r.get("FileType") else ""
         fname = f"{r['ContentDocumentId']}_{sanitize_filename(r.get('Title') or 'file')}{ext}"
         target = _safe_target(files_root, fname)
 
-        check_count += 1
-        pct = (check_count * 100) // len(rows) if rows else 0
+        # Show progress every 10%
+        pct = ((i + 1) * 100) // len(rows)
         if pct >= last_pct + 10:
             print(f" {pct}%", end="", flush=True)
             last_pct = pct
@@ -177,30 +188,31 @@ def dump_content_versions(
 
         to_download.append((r, target))
 
-    print(" done", flush=True)
+    print(flush=True)  # End the percentage line
 
-    # Second pass: download missing files
+    # Report what we found
+    if skipped_existing > 0 and len(to_download) > 0:
+        print(
+            f"        Already have {skipped_existing:,}, need {len(to_download):,}",
+            flush=True,
+        )
+    elif skipped_existing > 0:
+        print(f"        All {skipped_existing:,} already downloaded", flush=True)
+
+    # Download phase
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {}
         for r, target in to_download:
             rel = f"/services/data/{api.api_version}/sobjects/ContentVersion/{r['Id']}/VersionData"
             futs[ex.submit(api.download_path_to_file, rel, target)] = (r, target)
 
-        # Only iterate futures for files that actually need downloading
         if futs:
-            if skipped_existing > 0:
-                print(
-                    f"        Skipping {skipped_existing} already downloaded, "
-                    f"downloading {len(futs)}...",
-                    flush=True,
-                )
-            else:
-                print(f"        Downloading {len(futs)} documents...", flush=True)
             for fut in tqdm(
                 as_completed(futs),
                 total=len(futs),
-                desc="        Documents",
+                desc="        Downloading",
                 unit="file",
+                ncols=70,
             ):
                 r, target = futs[fut]
                 try:
@@ -221,8 +233,16 @@ def dump_content_versions(
                         e,
                     )
                 meta_rows.append(r)
-        elif skipped_existing > 0:
-            print(f"        All {skipped_existing} documents already downloaded", flush=True)
+
+    # Print completion summary for this phase
+    if downloaded_count > 0 or error_count > 0:
+        if error_count == 0:
+            print(f"        Complete: {downloaded_count:,} downloaded", flush=True)
+        else:
+            print(
+                f"        Complete: {downloaded_count:,} downloaded, {error_count:,} failed",
+                flush=True,
+            )
 
     # Links (which record a file is attached to)
     doc_ids = {r.get("ContentDocumentId") for r in meta_rows if r.get("ContentDocumentId")}
@@ -337,37 +357,48 @@ def dump_attachments(
     if where:
         soql += f" WHERE {where}"
 
-    print("        Querying Salesforce for attachments...", flush=True)
+    # Query phase
+    print("        Querying Salesforce...", end="", flush=True)
     rows = list(api.query_all_iter(soql))
     rows = _order_and_chunk_rows(rows, kind="attachment")
     meta_rows: List[dict] = []
     total_bytes = 0
 
     discovered_initial = len(rows)
-    print(f"        Found {discovered_initial} attachments", flush=True)
+    print(f" {discovered_initial:,} attachments found", flush=True)
     _logger.info(
         "dump_attachments: discovered %d Attachment rows (where=%r)",
         discovered_initial,
         where,
     )
 
+    if discovered_initial == 0:
+        return {
+            "kind": "attachment",
+            "meta_csv": None,
+            "links_csv": None,
+            "errors_csv": None,
+            "count": 0,
+            "bytes": 0,
+            "root": files_root,
+        }
+
     skipped_existing = 0
     downloaded_count = 0
     error_count = 0
 
-    # First pass: check which files already exist (with progress feedback)
+    # Check phase: see which files already exist locally
     print("        Checking local files...", end="", flush=True)
     to_download = []
-    check_count = 0
     last_pct = -1
 
-    for r in rows:
+    for i, r in enumerate(rows):
         r.pop("attributes", None)
         fname = f"{r['Id']}_{sanitize_filename(r.get('Name') or 'attachment')}"
         target = _safe_target(files_root, fname)
 
-        check_count += 1
-        pct = (check_count * 100) // len(rows) if rows else 0
+        # Show progress every 10%
+        pct = ((i + 1) * 100) // len(rows)
         if pct >= last_pct + 10:
             print(f" {pct}%", end="", flush=True)
             last_pct = pct
@@ -382,30 +413,31 @@ def dump_attachments(
 
         to_download.append((r, target))
 
-    print(" done", flush=True)
+    print(flush=True)  # End the percentage line
 
-    # Second pass: download missing files
+    # Report what we found
+    if skipped_existing > 0 and len(to_download) > 0:
+        print(
+            f"        Already have {skipped_existing:,}, need {len(to_download):,}",
+            flush=True,
+        )
+    elif skipped_existing > 0:
+        print(f"        All {skipped_existing:,} already downloaded", flush=True)
+
+    # Download phase
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {}
         for r, target in to_download:
             rel = f"/services/data/{api.api_version}/sobjects/Attachment/{r['Id']}/Body"
             futs[ex.submit(api.download_path_to_file, rel, target)] = (r, target)
 
-        # Only iterate futures for files that actually need downloading
         if futs:
-            if skipped_existing > 0:
-                print(
-                    f"        Skipping {skipped_existing} already downloaded, "
-                    f"downloading {len(futs)}...",
-                    flush=True,
-                )
-            else:
-                print(f"        Downloading {len(futs)} attachments...", flush=True)
             for fut in tqdm(
                 as_completed(futs),
                 total=len(futs),
-                desc="        Attachments",
+                desc="        Downloading",
                 unit="file",
+                ncols=70,
             ):
                 r, target = futs[fut]
                 try:
@@ -426,8 +458,16 @@ def dump_attachments(
                         e,
                     )
                 meta_rows.append(r)
-        elif skipped_existing > 0:
-            print(f"        All {skipped_existing} attachments already downloaded", flush=True)
+
+    # Print completion summary for this phase
+    if downloaded_count > 0 or error_count > 0:
+        if error_count == 0:
+            print(f"        Complete: {downloaded_count:,} downloaded", flush=True)
+        else:
+            print(
+                f"        Complete: {downloaded_count:,} downloaded, {error_count:,} failed",
+                flush=True,
+            )
 
     links_dir = os.path.join(out_dir, "links")
     ensure_dir(links_dir)

@@ -281,16 +281,18 @@ def run_full_export(
 
         # dump_attachments and dump_content_versions query internally and return stats
         print()
-        print("      Downloading Attachments...")
+        print("      Attachments (legacy):")
         att_stats = dump_attachments(api, str(export_path))
         att_count = att_stats.get("count", 0)
 
-        print("      Downloading ContentVersions...")
+        print()
+        print("      Documents (ContentVersion):")
         cv_stats = dump_content_versions(api, str(export_path))
         cv_count = cv_stats.get("count", 0)
 
         files_exported = att_count + cv_count
-        _print_success(f"{files_exported} files")
+        print()
+        print(f"      File export complete: {files_exported:,} total files indexed")
 
         # Clean up env vars
         if light:
@@ -303,27 +305,34 @@ def run_full_export(
         # Continue with CSV export even if files fail
 
     # Step 3: Export essential CSVs
-    report_progress(3, "Exporting data (Accounts, Opportunities, Invoices...)...")
-    print()
+    report_progress(3, "Exporting data (Accounts, Invoices, etc.)...")
 
     # Use lightweight list for CI testing
     objects_to_export = ESSENTIAL_OBJECTS_LIGHT if light else ESSENTIAL_OBJECTS
+    total_objects = len(objects_to_export)
+    last_pct = -1
 
-    for obj_name in objects_to_export:
+    print(f" {total_objects} objects", end="", flush=True)
+
+    for i, obj_name in enumerate(objects_to_export):
         try:
-            if verbose:
-                print(f"      Exporting {obj_name}...")
+            _logger.info(f"Exporting {obj_name}...")
             dump_object_to_csv(api, obj_name, str(csv_dir))
             objects_exported += 1
         except Exception as e:
-            if verbose:
-                print(f"      Skipping {obj_name}: {e}")
             objects_failed.append(obj_name)
             _logger.debug(f"Failed to export {obj_name}: {e}")
 
-    print(f"      Exported {objects_exported} objects", end="")
+        # Show progress every 20%
+        pct = ((i + 1) * 100) // total_objects
+        if pct >= last_pct + 20:
+            print(f" {pct}%", end="", flush=True)
+            last_pct = pct
+
+    print()  # End the line
+    print(f"      Complete: {objects_exported} exported", end="")
     if objects_failed:
-        print(f" ({len(objects_failed)} skipped)")
+        print(f", {len(objects_failed)} unavailable")
     else:
         print()
 
@@ -501,9 +510,7 @@ def run_full_export(
                     print("      Updating search database...")
                     from .command_docs_index import _build_master_index
 
-                    _, docs_with_path_final, docs_missing_final = _build_master_index(
-                        export_path
-                    )
+                    _, docs_with_path_final, docs_missing_final = _build_master_index(export_path)
                     database_path = meta_dir / "sfdata.db"
                     build_sqlite_from_export(str(export_path), str(database_path))
 
