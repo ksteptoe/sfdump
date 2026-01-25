@@ -287,9 +287,24 @@ class SalesforceAPI:
                 if error_code == "REQUEST_LIMIT_EXCEEDED" or (
                     isinstance(detail, str) and "REQUEST_LIMIT_EXCEEDED" in detail
                 ):
+                    # Try to parse usage from Sforce-Limit-Info header
+                    # Format: "api-usage=25/5000"
+                    used, max_limit = None, None
+                    limit_info = r.headers.get("Sforce-Limit-Info", "")
+                    if "api-usage=" in limit_info:
+                        try:
+                            usage_part = limit_info.split("api-usage=")[1].split(",")[0]
+                            used_str, max_str = usage_part.split("/")
+                            used = int(used_str)
+                            max_limit = int(max_str)
+                        except (ValueError, IndexError):
+                            pass
+
                     raise RateLimitError(
                         "Salesforce daily API request limit exceeded. "
-                        "The limit resets on a rolling 24-hour window."
+                        "The limit resets on a rolling 24-hour window.",
+                        used=used,
+                        max_limit=max_limit,
                     )
 
             # Short, high-level message (no giant JSON blob)
@@ -331,6 +346,11 @@ class SalesforceAPI:
             for r in res.get("records", []):
                 yield r
             next_url = res.get("nextRecordsUrl")
+
+    def get_limits(self) -> dict:
+        """Return API limits from /limits endpoint."""
+        url = f"{self.instance_url}/services/data/{self.api_version}/limits"
+        return self._get(url).json()
 
 
 # ----------------------------------------------------------------------

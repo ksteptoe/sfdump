@@ -9,5 +9,12 @@ class MissingCredentialsError(RuntimeError):
 class RateLimitError(RuntimeError):
     """Raised when Salesforce API rate limit is exceeded (HTTP 403 + REQUEST_LIMIT_EXCEEDED)."""
 
-    def __init__(self, message: str = "Salesforce API rate limit exceeded"):
+    def __init__(
+        self,
+        message: str = "Salesforce API rate limit exceeded",
+        used: int | None = None,
+        max_limit: int | None = None,
+    ):
+        self.used = used
+        self.max_limit = max_limit
         super().__init__(message)

@@ -122,7 +122,7 @@ def dump(export_dir: Path | None, retry: bool, verbose: bool) -> None:
         click.echo("Run 'sf dump' again to resume where you left off.")
         click.echo()
         sys.exit(130)
-    except RateLimitError:
+    except RateLimitError as e:
         click.echo()
         click.echo()
         click.echo("=" * 50)
@@ -130,12 +130,20 @@ def dump(export_dir: Path | None, retry: bool, verbose: bool) -> None:
         click.echo("=" * 50)
         click.echo()
         click.echo("Your Salesforce org has exceeded its daily API request limit.")
-        click.echo("This limit resets on a rolling 24-hour window.")
         click.echo()
-        click.echo("To check your usage:")
+        if e.used is not None and e.max_limit is not None:
+            click.echo(f"  Usage: {e.used:,} / {e.max_limit:,} requests")
+            pct = (e.used / e.max_limit) * 100 if e.max_limit > 0 else 0
+            click.echo(f"  At {pct:.0f}% of daily limit")
+            click.echo()
+        click.echo("The limit resets on a rolling 24-hour window.")
+        click.echo("Oldest requests drop off continuously, so you can retry")
+        click.echo("in 2-4 hours as capacity frees up.")
+        click.echo()
+        click.echo("To check current usage:")
         click.echo("  Salesforce Setup > System Overview > API Usage")
         click.echo()
-        click.echo("You can safely retry later:")
+        click.echo("Retry later:")
         click.echo("  sf dump")
         click.echo()
         sys.exit(1)
