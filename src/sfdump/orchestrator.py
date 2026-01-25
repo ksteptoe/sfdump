@@ -23,6 +23,17 @@ from typing import Callable
 
 _logger = logging.getLogger(__name__)
 
+
+def _progress_bar(current: int, total: int, width: int = 20) -> str:
+    """Return a visual progress bar string like [████████░░░░░░░░░░░░] 40%."""
+    if total == 0:
+        return "[" + "░" * width + "]   0%"
+    pct = (current * 100) // total
+    filled = (current * width) // total
+    bar = "█" * filled + "░" * (width - filled)
+    return f"[{bar}] {pct:3d}%"
+
+
 # Lightweight objects for CI testing - core financial data only
 # Used when SF_E2E_LIGHT=true to keep exports small (~1-2GB)
 ESSENTIAL_OBJECTS_LIGHT = [
@@ -312,7 +323,7 @@ def run_full_export(
     total_objects = len(objects_to_export)
     last_pct = -1
 
-    print(f" {total_objects} objects", end="", flush=True)
+    print(f" {total_objects} objects", flush=True)
 
     for i, obj_name in enumerate(objects_to_export):
         try:
@@ -323,10 +334,10 @@ def run_full_export(
             objects_failed.append(obj_name)
             _logger.debug(f"Failed to export {obj_name}: {e}")
 
-        # Show progress every 20%
+        # Show progress bar every 5%
         pct = ((i + 1) * 100) // total_objects
-        if pct >= last_pct + 20:
-            print(f" {pct}%", end="", flush=True)
+        if pct >= last_pct + 5 or i == total_objects - 1:
+            print(f"\r      {_progress_bar(i + 1, total_objects)}", end="", flush=True)
             last_pct = pct
 
     print()  # End the line

@@ -12,6 +12,16 @@ from .utils import ensure_dir, sanitize_filename, sha256_of_file, write_csv
 _logger = logging.getLogger(__name__)
 
 
+def _print_progress_bar(current: int, total: int, width: int = 20) -> str:
+    """Return a visual progress bar string like [████████░░░░░░░░░░░░] 40%."""
+    if total == 0:
+        return "[" + "░" * width + "]   0%"
+    pct = (current * 100) // total
+    filled = (current * width) // total
+    bar = "█" * filled + "░" * (width - filled)
+    return f"[{bar}] {pct:3d}%"
+
+
 def _order_and_chunk_rows(rows: List[dict], *, kind: str) -> List[dict]:
     """Optionally reorder and slice rows based on env vars.
 
@@ -162,7 +172,7 @@ def dump_content_versions(
     error_count = 0
 
     # Check phase: see which files already exist locally
-    print("        Checking local files...", end="", flush=True)
+    print("        Checking local files ", end="", flush=True)
     to_download = []
     last_pct = -1
 
@@ -172,10 +182,14 @@ def dump_content_versions(
         fname = f"{r['ContentDocumentId']}_{sanitize_filename(r.get('Title') or 'file')}{ext}"
         target = _safe_target(files_root, fname)
 
-        # Show progress every 10%
+        # Show progress bar every 2%
         pct = ((i + 1) * 100) // len(rows)
-        if pct >= last_pct + 10:
-            print(f" {pct}%", end="", flush=True)
+        if pct >= last_pct + 2 or i == len(rows) - 1:
+            print(
+                f"\r        Checking local files {_print_progress_bar(i + 1, len(rows))}",
+                end="",
+                flush=True,
+            )
             last_pct = pct
 
         # Resume-awareness: skip files that already exist and are non-empty
@@ -388,7 +402,7 @@ def dump_attachments(
     error_count = 0
 
     # Check phase: see which files already exist locally
-    print("        Checking local files...", end="", flush=True)
+    print("        Checking local files ", end="", flush=True)
     to_download = []
     last_pct = -1
 
@@ -397,10 +411,14 @@ def dump_attachments(
         fname = f"{r['Id']}_{sanitize_filename(r.get('Name') or 'attachment')}"
         target = _safe_target(files_root, fname)
 
-        # Show progress every 10%
+        # Show progress bar every 2%
         pct = ((i + 1) * 100) // len(rows)
-        if pct >= last_pct + 10:
-            print(f" {pct}%", end="", flush=True)
+        if pct >= last_pct + 2 or i == len(rows) - 1:
+            print(
+                f"\r        Checking local files {_print_progress_bar(i + 1, len(rows))}",
+                end="",
+                flush=True,
+            )
             last_pct = pct
 
         # Resume-awareness: skip files that already exist and are non-empty
