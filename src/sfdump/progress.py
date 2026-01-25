@@ -149,8 +149,10 @@ class Spinner:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=0.5)
-        # Clear the entire line (use terminal width or generous estimate)
-        print("\r" + " " * 80 + "\r", end="", flush=True, file=self.output)
+        # Show completion with checkmark (same pattern as ProgressBar)
+        msg_part = f" {self.message}" if self.message else ""
+        # Clear line and print final state with checkmark
+        print(f"\r{self.indent}✓{msg_part}", flush=True, file=self.output)
 
 
 @dataclass

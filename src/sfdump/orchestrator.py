@@ -209,7 +209,6 @@ def run_full_export(
         with ui.spinner("Connecting"):
             api = SalesforceAPI()
             api.connect()
-        ui.substep("done")
     except Exception as e:
         ui.step_error(str(e))
         error_msg = str(e)
@@ -344,8 +343,6 @@ def run_full_export(
         with ui.spinner("Building master index"):
             _, docs_with_path, docs_missing_path = _build_master_index(export_path)
 
-        ui.substep("done")
-
         if docs_missing_path > 0:
             _logger.info(
                 "Index shows %d/%d documents missing local files - will attempt recovery",
@@ -369,8 +366,6 @@ def run_full_export(
 
         with ui.spinner("Creating SQLite database"):
             build_sqlite_from_export(str(export_path), str(database_path))
-
-        ui.substep("done")
     except Exception as e:
         ui.step_error(str(e))
         _logger.exception("Database build failed")
