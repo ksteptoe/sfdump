@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 from tqdm import tqdm
 
-from .progress import ProgressBar, Spinner
+from .progress import SPINNER_CHARS, ProgressBar, Spinner
 from .utils import ensure_dir, sanitize_filename, sha256_of_file, write_csv
 
 _logger = logging.getLogger(__name__)
@@ -207,14 +207,21 @@ def dump_content_versions(
             futs[ex.submit(api.download_path_to_file, rel, target)] = (r, target)
 
         if futs:
-            for fut in tqdm(
+            spinner_idx = 0
+            pbar = tqdm(
                 as_completed(futs),
                 total=len(futs),
-                desc="        Downloading",
+                desc=f"        {SPINNER_CHARS[0]} Downloading",
                 unit="file",
                 ncols=90,
                 ascii="░█",
-            ):
+            )
+            for fut in pbar:
+                if hasattr(pbar, "set_description"):
+                    pbar.set_description(
+                        f"        {SPINNER_CHARS[spinner_idx % len(SPINNER_CHARS)]} Downloading"
+                    )
+                    spinner_idx += 1
                 r, target = futs[fut]
                 try:
                     size = fut.result()
@@ -430,14 +437,21 @@ def dump_attachments(
             futs[ex.submit(api.download_path_to_file, rel, target)] = (r, target)
 
         if futs:
-            for fut in tqdm(
+            spinner_idx = 0
+            pbar = tqdm(
                 as_completed(futs),
                 total=len(futs),
-                desc="        Downloading",
+                desc=f"        {SPINNER_CHARS[0]} Downloading",
                 unit="file",
                 ncols=90,
                 ascii="░█",
-            ):
+            )
+            for fut in pbar:
+                if hasattr(pbar, "set_description"):
+                    pbar.set_description(
+                        f"        {SPINNER_CHARS[spinner_idx % len(SPINNER_CHARS)]} Downloading"
+                    )
+                    spinner_idx += 1
                 r, target = futs[fut]
                 try:
                     size = fut.result()
