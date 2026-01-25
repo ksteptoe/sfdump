@@ -1,54 +1,79 @@
 # Generating Reports
 
-This page explains how to produce redacted or full audit reports.
+Create reports for audits, compliance, or IT review.
 
-## 1. Basic Report
+## When to Generate Reports
 
-```bash
-sfdump report-missing   --export-dir exports/export-YYYY-MM-DD/files   --out docs/missing_report
+Reports are useful for:
+
+- **Audit trails** — Document what was exported and what's missing
+- **Compliance** — Prove data retention requirements are met
+- **IT/CFO review** — Share export status with stakeholders
+- **Handover** — Document the export for future reference
+
+## Basic Report
+
+After running `sf dump`, generate a report of any missing files:
+
+```
+sfdump report-missing --export-dir exports/export-2026-01-25 --out missing_report
 ```
 
-This generates:
+This creates:
 
-- `missing_report.md`
-- Optional `missing_report.pdf` (requires pandoc)
+- `missing_report.md` — Markdown report you can view in any text editor
 
-## 2. Redacted Report
+## PDF Report
 
-Safe for public docs or repo:
+To generate a PDF (requires [Pandoc](https://pandoc.org) installed):
 
-```bash
-sfdump report-missing --export-dir ... --out docs/missing_report --redact
+```
+sfdump report-missing --export-dir exports/export-2026-01-25 --out missing_report --pdf
 ```
 
-Redaction hides:
+This creates both `missing_report.md` and `missing_report.pdf`.
 
-- Attachment IDs
-- Parent IDs
-- Filenames
-- Salesforce URLs
+## Redacted Reports
 
-## 3. Full Internal Report
+For reports you'll share externally or commit to a repository, use redaction:
 
-```bash
-sfdump report-missing   --export-dir ...   --out ../internal_reports/missing_report   --pdf
+```
+sfdump report-missing --export-dir exports/export-2026-01-25 --out missing_report --redact
 ```
 
-This includes:
+Redaction hides sensitive information:
 
-- Full IDs
-- Full filenames
-- All URLs
+| Hidden | Example |
+|--------|---------|
+| Salesforce IDs | `001xxx...xxx` → `[REDACTED]` |
+| Filenames | `Contract_Acme.pdf` → `[REDACTED]` |
+| URLs | Full Salesforce URLs removed |
 
-Never commit internal reports.
+Use redacted reports for external sharing. Keep full reports internal only.
 
-## 4. Logo Support
+## Report Contents
 
-If `src/logos/` contains a file, it is included automatically.
+A typical report includes:
 
-## 5. When to Generate Reports
+- **Summary** — Total files expected, downloaded, missing
+- **Missing files list** — Details of files that couldn't be downloaded
+- **Failure reasons** — Why each file failed (deleted, permissions, etc.)
+- **Recommendations** — Next steps to resolve issues
 
-- After retrying missing files
-- Before IT/CFO review
-- For audit trails
-- For compliance certification
+## Example Workflow
+
+```
+# 1. Run export
+sf dump
+
+# 2. Generate internal report (full details)
+sfdump report-missing --export-dir exports/export-2026-01-25 --out internal_report --pdf
+
+# 3. Generate external report (redacted)
+sfdump report-missing --export-dir exports/export-2026-01-25 --out external_report --redact --pdf
+```
+
+## Next Steps
+
+- [Interpreting Reports](interpreting_reports.md) — Understanding report contents
+- [FAQ](faq.md) — Common questions about exports and compliance

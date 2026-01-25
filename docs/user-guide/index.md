@@ -15,11 +15,11 @@ After exporting your data, use the interactive viewer to search for documents an
 
 installation
 quickstart
+database_viewer
+finding_documents
 exporting_files
 verifying_and_retrying
 generating_reports
 interpreting_reports
-database_viewer
-finding_documents
 faq
 ```

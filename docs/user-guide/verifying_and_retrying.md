@@ -1,69 +1,115 @@
-# Verifying and Retrying Missing Files
+# Verifying and Retrying
 
-This page explains how sfdump detects missing files, how to retry downloads, and how the system guarantees completeness.
+How sfdump ensures all your files are downloaded completely.
 
-## 1. Verify Export Completeness
+## Automatic Verification
 
-Run:
+When you run `sf dump`, verification happens automatically:
 
-```bash
-sfdump verify-files --export-dir exports/export-YYYY-MM-DD/files
+1. Downloads all files from Salesforce
+2. Checks that each file was saved correctly
+3. Retries any failed downloads
+4. Reports final status
+
+You don't need to run separate verify or retry commands.
+
+## Checking Results
+
+At the end of an export, you'll see a summary:
+
+```
+==================================================
+Export Summary
+==================================================
+
+  Location:   /home/user/sfdump/exports/export-2026-01-25
+
+  Files:
+    Expected:   12,847
+    Downloaded: 12,845
+    Missing:    2
+    Complete:   99.98%
+
+  Status: NEARLY COMPLETE - 2 files could not be retrieved
+          (These may have been deleted from Salesforce)
 ```
 
-This scans:
+### What the Status Means
 
-- `files/`
-- `files_legacy/`
-- metadata CSVs in `links/`
+| Status | Meaning |
+|--------|---------|
+| **COMPLETE** | All files downloaded successfully |
+| **NEARLY COMPLETE** | 99%+ downloaded, missing files may be deleted from Salesforce |
+| **INCOMPLETE** | Run `sf dump` again to continue downloading |
 
-Outputs:
+## Re-running the Export
 
-- `attachments_missing.csv`
-- `content_versions_missing.csv`
+If files are missing, simply run:
 
-You want both to be empty.
-
-## 2. Retry Missing Files
-
-```bash
-sfdump retry-missing --export-dir exports/export-YYYY-MM-DD/files -v
+```
+sf dump
 ```
 
-This will:
+This is safe to run multiple times:
 
-- login to Salesforce
-- re-download missing files
-- record retry results in:
-  - `attachments_missing_retry.csv`
-  - `content_versions_missing_retry.csv`
+- Already-downloaded files are skipped
+- Only missing files are attempted
+- Progress is preserved between runs
 
-Columns include:
+## Why Files Might Be Missing
 
-- `retry_success`
-- `retry_error`
-- `retry_status`
+Some files cannot be downloaded. Common reasons:
 
-## 3. Typical Causes of Missing Files
+| Reason | Explanation |
+|--------|-------------|
+| **Deleted in Salesforce** | File was removed after metadata was queried |
+| **Permission restricted** | Your user doesn't have access to the parent record |
+| **Archived content** | File was moved to external storage |
+| **Network interruption** | Connection dropped during download |
 
-- Salesforce API limits causing partial zero-byte responses
-- Attachments no longer stored in org (archived or purged)
-- Restricted Parent object the API can see but cannot download from
-- Network drop during a long export
+Files deleted from Salesforce cannot be recovered — they no longer exist.
 
-## 4. How Retry Logic Works
+## Viewing Missing Files
 
-It attempts each file again with:
+To see which files are missing, check the master index:
 
-- direct API call
-- additional debug logging when `-v` or `-vv` is used
-- local overwrite only when successful
-
-## 5. After Retry
-
-Run verify again:
-
-```bash
-sfdump verify-files --export-dir exports/export-YYYY-MM-DD/files
+```
+exports/export-2026-01-25/meta/master_documents_index.csv
 ```
 
-If everything is recovered, both CSVs should be empty.
+Files with an empty `local_path` column were not downloaded.
+
+## Advanced: Manual Verification
+
+For detailed control, use the full `sfdump` commands:
+
+### Verify Only
+
+```bash
+sfdump verify-files --export-dir exports/export-2026-01-25/files
+```
+
+Creates:
+- `links/attachments_missing.csv`
+- `links/content_versions_missing.csv`
+
+### Retry Only
+
+```bash
+sfdump retry-missing --export-dir exports/export-2026-01-25/files -v
+```
+
+Attempts to re-download files listed in the missing CSVs.
+
+### Analyze Missing Files
+
+```bash
+sfdump analyze-missing --export-dir exports/export-2026-01-25
+```
+
+Shows breakdown of why files are missing (permissions, deleted, etc.).
+
+## Next Steps
+
+- [Generating Reports](generating_reports.md) — Create reports for audit or compliance
+- [FAQ](faq.md) — Common questions about missing files
