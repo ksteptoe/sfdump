@@ -38,7 +38,7 @@ jobs:
 
       - name: Test sf --help
         run: |
-          $output = sf --help
+          $output = (sf --help) -join "`n"
           Write-Host $output
           if ($output -notmatch "setup") { throw "Missing 'setup' command" }
           if ($output -notmatch "test") { throw "Missing 'test' command" }
@@ -50,7 +50,7 @@ jobs:
 
       - name: Test sf setup --help
         run: |
-          $output = sf setup --help
+          $output = (sf setup --help) -join "`n"
           Write-Host $output
           if ($output -notmatch "Configure Salesforce credentials") { throw "Missing description" }
           Write-Host "sf setup help OK"
@@ -58,7 +58,7 @@ jobs:
 
       - name: Test sf test --help
         run: |
-          $output = sf test --help
+          $output = (sf test --help) -join "`n"
           Write-Host $output
           if ($output -notmatch "Test Salesforce connection") { throw "Missing description" }
           Write-Host "sf test help OK"
@@ -66,7 +66,7 @@ jobs:
 
       - name: Test sf dump --help
         run: |
-          $output = sf dump --help
+          $output = (sf dump --help) -join "`n"
           Write-Host $output
           if ($output -notmatch "--export-dir") { throw "Missing --export-dir option" }
           if ($output -notmatch "--retry") { throw "Missing --retry option" }
@@ -76,7 +76,7 @@ jobs:
 
       - name: Test sf view --help
         run: |
-          $output = sf view --help
+          $output = (sf view --help) -join "`n"
           Write-Host $output
           if ($output -notmatch "Browse exported Salesforce data") { throw "Missing description" }
           Write-Host "sf view help OK"
@@ -84,7 +84,7 @@ jobs:
 
       - name: Test sf status --help
         run: |
-          $output = sf status --help
+          $output = (sf status --help) -join "`n"
           Write-Host $output
           if ($output -notmatch "Show status of exports") { throw "Missing description" }
           Write-Host "sf status help OK"
@@ -92,7 +92,7 @@ jobs:
 
       - name: Test sf status with no exports
         run: |
-          $output = sf status
+          $output = (sf status) -join "`n"
           Write-Host $output
           if ($output -notmatch "No exports found") { throw "Expected 'No exports found' message" }
           Write-Host "sf status handles empty state correctly"
