@@ -363,9 +363,8 @@ def _build_master_index(export_root: Path) -> Path:
 
     if docs_missing_path > 0:
         missing_pct = (docs_missing_path / total_docs) * 100 if total_docs > 0 else 0
-        _logger.warning(
-            "Master index has %d/%d documents (%.1f%%) without local files. "
-            "This may indicate an incomplete export (chunking was enabled?).",
+        _logger.info(
+            "Master index: %d/%d documents (%.1f%%) pending download",
             docs_missing_path,
             total_docs,
             missing_pct,
@@ -395,10 +394,4 @@ def docs_index_cmd(export_root: Path) -> None:
 
     if docs_missing_path > 0:
         total = docs_with_path + docs_missing_path
-        click.echo(
-            click.style(
-                f"WARNING: {docs_missing_path}/{total} documents have no local file. "
-                f"Export may be incomplete.",
-                fg="yellow",
-            )
-        )
+        click.echo(f"Note: {docs_missing_path}/{total} documents pending download")

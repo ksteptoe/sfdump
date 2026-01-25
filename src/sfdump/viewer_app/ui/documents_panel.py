@@ -87,21 +87,17 @@ def _render_documents_panel_rows(
     rel_path = _rel_path(row)
 
     if not rel_path:
-        # Show diagnostic info about why path is missing
+        # Show info about missing file
         file_id = row.get("file_id") or row.get("Id") or "(unknown)"
         file_source = row.get("file_source") or "(unknown)"
         st.warning(
-            "This document was not downloaded. "
-            "The export may have been run in 'light' mode or with chunking limits."
+            "This document is not available locally. "
+            "It may have been deleted from Salesforce or not yet downloaded."
         )
-        with st.expander("Debug info", expanded=False):
+        with st.expander("Details", expanded=False):
             st.text(f"File ID: {file_id}")
             st.text(f"Source: {file_source}")
-            st.text(f"Row data: {row}")
-        st.info(
-            "To download all files, run a full export: `sf dump` "
-            "(ensure SFDUMP_FILES_CHUNK_TOTAL env var is not set)"
-        )
+            st.info("To re-download, run: `sf dump`")
         return
 
     c1, c2, c3 = st.columns([1, 1, 6])

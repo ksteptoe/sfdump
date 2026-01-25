@@ -304,6 +304,6 @@ def test_docs_index_cli_warns_on_missing_files(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    assert "WARNING" in result.output
-    assert "1/1" in result.output  # 1 out of 1 documents missing
-    assert "no local file" in result.output
+    assert "Note:" in result.output
+    assert "1/1" in result.output  # 1 out of 1 documents pending
+    assert "pending download" in result.output
