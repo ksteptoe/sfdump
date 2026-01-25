@@ -1,93 +1,112 @@
 # Quickstart
 
-The fastest way to perform a full export, verify completeness, and create a searchable archive.
+Get up and running with sfdump in 3 simple commands.
 
-## 1. Set Credentials
+## Prerequisites
 
-```bash
-export SF_CLIENT_ID="xxx"
-export SF_CLIENT_SECRET="yyy"
-export SF_LOGIN_URL="https://login.salesforce.com"
+- sfdump installed (see [Installation](installation.md))
+- Salesforce Connected App credentials from your IT department
+
+## Step 1: Configure Credentials
+
+Run the setup wizard:
+
+```
+sf setup
 ```
 
-## 2. Export
+You'll be prompted for:
 
-```bash
-make -f Makefile.export export-files
+- **Consumer Key** — from your Salesforce Connected App
+- **Consumer Secret** — from your Salesforce Connected App
+- **Username** — your Salesforce login email
+- **Password + Security Token** — your password with security token appended
+
+This creates a `.env` file with your credentials.
+
+## Step 2: Test Connection
+
+Verify your credentials work:
+
+```
+sf test
 ```
 
-This exports all Salesforce data and files to `exports/export-YYYY-MM-DD/`.
+You should see:
 
-## 3. Verify
+```
+Testing Salesforce Connection
+==================================================
+Config: C:\Users\YourName\sfdump\.env
 
-```bash
-sfdump verify-files --export-dir exports/export-YYYY-MM-DD/files
+Connecting... OK
+Instance: https://yourcompany.my.salesforce.com
+Testing query... OK
+
+Connection successful! Ready to export.
 ```
 
-Checks that all files downloaded successfully.
+## Step 3: Export Your Data
 
-## 4. Retry
+Run the export:
 
-```bash
-sfdump retry-missing --export-dir exports/export-YYYY-MM-DD/files -v
+```
+sf dump
 ```
 
-Re-downloads any files that failed.
+This automatically:
 
-## 5. Generate Report
+1. Authenticates to Salesforce
+2. Downloads all Attachments and Documents
+3. Exports Account, Contact, Opportunity, Invoice, and other business data
+4. Builds searchable indexes
+5. Creates a SQLite database for offline browsing
+6. Verifies downloads and retries any failures
 
-```bash
-sfdump report-missing --export-dir exports/export-YYYY-MM-DD --out docs/missing_report --redact
+Output is saved to `./exports/export-YYYY-MM-DD/`.
+
+## Step 4: Browse Your Data
+
+Launch the viewer:
+
+```
+sf view
 ```
 
-Creates a summary report of any missing files.
+This opens a web browser where you can:
 
-## 6. Build Searchable Database
+- Search by Account or Opportunity name
+- Browse related documents
+- Preview PDFs and images inline
+- Navigate between linked records
 
-```bash
-sfdump build-db -d exports/export-YYYY-MM-DD --overwrite
-```
+## Command Summary
 
-**What this does:**
-- Converts CSV exports into a SQLite database
-- Creates indexes for fast searching
-- Builds document index for file search
-- Output: `exports/export-YYYY-MM-DD/meta/sfdata.db`
+| Command | Description |
+|---------|-------------|
+| `sf setup` | Configure Salesforce credentials |
+| `sf test` | Verify connection works |
+| `sf dump` | Export everything from Salesforce |
+| `sf view` | Browse exported data in web viewer |
+| `sf status` | List available exports |
 
-**Time:** 1-5 minutes depending on data size
+## Troubleshooting
 
-## 7. Launch Viewer
+**"SF_CLIENT_ID not set"** — Run `sf setup` to configure credentials.
 
-```bash
-sfdump db-viewer --db exports/export-YYYY-MM-DD/meta/sfdata.db
-```
+**"Connection failed"** — Check your credentials with `sf test`. Verify your password includes the security token.
 
-**What this does:**
-- Starts a web-based viewer on http://localhost:8503
-- Browse records, navigate relationships
-- Search documents by Account/Opportunity
-- Preview PDFs inline
-
-**For detailed viewer usage, see:** [Database Viewer Guide](database_viewer.md)
-
-## Complete Workflow Summary
-
-| Step | Command | Time | Output |
-|------|---------|------|--------|
-| 1. Export | `make -f Makefile.export export-files` | 30-120 min | CSV files + documents |
-| 2. Verify | `sfdump verify-files ...` | 1-5 min | Verification report |
-| 3. Retry | `sfdump retry-missing ...` | 5-30 min | Missing files recovered |
-| 4. Report | `sfdump report-missing ...` | 1 min | Missing file report |
-| 5. **Build DB** | `sfdump build-db ...` | 1-5 min | **Searchable database** |
-| 6. **View** | `sfdump db-viewer ...` | Instant | **Web interface** |
+**Export incomplete** — Run `sf dump` again. It automatically retries failed downloads.
 
 ## Next Steps
 
-**For end users finding documents:**
-- See [Finding Documents Guide](finding_documents.md) - simplified for non-technical users
+- [Exporting Files](exporting_files.md) — Detailed export options
+- [FAQ](faq.md) — Common questions about long-term archival
 
-**For detailed viewer features:**
-- See [Database Viewer Guide](database_viewer.md) - complete documentation
+## Advanced Usage
 
-**For archiving before org shutdown:**
-- See [FAQ](faq.md) - common questions about long-term archival
+For advanced options (custom objects, chunking, redaction), use the full `sfdump` command:
+
+```
+sfdump --help
+```

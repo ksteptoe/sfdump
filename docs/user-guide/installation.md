@@ -1,41 +1,63 @@
 # Installation
 
-This document explains how to install and configure **sfdump** for secure and complete Salesforce export workflows.
+This guide explains how to install **sfdump** on your computer.
 
 ## Requirements
 
-- Python 3.9+
-- pip or uv
-- Salesforce Connected App credentials
-- API permissions to read:
-  - Attachment
-  - ContentVersion
-  - Related business objects
+- **Windows 10 or 11** (recommended) — macOS and Linux also supported
+- **40 GB+ free disk space** for Salesforce exports
+- **Salesforce credentials** — contact your IT department for:
+  - Connected App credentials (Client ID and Secret)
+  - Your Salesforce username and password
 
-## Install
+## Windows Installation
 
-```bash
-pip install -e .
+### Step 1: Open PowerShell
+
+1. Press the **Windows key** on your keyboard
+2. Type **PowerShell**
+3. Click on **Windows PowerShell** (the blue icon)
+
+### Step 2: Run the Installer
+
+Copy and paste this command into PowerShell, then press **Enter**:
+
+```powershell
+irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex
 ```
 
-Or:
+### Step 3: Follow the Setup Wizard
 
-```bash
-pip install sfdump
+The installer will:
+
+1. Download sfdump to your home folder (`C:\Users\YourName\sfdump`)
+2. Install Python if needed (no admin rights required)
+3. Ask for your Salesforce credentials
+4. Create a `.env` configuration file
+
+Answer the prompts to complete setup.
+
+### Troubleshooting
+
+**"Running scripts is disabled"** — If you see this error, use this command instead:
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex"
 ```
 
-## Environment Variables
+**Already installed?** — The installer will detect existing installations and offer to update.
+
+## macOS / Linux Installation
+
+For macOS or Linux users:
 
 ```bash
-export SF_CLIENT_ID="xxx"
-export SF_CLIENT_SECRET="yyy"
-export SF_LOGIN_URL="https://login.salesforce.com"
-export SF_AUTH_FLOW="client_credentials"
+curl -LO https://github.com/ksteptoe/sfdump/archive/refs/heads/main.zip
+unzip main.zip
+cd sfdump-main
+make bootstrap
 ```
 
-## Optional Tunables
+## Next Steps
 
-- `SFDUMP_FILES_ORDER`
-- `SFDUMP_FILES_CHUNK_TOTAL`
-- `SFDUMP_FILES_CHUNK_INDEX`
-- `SFDUMP_REDACT`
+Once installed, see the [Quickstart Guide](quickstart.md) to run your first export.
