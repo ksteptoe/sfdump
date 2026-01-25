@@ -157,10 +157,17 @@ def dump_content_versions(
     )
 
     if discovered_initial == 0:
+        # Create empty CSV files even when there are no documents
+        links_dir = os.path.join(out_dir, "links")
+        ensure_dir(links_dir)
+        meta_csv = os.path.join(links_dir, "content_versions.csv")
+        cdl_csv = os.path.join(links_dir, "content_document_links.csv")
+        open(meta_csv, "w").close()
+        open(cdl_csv, "w").close()
         return {
             "kind": "content_version",
-            "meta_csv": None,
-            "links_csv": None,
+            "meta_csv": meta_csv,
+            "links_csv": cdl_csv,
             "errors_csv": None,
             "count": 0,
             "bytes": 0,
@@ -388,9 +395,14 @@ def dump_attachments(
     )
 
     if discovered_initial == 0:
+        # Create empty CSV file even when there are no attachments
+        links_dir = os.path.join(out_dir, "links")
+        ensure_dir(links_dir)
+        meta_csv = os.path.join(links_dir, "attachments.csv")
+        open(meta_csv, "w").close()
         return {
             "kind": "attachment",
-            "meta_csv": None,
+            "meta_csv": meta_csv,
             "links_csv": None,
             "errors_csv": None,
             "count": 0,
