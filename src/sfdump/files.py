@@ -7,19 +7,10 @@ from typing import Dict, List, Optional
 
 from tqdm import tqdm
 
+from .progress import ProgressBar
 from .utils import ensure_dir, sanitize_filename, sha256_of_file, write_csv
 
 _logger = logging.getLogger(__name__)
-
-
-def _print_progress_bar(current: int, total: int, width: int = 20) -> str:
-    """Return a visual progress bar string like [████████░░░░░░░░░░░░] 40%."""
-    if total == 0:
-        return "[" + "░" * width + "]   0%"
-    pct = (current * 100) // total
-    filled = (current * width) // total
-    bar = "█" * filled + "░" * (width - filled)
-    return f"[{bar}] {pct:3d}%"
 
 
 def _order_and_chunk_rows(rows: List[dict], *, kind: str) -> List[dict]:
@@ -179,37 +170,25 @@ def dump_content_versions(
     error_count = 0
 
     # Check phase: see which files already exist locally
-    print("        Checking local files ", end="", flush=True)
     to_download = []
-    last_pct = -1
 
-    for i, r in enumerate(rows):
-        r.pop("attributes", None)
-        ext = f".{(r.get('FileType') or '').lower()}" if r.get("FileType") else ""
-        fname = f"{r['ContentDocumentId']}_{sanitize_filename(r.get('Title') or 'file')}{ext}"
-        target = _safe_target(files_root, fname)
+    with ProgressBar("Checking local files", total=len(rows), indent="        ") as pb:
+        for i, r in enumerate(rows):
+            r.pop("attributes", None)
+            ext = f".{(r.get('FileType') or '').lower()}" if r.get("FileType") else ""
+            fname = f"{r['ContentDocumentId']}_{sanitize_filename(r.get('Title') or 'file')}{ext}"
+            target = _safe_target(files_root, fname)
 
-        # Show progress bar every 2%
-        pct = ((i + 1) * 100) // len(rows)
-        if pct >= last_pct + 2 or i == len(rows) - 1:
-            print(
-                f"\r        Checking local files {_print_progress_bar(i + 1, len(rows))}",
-                end="",
-                flush=True,
-            )
-            last_pct = pct
+            # Resume-awareness: skip files that already exist and are non-empty
+            if os.path.exists(target) and os.path.getsize(target) > 0:
+                r["path"] = os.path.relpath(target, out_dir)
+                r["sha256"] = sha256_of_file(target)
+                skipped_existing += 1
+                meta_rows.append(r)
+            else:
+                to_download.append((r, target))
 
-        # Resume-awareness: skip files that already exist and are non-empty
-        if os.path.exists(target) and os.path.getsize(target) > 0:
-            r["path"] = os.path.relpath(target, out_dir)
-            r["sha256"] = sha256_of_file(target)
-            skipped_existing += 1
-            meta_rows.append(r)
-            continue
-
-        to_download.append((r, target))
-
-    print(flush=True)  # End the percentage line
+            pb.update(i + 1)
 
     # Report what we found
     if skipped_existing > 0 and len(to_download) > 0:
@@ -415,36 +394,24 @@ def dump_attachments(
     error_count = 0
 
     # Check phase: see which files already exist locally
-    print("        Checking local files ", end="", flush=True)
     to_download = []
-    last_pct = -1
 
-    for i, r in enumerate(rows):
-        r.pop("attributes", None)
-        fname = f"{r['Id']}_{sanitize_filename(r.get('Name') or 'attachment')}"
-        target = _safe_target(files_root, fname)
+    with ProgressBar("Checking local files", total=len(rows), indent="        ") as pb:
+        for i, r in enumerate(rows):
+            r.pop("attributes", None)
+            fname = f"{r['Id']}_{sanitize_filename(r.get('Name') or 'attachment')}"
+            target = _safe_target(files_root, fname)
 
-        # Show progress bar every 2%
-        pct = ((i + 1) * 100) // len(rows)
-        if pct >= last_pct + 2 or i == len(rows) - 1:
-            print(
-                f"\r        Checking local files {_print_progress_bar(i + 1, len(rows))}",
-                end="",
-                flush=True,
-            )
-            last_pct = pct
+            # Resume-awareness: skip files that already exist and are non-empty
+            if os.path.exists(target) and os.path.getsize(target) > 0:
+                r["path"] = os.path.relpath(target, out_dir)
+                r["sha256"] = sha256_of_file(target)
+                skipped_existing += 1
+                meta_rows.append(r)
+            else:
+                to_download.append((r, target))
 
-        # Resume-awareness: skip files that already exist and are non-empty
-        if os.path.exists(target) and os.path.getsize(target) > 0:
-            r["path"] = os.path.relpath(target, out_dir)
-            r["sha256"] = sha256_of_file(target)
-            skipped_existing += 1
-            meta_rows.append(r)
-            continue
-
-        to_download.append((r, target))
-
-    print(flush=True)  # End the percentage line
+            pb.update(i + 1)
 
     # Report what we found
     if skipped_existing > 0 and len(to_download) > 0:
