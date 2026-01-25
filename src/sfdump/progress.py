@@ -14,11 +14,54 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TextIO
+from typing import Iterator, TextIO
 
 _logger = logging.getLogger(__name__)
+
+# Spinner characters for animated progress indicator
+SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+@contextmanager
+def spinner(message: str = "", output: TextIO = sys.stdout) -> Iterator[None]:
+    """
+    Context manager that displays an animated spinner during long operations.
+
+    Usage:
+        with spinner("Processing"):
+            do_long_operation()
+
+    The spinner shows activity with a message like: "⠋ Processing..."
+    When complete, it clears the line and the caller can print the result.
+    """
+    stop_event = threading.Event()
+    spinner_thread = None
+
+    def _spin() -> None:
+        idx = 0
+        while not stop_event.is_set():
+            char = SPINNER_CHARS[idx % len(SPINNER_CHARS)]
+            if message:
+                print(f"\r{char} {message}", end="", flush=True, file=output)
+            else:
+                print(f"\r{char}", end="", flush=True, file=output)
+            idx += 1
+            stop_event.wait(0.1)  # Update every 100ms
+
+    try:
+        spinner_thread = threading.Thread(target=_spin, daemon=True)
+        spinner_thread.start()
+        yield
+    finally:
+        stop_event.set()
+        if spinner_thread:
+            spinner_thread.join(timeout=0.5)
+        # Clear the spinner line
+        print("\r" + " " * (len(message) + 10) + "\r", end="", flush=True, file=output)
 
 
 @dataclass

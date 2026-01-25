@@ -21,6 +21,8 @@ from datetime import date
 from pathlib import Path
 from typing import Callable
 
+from .progress import spinner
+
 _logger = logging.getLogger(__name__)
 
 
@@ -350,22 +352,25 @@ def run_full_export(
     # Step 4: Build document indexes
     step_num = 4
     report_progress(step_num, "Building document indexes...")
+    print()  # Newline for spinner
     docs_missing_path = 0
     try:
         from .command_files import build_files_index
 
         # Build index for each object type
-        for obj_name in FILE_INDEX_OBJECTS:
-            try:
-                build_files_index(api, obj_name, str(export_path))
-            except Exception:
-                pass  # Object may not have files
+        with spinner("Building file indexes..."):
+            for obj_name in FILE_INDEX_OBJECTS:
+                try:
+                    build_files_index(api, obj_name, str(export_path))
+                except Exception:
+                    pass  # Object may not have files
 
         # Build master documents index
         from .command_docs_index import _build_master_index
 
-        _, docs_with_path, docs_missing_path = _build_master_index(export_path)
-        _print_success()
+        with spinner("Building master index..."):
+            _, docs_with_path, docs_missing_path = _build_master_index(export_path)
+        print("      done")
 
         # Warn if many documents are missing local files
         if docs_missing_path > 0:
@@ -387,10 +392,12 @@ def run_full_export(
     # Step 5: Build SQLite database
     step_num = 5
     report_progress(step_num, "Building search database...")
+    print()  # Newline for spinner
     try:
         database_path = meta_dir / "sfdata.db"
-        build_sqlite_from_export(str(export_path), str(database_path))
-        _print_success()
+        with spinner("Creating SQLite database..."):
+            build_sqlite_from_export(str(export_path), str(database_path))
+        print("      done")
     except Exception as e:
         _print_error(str(e))
         _logger.exception("Database build failed")
@@ -421,22 +428,24 @@ def run_full_export(
             recovered_any = False
 
             # Check what's missing from master index (the source of truth)
+            print()  # Newline for spinner
             missing_in_index = []
-            if master_index.exists():
-                missing_in_index = load_missing_from_index(master_index)
+            with spinner("Scanning for missing files..."):
+                if master_index.exists():
+                    missing_in_index = load_missing_from_index(master_index)
 
-            # Also check metadata CSVs for missing files
-            metadata_missing = 0
-            if att_meta.exists():
-                verify_attachments(str(att_meta), str(export_path))
-                missing_csv = links_dir / "attachments_missing.csv"
-                if missing_csv.exists():
-                    metadata_missing += len(_load_csv_rows(missing_csv))
-            if cv_meta.exists():
-                verify_content_versions(str(cv_meta), str(export_path))
-                missing_csv = links_dir / "content_versions_missing.csv"
-                if missing_csv.exists():
-                    metadata_missing += len(_load_csv_rows(missing_csv))
+                # Also check metadata CSVs for missing files
+                metadata_missing = 0
+                if att_meta.exists():
+                    verify_attachments(str(att_meta), str(export_path))
+                    missing_csv = links_dir / "attachments_missing.csv"
+                    if missing_csv.exists():
+                        metadata_missing += len(_load_csv_rows(missing_csv))
+                if cv_meta.exists():
+                    verify_content_versions(str(cv_meta), str(export_path))
+                    missing_csv = links_dir / "content_versions_missing.csv"
+                    if missing_csv.exists():
+                        metadata_missing += len(_load_csv_rows(missing_csv))
 
             total_missing = len(missing_in_index) + metadata_missing
 
@@ -518,12 +527,15 @@ def run_full_export(
                 # Rebuild index and database if anything was recovered
                 if recovered_any:
                     print()
-                    print("      Updating search database...")
                     from .command_docs_index import _build_master_index
 
-                    _, docs_with_path_final, docs_missing_final = _build_master_index(export_path)
-                    database_path = meta_dir / "sfdata.db"
-                    build_sqlite_from_export(str(export_path), str(database_path))
+                    with spinner("Updating search database..."):
+                        _, docs_with_path_final, docs_missing_final = _build_master_index(
+                            export_path
+                        )
+                        database_path = meta_dir / "sfdata.db"
+                        build_sqlite_from_export(str(export_path), str(database_path))
+                    print("      Database updated")
 
                     files_missing = docs_missing_final
                 else:
