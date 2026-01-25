@@ -156,9 +156,7 @@ class ProgressReporter:
             self._phase_stats.skipped = existing
 
         if existing > 0 and to_download > 0:
-            self._print(
-                f"      {existing:,} already downloaded, {to_download:,} to download"
-            )
+            self._print(f"      {existing:,} already downloaded, {to_download:,} to download")
         elif existing > 0 and to_download == 0:
             self._print(f"      All {existing:,} already downloaded")
         elif to_download > 0:
@@ -179,8 +177,7 @@ class ProgressReporter:
                     self._print(f"      Done: {downloaded:,} downloaded ({elapsed:.1f}s)")
                 else:
                     self._print(
-                        f"      Done: {downloaded:,} downloaded, "
-                        f"{failed:,} failed ({elapsed:.1f}s)"
+                        f"      Done: {downloaded:,} downloaded, {failed:,} failed ({elapsed:.1f}s)"
                     )
 
             self._log_info(
@@ -238,9 +235,7 @@ class ProgressReporter:
             else:
                 self._print("")
 
-            self._log_info(
-                f"Object export complete: {succeeded} exported, {failed} unavailable"
-            )
+            self._log_info(f"Object export complete: {succeeded} exported, {failed} unavailable")
 
         self._phase_stats = None
 
