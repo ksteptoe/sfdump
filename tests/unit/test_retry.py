@@ -4,7 +4,6 @@ import csv
 from unittest.mock import MagicMock, patch
 
 from sfdump.retry import (
-    _attempt_download,
     _write_retry_results,
     load_missing_csv,
     merge_recovered_into_metadata,
@@ -41,31 +40,6 @@ class TestLoadMissingCsv:
         result = load_missing_csv(str(csv_file))
 
         assert result == []
-
-
-class TestAttemptDownload:
-    """Tests for _attempt_download function."""
-
-    def test_successful_download(self):
-        """Returns success on successful download."""
-        mock_api = MagicMock()
-        mock_api.download_path_to_file.return_value = None
-
-        success, error = _attempt_download(mock_api, "/path/to/file", "/out/path")
-
-        assert success is True
-        assert error == ""
-        mock_api.download_path_to_file.assert_called_once_with("/path/to/file", "/out/path")
-
-    def test_failed_download(self):
-        """Returns failure on exception."""
-        mock_api = MagicMock()
-        mock_api.download_path_to_file.side_effect = Exception("Connection error")
-
-        success, error = _attempt_download(mock_api, "/path/to/file", "/out/path")
-
-        assert success is False
-        assert "Connection error" in error
 
 
 class TestWriteRetryResults:
