@@ -471,20 +471,24 @@ def run_full_export(
                         recovered_any = True
                         recovered_count += backfill_result.downloaded
 
-                # Rebuild index and database if anything was recovered
+                # Rebuild database if anything was recovered
+                # Note: Don't rebuild master index - backfill already updated it with
+                # recovered paths. Rebuilding would overwrite those updates.
                 if recovered_any:
-                    from .command_docs_index import _build_master_index
-
                     with ui.spinner("Finalizing database"):
-                        _, docs_with_path_final, docs_missing_final = _build_master_index(
-                            export_path
-                        )
                         database_path = meta_dir / "sfdata.db"
                         build_sqlite_from_export(
                             str(export_path), str(database_path), overwrite=True
                         )
 
-                    files_missing = docs_missing_final
+                    # Count actual missing from updated master index
+                    if master_index.exists():
+                        updated_rows = _load_csv_rows(master_index)
+                        files_missing = sum(
+                            1 for r in updated_rows if not (r.get("local_path") or "").strip()
+                        )
+                    else:
+                        files_missing = 0
                 else:
                     files_missing = total_missing
 
