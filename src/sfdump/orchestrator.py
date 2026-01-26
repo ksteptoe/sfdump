@@ -371,7 +371,6 @@ def run_full_export(
 
     try:
         database_path = meta_dir / "sfdata.db"
-        ui.step_done()
 
         with ui.spinner("Creating SQLite database"):
             build_sqlite_from_export(str(export_path), str(database_path))
@@ -405,8 +404,6 @@ def run_full_export(
             cv_meta = links_dir / "content_versions.csv"
             master_index = meta_dir / "master_documents_index.csv"
             recovered_any = False
-
-            ui.step_done()
 
             # Scan for missing files
             missing_in_index = []
