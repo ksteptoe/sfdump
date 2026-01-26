@@ -145,9 +145,9 @@ class TestOutputExamplesPlausible:
         content = quickstart.read_text()
 
         # Check that key summary elements are documented
-        assert (
-            "Export Summary" in content or "Location:" in content
-        ), "Export summary format should be documented"
+        assert "Export Summary" in content or "Location:" in content, (
+            "Export summary format should be documented"
+        )
         assert "Downloaded:" in content, "Downloaded count should be in example"
         assert "Missing:" in content, "Missing count should be in example"
 
@@ -157,9 +157,9 @@ class TestOutputExamplesPlausible:
         content = quickstart.read_text()
 
         # The docs should mention what success looks like
-        assert (
-            "Connection successful" in content
-        ), "quickstart.md should show 'Connection successful' message"
+        assert "Connection successful" in content, (
+            "quickstart.md should show 'Connection successful' message"
+        )
 
 
 class TestTroubleshootingCoversCommonErrors:
@@ -177,9 +177,9 @@ class TestTroubleshootingCoversCommonErrors:
         quickstart = DOCS_DIR / "quickstart.md"
         content = quickstart.read_text()
 
-        assert (
-            "Connection failed" in content or "connection failed" in content
-        ), "Troubleshooting should mention connection failures"
+        assert "Connection failed" in content or "connection failed" in content, (
+            "Troubleshooting should mention connection failures"
+        )
 
     def test_security_token_mentioned(self):
         """Security token requirement should be documented."""
