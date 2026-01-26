@@ -60,7 +60,4 @@ make bootstrap
 
 ## Next Steps
 
-Once installed:
-
-- [Getting Started](getting-started.md) — 10-minute guide to your first export
-- [Quickstart](quickstart.md) — Detailed walkthrough with explanations
+Once installed, continue to [Getting Started](getting-started.md) for credential setup and your first export.
