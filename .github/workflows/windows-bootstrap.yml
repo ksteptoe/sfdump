@@ -1,0 +1,155 @@
+name: windows-bootstrap
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-bootstrap:
+    runs-on: windows-latest
+    steps:
+      # Don't checkout - simulating a fresh user machine
+      # Don't setup Python - user won't have it installed
+
+      - name: Test bootstrap.ps1 can be downloaded
+        shell: pwsh
+        run: |
+          Write-Host "Testing bootstrap.ps1 download from GitHub..."
+          $script = irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1
+          if (-not $script) { throw "Failed to download bootstrap.ps1" }
+          if ($script -notmatch "sfdump") { throw "Downloaded content doesn't look like bootstrap.ps1" }
+          Write-Host "Bootstrap script downloaded successfully ($($script.Length) bytes)"
+
+      - name: Test release ZIP download
+        shell: pwsh
+        run: |
+          Write-Host "Testing release ZIP download..."
+
+          # Ensure TLS 1.2
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+          # Get latest release info
+          $headers = @{ "User-Agent" = "sfdump-ci-test" }
+          $releaseApiUrl = "https://api.github.com/repos/ksteptoe/sfdump/releases/latest"
+
+          try {
+              $release = Invoke-RestMethod -Uri $releaseApiUrl -Headers $headers -ErrorAction Stop
+              Write-Host "Found release: $($release.tag_name)"
+
+              # Look for sfdump ZIP
+              $asset = $release.assets | Where-Object { $_.name -match "^sfdump-.*\.zip$" } | Select-Object -First 1
+
+              if ($asset) {
+                  $zipUrl = $asset.browser_download_url
+                  Write-Host "Found ZIP asset: $($asset.name)"
+              } else {
+                  $zipUrl = $release.zipball_url
+                  Write-Host "No ZIP asset, using source archive"
+              }
+          } catch {
+              Write-Host "No releases found, using main branch"
+              $zipUrl = "https://github.com/ksteptoe/sfdump/archive/refs/heads/main.zip"
+          }
+
+          # Download the ZIP
+          $zipPath = "$env:TEMP\sfdump-test.zip"
+          Write-Host "Downloading: $zipUrl"
+          Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -Headers $headers
+
+          if (-not (Test-Path $zipPath)) { throw "ZIP download failed" }
+          $size = (Get-Item $zipPath).Length
+          Write-Host "Downloaded successfully: $([math]::Round($size/1MB, 2)) MB"
+
+      - name: Test ZIP extraction and verify contents
+        shell: pwsh
+        run: |
+          Write-Host "Testing ZIP extraction..."
+
+          $zipPath = "$env:TEMP\sfdump-test.zip"
+          $extractPath = "$env:TEMP\sfdump-extract"
+          $installDir = "$env:USERPROFILE\sfdump-test"
+
+          # Extract
+          Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+
+          # Find extracted folder
+          $extractedFolder = Get-ChildItem $extractPath | Select-Object -First 1
+          if (-not $extractedFolder) { throw "No files in archive" }
+
+          Write-Host "Extracted to: $($extractedFolder.FullName)"
+
+          # Copy to install location
+          New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+          Copy-Item -Path "$($extractedFolder.FullName)\*" -Destination $installDir -Recurse -Force
+
+          Write-Host "Installed to: $installDir"
+          Write-Host ""
+          Write-Host "Contents:"
+          Get-ChildItem $installDir | ForEach-Object { Write-Host "  $_" }
+
+      - name: Verify required files exist
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-test"
+
+          Write-Host "Verifying required files..."
+
+          $requiredFiles = @(
+              "setup.ps1",
+              "install.bat",
+              "bootstrap.ps1",
+              "pyproject.toml",
+              "src/sfdump/cli.py"
+          )
+
+          $missing = @()
+          foreach ($file in $requiredFiles) {
+              $path = Join-Path $installDir $file
+              if (Test-Path $path) {
+                  Write-Host "  [OK] $file"
+              } else {
+                  Write-Host "  [MISSING] $file" -ForegroundColor Red
+                  $missing += $file
+              }
+          }
+
+          if ($missing.Count -gt 0) {
+              throw "Missing required files: $($missing -join ', ')"
+          }
+
+          Write-Host ""
+          Write-Host "All required files present!" -ForegroundColor Green
+
+      - name: Verify setup.ps1 is valid PowerShell
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-test"
+          $setupScript = Join-Path $installDir "setup.ps1"
+
+          Write-Host "Checking setup.ps1 syntax..."
+
+          $errors = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile($setupScript, [ref]$null, [ref]$errors)
+
+          if ($errors.Count -gt 0) {
+              Write-Host "Syntax errors found:" -ForegroundColor Red
+              $errors | ForEach-Object { Write-Host "  $_" }
+              throw "setup.ps1 has syntax errors"
+          }
+
+          Write-Host "setup.ps1 syntax is valid!" -ForegroundColor Green
+
+      - name: Cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item "$env:TEMP\sfdump-test.zip" -Force -ErrorAction SilentlyContinue
+          Remove-Item "$env:TEMP\sfdump-extract" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item "$env:USERPROFILE\sfdump-test" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "Cleanup complete"
