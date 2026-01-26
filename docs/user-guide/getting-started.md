@@ -133,6 +133,7 @@ Connection successful! Ready to export.
 | `Invalid client credentials` | Double-check Consumer Key and Secret with IT |
 | `Invalid username or password` | Make sure password includes security token (no space) |
 | `INVALID_LOGIN: Invalid Password` | Reset your security token and try again |
+| `Connection failed` | Check your network connection and verify `SF_HOST` is correct |
 | `Connection refused` | Check if `SF_HOST` should be `test.salesforce.com` (for sandbox) |
 
 **Still stuck?** Ask your IT department to verify the Connected App is configured correctly and your user has API access enabled.

@@ -39,29 +39,14 @@ class TestDocumentedCommandsExist:
             result = runner.invoke(sf_cli, [cmd, "--help"])
             assert result.exit_code == 0, f"Command 'sf {cmd}' failed: {result.output}"
 
-    def test_quickstart_commands(self, runner):
-        """Commands in quickstart.md should all work."""
-        quickstart = DOCS_DIR / "quickstart.md"
-        assert quickstart.exists(), "quickstart.md not found"
 
-        content = quickstart.read_text()
-
-        # Extract commands from code blocks
-        commands = re.findall(r"^sf (\w+)", content, re.MULTILINE)
-        unique_commands = set(commands)
-
-        for cmd in unique_commands:
-            result = runner.invoke(sf_cli, [cmd, "--help"])
-            assert result.exit_code == 0, f"Command 'sf {cmd}' failed: {result.output}"
-
-
-class TestQuickstartCommandTable:
-    """Verify the command summary table in quickstart.md matches reality."""
+class TestGettingStartedCommandTable:
+    """Verify the command summary table in getting-started.md matches reality."""
 
     def test_command_table_accurate(self, runner):
         """The command table should list all sf commands accurately."""
-        quickstart = DOCS_DIR / "quickstart.md"
-        content = quickstart.read_text()
+        getting_started = DOCS_DIR / "getting-started.md"
+        content = getting_started.read_text()
 
         # Extract command table entries: | `sf cmd` | description |
         table_commands = re.findall(r"\| `sf (\w+)` \|", content)
@@ -140,9 +125,9 @@ class TestOutputExamplesPlausible:
     """Verify documented output examples are plausible."""
 
     def test_export_summary_format_documented(self):
-        """The export summary format in quickstart.md should match code."""
-        quickstart = DOCS_DIR / "quickstart.md"
-        content = quickstart.read_text()
+        """The export summary format in getting-started.md should match code."""
+        getting_started = DOCS_DIR / "getting-started.md"
+        content = getting_started.read_text()
 
         # Check that key summary elements are documented
         assert "Export Summary" in content or "Location:" in content, (
@@ -153,12 +138,12 @@ class TestOutputExamplesPlausible:
 
     def test_sf_test_success_message_documented(self, runner):
         """The success message format from sf test should be documented."""
-        quickstart = DOCS_DIR / "quickstart.md"
-        content = quickstart.read_text()
+        getting_started = DOCS_DIR / "getting-started.md"
+        content = getting_started.read_text()
 
         # The docs should mention what success looks like
         assert "Connection successful" in content, (
-            "quickstart.md should show 'Connection successful' message"
+            "getting-started.md should show 'Connection successful' message"
         )
 
 
@@ -167,15 +152,15 @@ class TestTroubleshootingCoversCommonErrors:
 
     def test_sf_client_id_error_documented(self):
         """Missing SF_CLIENT_ID error should be in troubleshooting."""
-        quickstart = DOCS_DIR / "quickstart.md"
-        content = quickstart.read_text()
+        getting_started = DOCS_DIR / "getting-started.md"
+        content = getting_started.read_text()
 
         assert "SF_CLIENT_ID" in content, "Troubleshooting should mention SF_CLIENT_ID error"
 
     def test_connection_failed_documented(self):
         """Connection failure should be in troubleshooting."""
-        quickstart = DOCS_DIR / "quickstart.md"
-        content = quickstart.read_text()
+        getting_started = DOCS_DIR / "getting-started.md"
+        content = getting_started.read_text()
 
         assert "Connection failed" in content or "connection failed" in content, (
             "Troubleshooting should mention connection failures"
@@ -183,7 +168,7 @@ class TestTroubleshootingCoversCommonErrors:
 
     def test_security_token_mentioned(self):
         """Security token requirement should be documented."""
-        quickstart = DOCS_DIR / "quickstart.md"
-        content = quickstart.read_text()
+        getting_started = DOCS_DIR / "getting-started.md"
+        content = getting_started.read_text()
 
         assert "security token" in content.lower(), "Security token requirement should be mentioned"
