@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
@@ -18,6 +19,8 @@ from typing import TYPE_CHECKING, Callable
 from tqdm import tqdm
 
 from .exceptions import RateLimitError
+
+DEFAULT_MAX_WORKERS = 8
 
 if TYPE_CHECKING:
     from .api import SalesforceAPI
@@ -150,9 +153,10 @@ def run_backfill(
     progress_callback: Callable[[int, int, int, int], None] | None = None,
     progress_interval: int = 100,
     show_progress: bool = True,
+    max_workers: int = DEFAULT_MAX_WORKERS,
 ) -> BackfillResult:
     """
-    Download missing files from master_documents_index.csv.
+    Download missing files from master_documents_index.csv using parallel threads.
 
     This is the second-pass recovery that handles files not recorded in
     content_versions.csv due to chunking during the initial export.
@@ -165,6 +169,7 @@ def run_backfill(
         progress_callback: Optional callback(processed, total, downloaded, failed)
         progress_interval: How often to call progress_callback (every N files)
         show_progress: If True, show tqdm progress bar
+        max_workers: Number of parallel download threads (default 8)
 
     Returns:
         BackfillResult with counts of what happened
@@ -225,32 +230,16 @@ def run_backfill(
     failed = 0
     skipped = 0
 
-    # Use tqdm for visual progress
-    iterator = todo
-    if show_progress and not dry_run:
-        iterator = tqdm(
-            todo,
-            desc="        Downloading",
-            unit="file",
-            leave=True,
-            ncols=80,
-        )
+    # Phase 1: Prepare downloads - resolve IDs and check existing files
+    to_resolve = []  # (row, file_id) for ContentDocument IDs needing resolution
+    to_download = []  # (row, ver_id, abs_path, rel_path) ready to download
 
-    for i, row in enumerate(iterator):
+    for row in todo:
         file_id = str(row.get("file_id") or "").strip()
         name = str(row.get("file_name") or "").strip()
         ext = str(row.get("file_extension") or "").strip()
 
-        # Resolve to ContentVersion ID if needed
-        if file_id.startswith("069"):
-            ver_id = resolve_content_version_id(api, file_id)
-            if not ver_id:
-                failed += 1
-                _logger.debug("Could not resolve ContentDocument %s", file_id)
-                continue
-        elif file_id.startswith("068"):
-            ver_id = file_id
-        else:
+        if not file_id.startswith("069") and not file_id.startswith("068"):
             skipped += 1
             _logger.debug("Skipping unsupported file_id: %s", file_id)
             continue
@@ -265,28 +254,111 @@ def run_backfill(
 
         # Skip if already exists
         if abs_path.exists():
-            # Update the index with the path
             row["local_path"] = str(rel_path).replace("/", "\\")
             skipped += 1
             _logger.debug("File exists, updating path: %s", file_id)
             continue
 
-        if dry_run:
-            _logger.debug("DRY-RUN: would download %s -> %s", file_id, rel_path)
-            continue
-
-        # Download the file
-        if _download_content_version(api, ver_id, abs_path):
-            row["local_path"] = str(rel_path).replace("/", "\\")
-            downloaded += 1
-            _logger.debug("Downloaded: %s -> %s", file_id, rel_path)
+        if file_id.startswith("069"):
+            to_resolve.append((row, file_id, abs_path, rel_path))
         else:
-            failed += 1
+            # Already a ContentVersion ID
+            to_download.append((row, file_id, abs_path, rel_path))
 
-        # Legacy progress callback (for backward compat)
-        processed = i + 1
-        if progress_callback and (processed % progress_interval == 0 or processed == len(todo)):
-            progress_callback(processed, len(todo), downloaded, failed)
+    # Phase 2: Resolve ContentDocument IDs to ContentVersion IDs in parallel
+    if to_resolve and not dry_run:
+        if show_progress:
+            pbar = tqdm(
+                total=len(to_resolve),
+                desc="        Resolving IDs",
+                unit="file",
+                ncols=80,
+            )
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(resolve_content_version_id, api, file_id): (
+                    row,
+                    file_id,
+                    abs_path,
+                    rel_path,
+                )
+                for row, file_id, abs_path, rel_path in to_resolve
+            }
+
+            for fut in as_completed(futures):
+                row, file_id, abs_path, rel_path = futures[fut]
+                try:
+                    ver_id = fut.result()
+                    if ver_id:
+                        to_download.append((row, ver_id, abs_path, rel_path))
+                    else:
+                        failed += 1
+                        _logger.debug("Could not resolve ContentDocument %s", file_id)
+                except RateLimitError:
+                    raise  # Stop immediately on rate limit
+                except Exception as e:
+                    failed += 1
+                    _logger.debug("Failed to resolve %s: %s", file_id, e)
+
+                if show_progress:
+                    pbar.update(1)
+
+        if show_progress:
+            pbar.close()
+
+    # Phase 3: Download files in parallel
+    if to_download and not dry_run:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    api.download_path_to_file,
+                    f"/services/data/{api.api_version}/sobjects/ContentVersion/{ver_id}/VersionData",
+                    str(abs_path),
+                ): (row, abs_path, rel_path)
+                for row, ver_id, abs_path, rel_path in to_download
+            }
+
+            if show_progress:
+                pbar = tqdm(
+                    as_completed(futures),
+                    total=len(futures),
+                    desc="        Downloading",
+                    unit="file",
+                    leave=True,
+                    ncols=80,
+                )
+            else:
+                pbar = as_completed(futures)
+
+            processed = 0
+            for fut in pbar:
+                row, abs_path, rel_path = futures[fut]
+                try:
+                    fut.result()
+                    row["local_path"] = str(rel_path).replace("/", "\\")
+                    downloaded += 1
+                    _logger.debug("Downloaded: %s -> %s", row.get("file_id"), rel_path)
+                except RateLimitError:
+                    raise  # Stop immediately on rate limit
+                except Exception as e:
+                    failed += 1
+                    _logger.debug("Failed to download %s: %s", row.get("file_id"), e)
+
+                processed += 1
+                if progress_callback and (
+                    processed % progress_interval == 0 or processed == len(futures)
+                ):
+                    progress_callback(processed, len(futures), downloaded, failed)
+
+            if show_progress and hasattr(pbar, "close"):
+                pbar.close()
+
+    elif dry_run:
+        for row, _ver_id, _abs_path, rel_path in to_download:
+            _logger.debug("DRY-RUN: would download %s -> %s", row.get("file_id"), rel_path)
+        for _row, file_id, _abs_path, rel_path in to_resolve:
+            _logger.debug("DRY-RUN: would resolve and download %s -> %s", file_id, rel_path)
 
     # Write updated index (atomic: write to temp, then rename)
     if not dry_run and (downloaded > 0 or skipped > 0):
