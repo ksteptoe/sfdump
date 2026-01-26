@@ -373,7 +373,7 @@ def run_full_export(
         database_path = meta_dir / "sfdata.db"
 
         with ui.spinner("Creating SQLite database"):
-            build_sqlite_from_export(str(export_path), str(database_path))
+            build_sqlite_from_export(str(export_path), str(database_path), overwrite=True)
     except RateLimitError:
         raise  # Re-raise to stop the export
     except Exception as e:
