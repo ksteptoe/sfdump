@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 from tqdm import tqdm
 
 from .exceptions import RateLimitError
-from .progress import SPINNER_CHARS, ProgressBar, Spinner
+from .progress import BAR_EMPTY, BAR_FILLED, SPINNER_CHARS, ProgressBar, Spinner
 from .utils import ensure_dir, sanitize_filename, sha256_of_file, write_csv
 
 _logger = logging.getLogger(__name__)
@@ -285,7 +285,7 @@ def dump_content_versions(
                 desc=f"        {SPINNER_CHARS[0]} Downloading",
                 unit="file",
                 ncols=90,
-                ascii="░█",
+                ascii=f"{BAR_EMPTY}{BAR_FILLED}",
             )
             for fut in pbar:
                 if hasattr(pbar, "set_description"):
@@ -517,7 +517,7 @@ def dump_attachments(
                 desc=f"        {SPINNER_CHARS[0]} Downloading",
                 unit="file",
                 ncols=90,
-                ascii="░█",
+                ascii=f"{BAR_EMPTY}{BAR_FILLED}",
             )
             for fut in pbar:
                 if hasattr(pbar, "set_description"):

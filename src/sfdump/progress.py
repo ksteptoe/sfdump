@@ -33,8 +33,36 @@ from typing import Iterator, TextIO
 
 _logger = logging.getLogger(__name__)
 
+
+def _supports_unicode() -> bool:
+    """Check if the terminal supports Unicode output."""
+    # Check if stdout encoding supports Unicode
+    try:
+        encoding = getattr(sys.stdout, "encoding", None) or ""
+        if encoding.lower() in ("utf-8", "utf8", "utf-16", "utf-32"):
+            return True
+        # Try to encode a Unicode character
+        "✓".encode(encoding)
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+# Detect Unicode support once at module load
+_UNICODE_SUPPORTED = _supports_unicode()
+
 # Spinner characters for animated progress indicator
-SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+# Use ASCII fallback on terminals that don't support Unicode
+if _UNICODE_SUPPORTED:
+    SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    CHECKMARK = "✓"
+    BAR_FILLED = "█"
+    BAR_EMPTY = "░"
+else:
+    SPINNER_CHARS = "|/-\\"
+    CHECKMARK = "+"
+    BAR_FILLED = "#"
+    BAR_EMPTY = "-"
 
 
 class ProgressBar:
@@ -73,7 +101,7 @@ class ProgressBar:
         else:
             pct = (self._current * 100) // self.total
             filled = (self._current * self.width) // self.total
-        bar = "█" * filled + "░" * (self.width - filled)
+        bar = BAR_FILLED * filled + BAR_EMPTY * (self.width - filled)
         label_part = f"{self.label} " if self.label else ""
         return f"{self.indent}{label_part}{spinner_char} [{bar}] {pct:3d}%"
 
@@ -105,7 +133,7 @@ class ProgressBar:
         with self._lock:
             line = self._render_bar(0)
         # Replace spinner with checkmark for final output
-        line = line.replace(SPINNER_CHARS[0], "✓")
+        line = line.replace(SPINNER_CHARS[0], CHECKMARK)
         print(f"\r{line}", flush=True, file=self.output)
 
 
@@ -152,7 +180,7 @@ class Spinner:
         # Show completion with checkmark (same pattern as ProgressBar)
         msg_part = f" {self.message}" if self.message else ""
         # Clear line and print final state with checkmark
-        print(f"\r{self.indent}✓{msg_part}", flush=True, file=self.output)
+        print(f"\r{self.indent}{CHECKMARK}{msg_part}", flush=True, file=self.output)
 
 
 @dataclass

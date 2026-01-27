@@ -18,6 +18,7 @@ import click
 
 from .exceptions import RateLimitError
 from .orchestrator import find_latest_export, launch_viewer, run_full_export
+from .progress import BAR_EMPTY, BAR_FILLED
 
 
 def _display_usage_info() -> bool:
@@ -53,7 +54,7 @@ def _display_usage_info() -> bool:
             # Visual bar
             bar_width = 40
             filled = int((used / max_limit) * bar_width)
-            bar = "█" * filled + "░" * (bar_width - filled)
+            bar = BAR_FILLED * filled + BAR_EMPTY * (bar_width - filled)
             click.echo(f"  [{bar}] {pct_used:.0f}%")
             return True
         return False
@@ -449,7 +450,7 @@ def usage() -> None:
             # Visual bar
             bar_width = 40
             filled = int((used / max_limit) * bar_width)
-            bar = "█" * filled + "░" * (bar_width - filled)
+            bar = BAR_FILLED * filled + BAR_EMPTY * (bar_width - filled)
             click.echo(f"  [{bar}] {pct_used:.0f}%")
             click.echo()
 
