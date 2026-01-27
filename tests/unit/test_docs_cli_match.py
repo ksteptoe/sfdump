@@ -166,9 +166,12 @@ class TestTroubleshootingCoversCommonErrors:
             "Troubleshooting should mention connection failures"
         )
 
-    def test_security_token_mentioned(self):
-        """Security token requirement should be documented."""
+    def test_client_credentials_flow_documented(self):
+        """OAuth Client Credentials flow should be documented."""
         getting_started = DOCS_DIR / "getting-started.md"
         content = getting_started.read_text()
 
-        assert "security token" in content.lower(), "Security token requirement should be mentioned"
+        assert "client credentials" in content.lower(), (
+            "Client Credentials flow should be mentioned"
+        )
+        assert "SF_LOGIN_URL" in content, "SF_LOGIN_URL should be documented"
