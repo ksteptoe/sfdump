@@ -5,13 +5,25 @@
     Menu-driven installer for non-technical users:
     - Checks disk space requirements (40GB recommended)
     - Installs Python if missing (no admin required)
-    - Installs/updates sfdump and dependencies
+    - Installs/updates sfdump and dependencies into a virtual environment
     - Configures .env file
     - Clean uninstall option
+.PARAMETER Install
+    Non-interactive install mode. Installs sfdump without prompts.
+    Requires Python to already be installed.
+.PARAMETER SkipEnv
+    Skip .env file configuration (useful for CI).
 .NOTES
     Run from PowerShell: .\setup.ps1
     Or double-click install.bat
+
+    For CI/automated installs: .\setup.ps1 -Install -SkipEnv
 #>
+
+param(
+    [switch]$Install,
+    [switch]$SkipEnv
+)
 
 $ErrorActionPreference = "Stop"
 $MinPythonVersion = [Version]"3.12.0"
@@ -244,18 +256,41 @@ function Install-Sfdump {
         $pythonCmd = $pythonPath
     }
 
-    Write-Step "Upgrading pip..."
-    & $pythonCmd -m pip install --upgrade pip setuptools wheel 2>&1 | Out-Null
+    $venvDir = Join-Path $ScriptDir ".venv"
+    $venvPython = Join-Path $venvDir "Scripts\python.exe"
+    $venvActivate = Join-Path $venvDir "Scripts\Activate.ps1"
+
+    # Create virtual environment if it doesn't exist
+    if (-not (Test-Path $venvPython)) {
+        Write-Step "Creating virtual environment..."
+        & $pythonCmd -m venv $venvDir
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err "Failed to create virtual environment."
+            return $false
+        }
+        Write-Success "Virtual environment created at: $venvDir"
+    } else {
+        Write-Host "`nUsing existing virtual environment: $venvDir" -ForegroundColor Green
+    }
+
+    Write-Step "Upgrading pip in virtual environment..."
+    & $venvPython -m pip install --upgrade pip setuptools wheel 2>&1 | Out-Null
 
     Write-Step "Installing sfdump and dependencies..."
     Write-Host "This may take a few minutes..." -ForegroundColor Gray
 
     Push-Location $ScriptDir
     try {
-        & $pythonCmd -m pip install -e ".[dev]"
+        & $venvPython -m pip install -e ".[dev]"
 
         if ($LASTEXITCODE -eq 0) {
             Write-Success "sfdump installed successfully!"
+
+            # Store venv path for later use
+            $script:VenvActivate = $venvActivate
+            $script:VenvPython = $venvPython
+
             return $true
         } else {
             Write-Err "Installation failed."
@@ -540,14 +575,27 @@ function Test-Connection {
 }
 
 function Show-PostInstallHelp {
+    $venvActivate = Join-Path $ScriptDir ".venv\Scripts\Activate.ps1"
+
     Write-Host @"
 
 ============================================================
             Installation Complete!
 ============================================================
 
-AVAILABLE COMMANDS
-------------------
+ACTIVATE THE VIRTUAL ENVIRONMENT
+--------------------------------
+
+Before using sfdump, activate the virtual environment:
+
+    . "$venvActivate"
+
+Or for Command Prompt (cmd.exe):
+
+    .venv\Scripts\activate.bat
+
+AVAILABLE COMMANDS (after activation)
+-------------------------------------
 
     sfdump --help         Show all available commands
     sfdump login          Test Salesforce connection
@@ -558,10 +606,11 @@ AVAILABLE COMMANDS
 GETTING STARTED
 ---------------
 
-1. Make sure your .env file is configured with Salesforce credentials
-2. Run: sfdump login
+1. Activate the virtual environment (see above)
+2. Make sure your .env file is configured with Salesforce credentials
+3. Run: sfdump login
    (to verify your connection works)
-3. Run: sfdump files --help
+4. Run: sfdump files --help
    (to see export options)
 
 "@ -ForegroundColor Cyan
@@ -571,6 +620,35 @@ GETTING STARTED
 # Main Script
 # ============================================================================
 
+# Non-interactive install mode (for CI and automation)
+if ($Install) {
+    Show-Banner
+    Write-Host "Running in non-interactive install mode..." -ForegroundColor Cyan
+
+    $pythonPath = Test-PythonInstalled
+    if (-not $pythonPath) {
+        Write-Err "Python not found. Please install Python 3.12+ first."
+        Write-Host "Download from: https://www.python.org/downloads/"
+        exit 1
+    }
+
+    $version = Get-PythonVersion $pythonPath
+    Write-Host "Using Python $version" -ForegroundColor Green
+
+    if (Install-Sfdump) {
+        if (-not $SkipEnv) {
+            Setup-EnvFile
+        }
+        Show-PostInstallHelp
+        Write-Success "`nInstallation complete!"
+        exit 0
+    } else {
+        Write-Err "Installation failed."
+        exit 1
+    }
+}
+
+# Interactive menu mode
 $running = $true
 
 while ($running) {

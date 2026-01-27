@@ -145,6 +145,89 @@ jobs:
 
           Write-Host "setup.ps1 syntax is valid!" -ForegroundColor Green
 
+      - name: Setup Python for installation test
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run setup.ps1 -Install -SkipEnv
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-test"
+          Write-Host "Running setup.ps1 in non-interactive mode..."
+
+          Push-Location $installDir
+          try {
+              & "$installDir\setup.ps1" -Install -SkipEnv
+              if ($LASTEXITCODE -ne 0) { throw "setup.ps1 failed with exit code $LASTEXITCODE" }
+          } finally {
+              Pop-Location
+          }
+
+      - name: Verify virtual environment created
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-test"
+          $venvPython = Join-Path $installDir ".venv\Scripts\python.exe"
+          $venvActivate = Join-Path $installDir ".venv\Scripts\Activate.ps1"
+
+          Write-Host "Checking virtual environment..."
+
+          if (-not (Test-Path $venvPython)) {
+              throw "Virtual environment python not found at: $venvPython"
+          }
+          Write-Host "  [OK] .venv\Scripts\python.exe exists"
+
+          if (-not (Test-Path $venvActivate)) {
+              throw "Virtual environment activate script not found at: $venvActivate"
+          }
+          Write-Host "  [OK] .venv\Scripts\Activate.ps1 exists"
+
+          # Verify Python version in venv
+          $version = & $venvPython --version
+          Write-Host "  [OK] Python version: $version"
+
+      - name: Verify sfdump installed in venv
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-test"
+          $venvPython = Join-Path $installDir ".venv\Scripts\python.exe"
+
+          Write-Host "Checking sfdump installation..."
+
+          # Check pip shows sfdump
+          $pipShow = & $venvPython -m pip show sfdump 2>&1
+          if ($pipShow -notmatch "Name: sfdump") {
+              throw "sfdump not found in pip list"
+          }
+          Write-Host "  [OK] sfdump installed in venv"
+
+          # Check sfdump command works
+          $sfdumpPath = Join-Path $installDir ".venv\Scripts\sfdump.exe"
+          if (-not (Test-Path $sfdumpPath)) {
+              throw "sfdump.exe not found at: $sfdumpPath"
+          }
+          Write-Host "  [OK] sfdump.exe exists"
+
+          $version = & $sfdumpPath --version
+          Write-Host "  [OK] sfdump version: $version"
+
+      - name: Test sfdump --help from venv
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-test"
+          $sfdump = Join-Path $installDir ".venv\Scripts\sfdump.exe"
+
+          Write-Host "Testing sfdump --help..."
+          $output = (& $sfdump --help) -join "`n"
+          Write-Host $output
+
+          if ($output -notmatch "login") { throw "Missing 'login' command" }
+          if ($output -notmatch "files") { throw "Missing 'files' command" }
+          if ($output -notmatch "build-db") { throw "Missing 'build-db' command" }
+          Write-Host ""
+          Write-Host "All sfdump commands present!" -ForegroundColor Green
+
       - name: Cleanup
         if: always()
         shell: pwsh
