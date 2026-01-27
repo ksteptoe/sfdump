@@ -555,7 +555,21 @@ def run_full_export(
     else:
         ui.summary_item("Files:", str(files_exported))
 
-    ui.summary_item("Objects:", str(objects_exported))
+    # List the CSV files that were exported
+    csv_files = sorted(csv_dir.glob("*.csv")) if csv_dir.exists() else []
+    csv_names = [f.stem for f in csv_files]
+
+    if csv_names:
+        # Show count with examples
+        examples = csv_names[:5]
+        example_str = ", ".join(examples)
+        if len(csv_names) > 5:
+            example_str += ", ..."
+        ui.summary_item("CSV Tables:", f"{objects_exported} ({example_str})")
+        ui.hint("(Each table is a Salesforce object type exported to CSV)")
+    else:
+        ui.summary_item("CSV Tables:", str(objects_exported))
+
     if database_path and database_path.exists():
         ui.summary_item("Database:", str(database_path))
     ui.blank()

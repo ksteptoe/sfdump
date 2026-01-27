@@ -263,15 +263,20 @@ def status() -> None:
         file_count = (
             sum(1 for _ in files_dir.rglob("*") if _.is_file()) if files_dir.exists() else 0
         )
-        csv_count = sum(1 for _ in csv_dir.glob("*.csv")) if csv_dir.exists() else 0
+        csv_files = sorted(csv_dir.glob("*.csv")) if csv_dir.exists() else []
+        csv_count = len(csv_files)
         has_db = db_path.exists()
 
         status_icon = "[ready]" if has_db else "[no db]"
 
+        # Get example table names
+        csv_names = [f.stem for f in csv_files[:3]]
+        table_hint = f" ({', '.join(csv_names)}, ...)" if csv_names else ""
+
         click.echo(f"\n  {export_path.name} {status_icon}")
         click.echo(f"    Path:    {export_path}")
         click.echo(f"    Files:   {file_count:,}")
-        click.echo(f"    Objects: {csv_count}")
+        click.echo(f"    Tables:  {csv_count}{table_hint}")
 
     latest = find_latest_export()
     if latest:
