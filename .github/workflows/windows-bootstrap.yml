@@ -48,25 +48,41 @@ jobs:
           $version = & $venvPython --version
           Write-Host "  [OK] Python version: $version"
 
-      - name: Verify sfdump installed in venv
+      - name: Verify sfdump and sf executables exist
         shell: pwsh
         run: |
-          $venvPython = "${{ github.workspace }}\.venv\Scripts\python.exe"
           $sfdump = "${{ github.workspace }}\.venv\Scripts\sfdump.exe"
+          $sf = "${{ github.workspace }}\.venv\Scripts\sf.exe"
 
-          Write-Host "Checking sfdump installation..."
+          Write-Host "Checking executables..."
 
-          # Check sfdump.exe exists
           if (-not (Test-Path $sfdump)) {
               throw "sfdump.exe not found at: $sfdump"
           }
           Write-Host "  [OK] sfdump.exe exists"
 
-          # Check sfdump version works
-          $version = & $sfdump --version
-          Write-Host "  [OK] sfdump version: $version"
+          if (-not (Test-Path $sf)) {
+              throw "sf.exe not found at: $sf"
+          }
+          Write-Host "  [OK] sf.exe exists (alias)"
 
-      - name: Test sfdump --help
+      - name: Test sfdump --version
+        shell: pwsh
+        run: |
+          $sfdump = "${{ github.workspace }}\.venv\Scripts\sfdump.exe"
+          $version = & $sfdump --version
+          Write-Host "sfdump version: $version"
+          if (-not $version) { throw "sfdump --version returned empty" }
+
+      - name: Test sf --version (alias)
+        shell: pwsh
+        run: |
+          $sf = "${{ github.workspace }}\.venv\Scripts\sf.exe"
+          $version = & $sf --version
+          Write-Host "sf version: $version"
+          if (-not $version) { throw "sf --version returned empty" }
+
+      - name: Test sfdump --help shows all commands
         shell: pwsh
         run: |
           $sfdump = "${{ github.workspace }}\.venv\Scripts\sfdump.exe"
@@ -75,10 +91,214 @@ jobs:
           $output = (& $sfdump --help) -join "`n"
           Write-Host $output
 
-          if ($output -notmatch "login") { throw "Missing 'login' command" }
-          if ($output -notmatch "files") { throw "Missing 'files' command" }
-          Write-Host ""
-          Write-Host "All sfdump commands present!" -ForegroundColor Green
+          $requiredCommands = @("login", "files", "verify-files", "build-db", "db-viewer")
+          foreach ($cmd in $requiredCommands) {
+              if ($output -notmatch $cmd) {
+                  throw "Missing '$cmd' command in sfdump --help"
+              }
+              Write-Host "  [OK] Found '$cmd' command"
+          }
+
+      - name: Test venv activation works
+        shell: pwsh
+        run: |
+          Write-Host "Testing venv activation..."
+
+          # Activate the venv
+          . "${{ github.workspace }}\.venv\Scripts\Activate.ps1"
+
+          # Verify we're in the venv
+          $pythonPath = (Get-Command python).Source
+          Write-Host "Python path after activation: $pythonPath"
+
+          if ($pythonPath -notmatch "\.venv") {
+              throw "Python is not from venv after activation"
+          }
+          Write-Host "  [OK] Venv activation works"
+
+          # Verify sfdump is available after activation
+          $sfdumpPath = (Get-Command sfdump -ErrorAction SilentlyContinue).Source
+          if (-not $sfdumpPath) {
+              throw "sfdump not found in PATH after venv activation"
+          }
+          Write-Host "  [OK] sfdump available in PATH: $sfdumpPath"
+
+          # Run sfdump from activated venv
+          $version = sfdump --version
+          Write-Host "  [OK] sfdump --version from activated venv: $version"
+
+      - name: Test sfdump login --help
+        shell: pwsh
+        run: |
+          $sfdump = "${{ github.workspace }}\.venv\Scripts\sfdump.exe"
+          $output = (& $sfdump login --help) -join "`n"
+          Write-Host $output
+          if ($output -notmatch "Salesforce") { throw "login --help missing expected content" }
+          Write-Host "  [OK] sfdump login --help works"
+
+      - name: Test sfdump files --help
+        shell: pwsh
+        run: |
+          $sfdump = "${{ github.workspace }}\.venv\Scripts\sfdump.exe"
+          $output = (& $sfdump files --help) -join "`n"
+          Write-Host $output
+          if ($output -notmatch "export") { throw "files --help missing expected content" }
+          Write-Host "  [OK] sfdump files --help works"
+
+  # Full end-to-end test: download release, install, and verify
+  test-full-e2e:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download and extract release
+        shell: pwsh
+        run: |
+          Write-Host "Downloading latest release..."
+
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          $headers = @{ "User-Agent" = "sfdump-ci-test" }
+
+          # Get latest release
+          try {
+              $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ksteptoe/sfdump/releases/latest" -Headers $headers
+              Write-Host "Found release: $($release.tag_name)"
+              $asset = $release.assets | Where-Object { $_.name -match "^sfdump-.*\.zip$" } | Select-Object -First 1
+              if ($asset) {
+                  $zipUrl = $asset.browser_download_url
+              } else {
+                  $zipUrl = $release.zipball_url
+              }
+          } catch {
+              Write-Host "No releases found, using main branch"
+              $zipUrl = "https://github.com/ksteptoe/sfdump/archive/refs/heads/main.zip"
+          }
+
+          # Download
+          $zipPath = "$env:TEMP\sfdump-e2e.zip"
+          Write-Host "Downloading: $zipUrl"
+          Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -Headers $headers
+
+          # Extract
+          $extractPath = "$env:TEMP\sfdump-e2e-extract"
+          Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+
+          # Find and copy to install location
+          $extractedFolder = Get-ChildItem $extractPath | Select-Object -First 1
+          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
+          New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+          Copy-Item -Path "$($extractedFolder.FullName)\*" -Destination $installDir -Recurse -Force
+
+          Write-Host "Installed to: $installDir"
+
+      - name: Run setup.ps1 -Install (with .env creation)
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
+          Write-Host "Running setup.ps1 -Install..."
+
+          Push-Location $installDir
+          try {
+              # Run with -Install but WITHOUT -SkipEnv to test .env template creation
+              # We'll need to handle the interactive prompt for .env
+              # For now, use -SkipEnv since we can't interact
+              & "$installDir\setup.ps1" -Install -SkipEnv
+          } finally {
+              Pop-Location
+          }
+
+      - name: Verify installation
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
+          $venvPython = "$installDir\.venv\Scripts\python.exe"
+          $sfdump = "$installDir\.venv\Scripts\sfdump.exe"
+          $sf = "$installDir\.venv\Scripts\sf.exe"
+
+          Write-Host "Verifying installation..."
+
+          # Check venv exists
+          if (-not (Test-Path $venvPython)) { throw "venv python not found" }
+          Write-Host "  [OK] .venv\Scripts\python.exe exists"
+
+          # Check executables exist
+          if (-not (Test-Path $sfdump)) { throw "sfdump.exe not found" }
+          Write-Host "  [OK] sfdump.exe exists"
+
+          if (-not (Test-Path $sf)) { throw "sf.exe not found" }
+          Write-Host "  [OK] sf.exe exists"
+
+          # Check version
+          $version = & $sfdump --version
+          Write-Host "  [OK] sfdump version: $version"
+
+      - name: Test sfdump commands work
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
+          $sfdump = "$installDir\.venv\Scripts\sfdump.exe"
+
+          Write-Host "Testing sfdump commands..."
+
+          # Test --help
+          $help = (& $sfdump --help) -join "`n"
+          if ($help -notmatch "login") { throw "Missing login command" }
+          Write-Host "  [OK] --help works"
+
+          # Test login --help
+          $loginHelp = (& $sfdump login --help) -join "`n"
+          if ($loginHelp -notmatch "credentials") { throw "login --help missing content" }
+          Write-Host "  [OK] login --help works"
+
+          # Test files --help
+          $filesHelp = (& $sfdump files --help) -join "`n"
+          if ($filesHelp -notmatch "Attachment") { throw "files --help missing content" }
+          Write-Host "  [OK] files --help works"
+
+          # Test build-db --help
+          $buildDbHelp = (& $sfdump build-db --help) -join "`n"
+          if ($buildDbHelp -notmatch "SQLite") { throw "build-db --help missing content" }
+          Write-Host "  [OK] build-db --help works"
+
+      - name: Test venv activation in e2e install
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
+
+          Write-Host "Testing venv activation..."
+
+          # Change to install directory
+          Push-Location $installDir
+          try {
+              # Activate venv
+              . ".\.venv\Scripts\Activate.ps1"
+
+              # Verify sfdump is in PATH
+              $sfdumpPath = (Get-Command sfdump -ErrorAction SilentlyContinue).Source
+              if (-not $sfdumpPath) { throw "sfdump not in PATH after activation" }
+              Write-Host "  [OK] sfdump in PATH: $sfdumpPath"
+
+              # Run commands
+              $version = sfdump --version
+              Write-Host "  [OK] sfdump --version: $version"
+
+              $help = (sfdump --help) -join "`n"
+              if ($help -notmatch "Salesforce") { throw "Help missing Salesforce" }
+              Write-Host "  [OK] sfdump --help works from activated venv"
+          } finally {
+              Pop-Location
+          }
+
+      - name: Cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item "$env:TEMP\sfdump-e2e.zip" -Force -ErrorAction SilentlyContinue
+          Remove-Item "$env:TEMP\sfdump-e2e-extract" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item "$env:USERPROFILE\sfdump-e2e-test" -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "Cleanup complete"
 
   # Test the release download flow (simulates fresh user experience)
   test-release-download:
@@ -215,8 +435,42 @@ jobs:
 
           Write-Host "setup.ps1 syntax is valid!" -ForegroundColor Green
 
-      # Note: Full installation testing is done in the test-setup-script job
-      # This job only verifies the release download and extraction works
+      - name: Verify .env template in setup.ps1
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-test"
+          $setupScript = Join-Path $installDir "setup.ps1"
+
+          Write-Host "Checking .env template content..."
+
+          $content = Get-Content $setupScript -Raw
+
+          # Verify correct environment variables are in the template
+          $requiredVars = @(
+              "SF_AUTH_FLOW=client_credentials",
+              "SF_CLIENT_ID=",
+              "SF_CLIENT_SECRET=",
+              "SF_LOGIN_URL="
+          )
+
+          foreach ($var in $requiredVars) {
+              if ($content -notmatch [regex]::Escape($var)) {
+                  throw "Missing '$var' in .env template"
+              }
+              Write-Host "  [OK] Found '$var' in template"
+          }
+
+          # Verify OLD variables are NOT in the template
+          $oldVars = @("SF_HOST=", "SF_USERNAME=", "SF_PASSWORD=")
+          foreach ($var in $oldVars) {
+              if ($content -match [regex]::Escape($var)) {
+                  throw "Old variable '$var' still in .env template - should use Client Credentials flow"
+              }
+              Write-Host "  [OK] Old variable '$var' not in template"
+          }
+
+          Write-Host ""
+          Write-Host ".env template is correct!" -ForegroundColor Green
 
       - name: Cleanup
         if: always()
