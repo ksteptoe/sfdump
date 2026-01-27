@@ -145,6 +145,36 @@ jobs:
           if ($output -notmatch "Download") { throw "files --help missing expected content" }
           Write-Host "  [OK] sfdump files --help works"
 
+      - name: Test sfdump login runs (no credentials)
+        shell: pwsh
+        run: |
+          $sfdump = "${{ github.workspace }}\.venv\Scripts\sfdump.exe"
+
+          Write-Host "Testing sfdump login (expecting credential error)..."
+
+          # Clear any env vars that might exist
+          $env:SF_CLIENT_ID = ""
+          $env:SF_CLIENT_SECRET = ""
+          $env:SF_LOGIN_URL = ""
+
+          # Run login - should fail with missing credentials error
+          $output = (& $sfdump login 2>&1) -join "`n"
+          $exitCode = $LASTEXITCODE
+
+          Write-Host "Output: $output"
+          Write-Host "Exit code: $exitCode"
+
+          # Verify it failed with the expected error (not a crash)
+          if ($output -notmatch "SF_CLIENT_ID|Missing|credentials") {
+              throw "sfdump login didn't produce expected credential error"
+          }
+
+          if ($exitCode -eq 0) {
+              throw "sfdump login should have failed without credentials"
+          }
+
+          Write-Host "  [OK] sfdump login runs correctly (fails gracefully without credentials)"
+
   # Full end-to-end test: download release, install, and verify
   test-full-e2e:
     runs-on: windows-latest
@@ -290,6 +320,33 @@ jobs:
           } finally {
               Pop-Location
           }
+
+      - name: Test sfdump login runs (no credentials)
+        shell: pwsh
+        run: |
+          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
+          $sfdump = "$installDir\.venv\Scripts\sfdump.exe"
+
+          Write-Host "Testing sfdump login (expecting credential error)..."
+
+          # Clear any env vars
+          $env:SF_CLIENT_ID = ""
+          $env:SF_CLIENT_SECRET = ""
+          $env:SF_LOGIN_URL = ""
+
+          # Run login - should fail with missing credentials error
+          $output = (& $sfdump login 2>&1) -join "`n"
+          $exitCode = $LASTEXITCODE
+
+          Write-Host "Output: $output"
+          Write-Host "Exit code: $exitCode"
+
+          # Verify it failed with the expected error (not a crash)
+          if ($output -notmatch "SF_CLIENT_ID|Missing|credentials") {
+              throw "sfdump login didn't produce expected credential error"
+          }
+
+          Write-Host "  [OK] sfdump login runs correctly (fails gracefully without credentials)"
 
       - name: Cleanup
         if: always()
