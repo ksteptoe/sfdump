@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
 
@@ -12,6 +13,9 @@ from .progress import SPINNER_CHARS, ProgressBar, Spinner
 from .utils import ensure_dir, sanitize_filename, sha256_of_file, write_csv
 
 _logger = logging.getLogger(__name__)
+
+# Windows MAX_PATH is 260, but we use 250 to leave buffer for edge cases
+_WINDOWS_MAX_PATH = 250
 
 
 def _order_and_chunk_rows(rows: List[dict], *, kind: str) -> List[dict]:
@@ -102,10 +106,76 @@ def _order_and_chunk_rows(rows: List[dict], *, kind: str) -> List[dict]:
 
 
 def _safe_target(files_root: str, suggested_name: str) -> str:
+    """Build a safe file path, truncating filename if needed for Windows MAX_PATH.
+
+    On Windows, paths longer than 260 characters fail unless long path support
+    is enabled. This function truncates the filename (preserving ID prefix and
+    extension) to fit within the limit.
+    """
     safe = sanitize_filename(suggested_name) or "file"
     # shard into subdirs to avoid huge single directories
     sub = safe[:2].lower()
-    return os.path.join(files_root, sub, safe)
+    target = os.path.join(files_root, sub, safe)
+
+    # On Windows, check if path exceeds MAX_PATH and truncate if needed
+    if sys.platform == "win32" and len(target) > _WINDOWS_MAX_PATH:
+        target = _truncate_path_for_windows(files_root, sub, safe)
+
+    return target
+
+
+def _truncate_path_for_windows(files_root: str, subdir: str, filename: str) -> str:
+    """Truncate filename to fit within Windows MAX_PATH limit.
+
+    Preserves:
+    - The Salesforce ID prefix (e.g., '00P2X00001y8TAKUA2_')
+    - The file extension (e.g., '.pdf')
+    Truncates the middle portion of the name, adding '~' to indicate truncation.
+    """
+    dir_path = os.path.join(files_root, subdir)
+    # Account for path separator
+    available = _WINDOWS_MAX_PATH - len(dir_path) - 1
+
+    if available < 30:
+        # Directory path itself is too long, can't do much
+        _logger.warning("Directory path too long for Windows: %s", dir_path)
+        return os.path.join(dir_path, filename[:available])
+
+    # Split filename into parts: ID prefix, name, extension
+    # Format is typically: {ID}_{name}.{ext} or {ID}_{name}
+    base, ext = os.path.splitext(filename)
+
+    # Find the ID prefix (first underscore separates ID from name)
+    underscore_pos = base.find("_")
+    if underscore_pos > 0:
+        id_prefix = base[: underscore_pos + 1]  # Include the underscore
+        name_part = base[underscore_pos + 1 :]
+    else:
+        id_prefix = ""
+        name_part = base
+
+    # Calculate how much space we have for the name
+    # Format: {id_prefix}{truncated_name}~{ext}
+    reserved = len(id_prefix) + len(ext) + 1  # +1 for truncation marker '~'
+    name_space = available - reserved
+
+    if name_space < 5:
+        # Very tight, just use ID and extension
+        truncated = f"{id_prefix[:available - len(ext)]}{ext}"
+    elif len(name_part) <= name_space:
+        # Name fits, no truncation needed (shouldn't happen but handle it)
+        truncated = filename
+    else:
+        # Truncate the name and add marker
+        truncated = f"{id_prefix}{name_part[:name_space]}~{ext}"
+
+    _logger.debug(
+        "Truncated filename for Windows: %s -> %s (%d chars)",
+        filename,
+        truncated,
+        len(os.path.join(dir_path, truncated)),
+    )
+    return os.path.join(dir_path, truncated)
 
 
 def dump_content_versions(
