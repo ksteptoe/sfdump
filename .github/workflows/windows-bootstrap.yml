@@ -165,7 +165,7 @@ jobs:
           Write-Host "Exit code: $exitCode"
 
           # Verify it failed with the expected error (not a crash)
-          if ($output -notmatch "SF_CLIENT_ID|Missing|credentials") {
+          if ($output -notmatch "SF_CLIENT_ID|SF_LOGIN_URL|Missing|credentials") {
               throw "sfdump login didn't produce expected credential error"
           }
 
@@ -174,6 +174,9 @@ jobs:
           }
 
           Write-Host "  [OK] sfdump login runs correctly (fails gracefully without credentials)"
+
+          # Reset exit code so the step passes
+          exit 0
 
   # Full end-to-end test: download release, install, and verify
   test-full-e2e:
@@ -342,11 +345,14 @@ jobs:
           Write-Host "Exit code: $exitCode"
 
           # Verify it failed with the expected error (not a crash)
-          if ($output -notmatch "SF_CLIENT_ID|Missing|credentials") {
+          if ($output -notmatch "SF_CLIENT_ID|SF_LOGIN_URL|Missing|credentials") {
               throw "sfdump login didn't produce expected credential error"
           }
 
           Write-Host "  [OK] sfdump login runs correctly (fails gracefully without credentials)"
+
+          # Reset exit code so the step passes
+          exit 0
 
       - name: Cleanup
         if: always()
