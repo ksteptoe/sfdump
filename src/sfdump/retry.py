@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from .exceptions import RateLimitError
 
-DEFAULT_MAX_WORKERS = 8
+DEFAULT_MAX_WORKERS = 16
 
 _logger = logging.getLogger(__name__)
 

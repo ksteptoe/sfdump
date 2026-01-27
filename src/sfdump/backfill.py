@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from .exceptions import RateLimitError
 
-DEFAULT_MAX_WORKERS = 8
+DEFAULT_MAX_WORKERS = 16
 
 if TYPE_CHECKING:
     from .api import SalesforceAPI

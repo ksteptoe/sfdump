@@ -19,6 +19,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Iterable, Optional, Tuple
 
@@ -284,6 +285,87 @@ def _download_content_version_versiondata(
     return _request_bytes(url, tp)
 
 
+def _process_single_file(
+    *,
+    row: dict,
+    tp: TokenProvider,
+    api_version: str,
+    export_root: Path,
+    files_root: Path,
+    dry_run: bool,
+) -> Tuple[dict, str, Optional[str], Optional[int]]:
+    """
+    Process a single file download.
+
+    Returns: (row, status, local_path, bytes_downloaded)
+      - status: "skip_unsupported", "skip_exists", "dry_run", "ok", "fail_resolve", "fail_download"
+      - local_path: the relative path if downloaded/exists, else None
+      - bytes_downloaded: size if downloaded, else None
+    """
+    file_id = str(row.get("file_id") or "").strip()
+    name = str(row.get("file_name") or "").strip()
+    ext = str(row.get("file_extension") or "").strip()
+
+    # Resolve version ID
+    try:
+        if file_id.startswith("069"):
+            ver_id = _get_latest_published_version_id(
+                instance_url=tp.instance_url,
+                tp=tp,
+                api_version=api_version,
+                content_document_id=file_id,
+            )
+        elif file_id.startswith("068"):
+            ver_id = file_id
+        else:
+            return (row, "skip_unsupported", None, None)
+    except urllib.error.HTTPError as e:
+        row["_error"] = f"HTTP {e.code}: {e.reason}"
+        return (row, "fail_resolve", None, None)
+    except Exception as e:
+        row["_error"] = str(e)
+        return (row, "fail_resolve", None, None)
+
+    # Build paths
+    subdir = files_root / file_id[:2]
+    subdir.mkdir(parents=True, exist_ok=True)
+
+    fname = _safe_filename(f"{file_id}_{name}", ext)
+    rel_path = Path("files") / file_id[:2] / fname
+    abs_path = export_root / rel_path
+    local_path_str = str(rel_path).replace("/", "\\")
+
+    # Check if already exists
+    if abs_path.exists():
+        row["local_path"] = local_path_str
+        return (row, "skip_exists", local_path_str, None)
+
+    # Dry run
+    if dry_run:
+        row["_ver_id"] = ver_id
+        return (row, "dry_run", str(rel_path), None)
+
+    # Download
+    try:
+        data = _download_content_version_versiondata(
+            instance_url=tp.instance_url,
+            tp=tp,
+            api_version=api_version,
+            content_version_id=ver_id,
+        )
+        abs_path.write_bytes(data)
+        row["local_path"] = local_path_str
+        return (row, "ok", local_path_str, len(data))
+    except urllib.error.HTTPError as e:
+        row["_error"] = f"HTTP {e.code}: {e.reason}"
+        row["_ver_id"] = ver_id
+        return (row, "fail_download", None, None)
+    except Exception as e:
+        row["_error"] = str(e)
+        row["_ver_id"] = ver_id
+        return (row, "fail_download", None, None)
+
+
 def run_backfill(
     *,
     export_root: Path,
@@ -292,6 +374,7 @@ def run_backfill(
     dry_run: bool = False,
     api_version: str = "60.0",
     access_token: str | None = None,
+    max_workers: int = 16,
 ) -> int:
     _configure_stdio()
 
@@ -383,72 +466,57 @@ def run_backfill(
     todo = missing if limit <= 0 else missing[: int(limit)]
     _safe_print(
         f"Will process: {len(todo)} "
-        f"({'limit=0 -> no limit' if limit <= 0 else f'limit={limit}'}, dry_run={dry_run})"
+        f"({'limit=0 -> no limit' if limit <= 0 else f'limit={limit}'}, dry_run={dry_run}, "
+        f"workers={max_workers})"
     )
 
     downloaded = 0
     failed = 0
+    skipped = 0
 
-    for r in todo:
-        file_id = str(r.get("file_id") or "").strip()
-        name = str(r.get("file_name") or "").strip()
-        ext = str(r.get("file_extension") or "").strip()
-
-        try:
-            if file_id.startswith("069"):
-                ver_id = _get_latest_published_version_id(
-                    instance_url=tp.instance_url,
-                    tp=tp,
-                    api_version=ver,
-                    content_document_id=file_id,
-                )
-            elif file_id.startswith("068"):
-                ver_id = file_id
-            else:
-                _safe_print(f"SKIP unsupported file_id: {file_id}")
-                continue
-        except urllib.error.HTTPError as e:
-            failed += 1
-            _safe_print(f"FAIL resolve {file_id} HTTP {e.code}: {e.reason}")
-            continue
-        except Exception as e:
-            failed += 1
-            _safe_print(f"FAIL resolve {file_id}: {e}")
-            continue
-
-        subdir = files_root / file_id[:2]
-        subdir.mkdir(parents=True, exist_ok=True)
-
-        fname = _safe_filename(f"{file_id}_{name}", ext)
-        rel_path = Path("files") / file_id[:2] / fname
-        abs_path = export_root / rel_path
-
-        if abs_path.exists():
-            r["local_path"] = str(rel_path).replace("/", "\\")
-            _safe_print(f"SKIP exists -> set local_path: {file_id} -> {r['local_path']}")
-            continue
-
-        if dry_run:
-            _safe_print(f"DRY-RUN would download: {file_id} (via {ver_id}) -> {rel_path}")
-            continue
-
-        try:
-            data = _download_content_version_versiondata(
-                instance_url=tp.instance_url,
+    # Process files in parallel using ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                _process_single_file,
+                row=r,
                 tp=tp,
                 api_version=ver,
-                content_version_id=ver_id,
-            )
-            abs_path.write_bytes(data)
-            r["local_path"] = str(rel_path).replace("/", "\\")
-            downloaded += 1
-            _safe_print(f"OK {file_id} (via {ver_id}) ({len(data)} bytes) -> {r['local_path']}")
-        except urllib.error.HTTPError as e:
-            failed += 1
-            _safe_print(f"FAIL download {file_id} (via {ver_id}) HTTP {e.code}: {e.reason}")
-        except Exception as e:
-            failed += 1
-            _safe_print(f"FAIL download {file_id} (via {ver_id}): {e}")
+                export_root=export_root,
+                files_root=files_root,
+                dry_run=dry_run,
+            ): r
+            for r in todo
+        }
+
+        for future in as_completed(futures):
+            row, status, local_path, size = future.result()
+            file_id = str(row.get("file_id") or "").strip()
+            ver_id = row.get("_ver_id", "")
+
+            if status == "skip_unsupported":
+                _safe_print(f"SKIP unsupported file_id: {file_id}")
+                skipped += 1
+            elif status == "skip_exists":
+                _safe_print(f"SKIP exists -> set local_path: {file_id} -> {local_path}")
+                skipped += 1
+            elif status == "dry_run":
+                _safe_print(f"DRY-RUN would download: {file_id} (via {ver_id}) -> {local_path}")
+            elif status == "ok":
+                downloaded += 1
+                _safe_print(f"OK {file_id} (via {ver_id}) ({size} bytes) -> {local_path}")
+            elif status == "fail_resolve":
+                failed += 1
+                _safe_print(f"FAIL resolve {file_id}: {row.get('_error', 'unknown')}")
+            elif status == "fail_download":
+                failed += 1
+                _safe_print(
+                    f"FAIL download {file_id} (via {ver_id}): {row.get('_error', 'unknown')}"
+                )
+
+            # Clean up internal tracking fields
+            row.pop("_error", None)
+            row.pop("_ver_id", None)
 
     if not dry_run:
         tmp = index_path.with_suffix(".csv.tmp")
@@ -480,6 +548,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--dry-run", action="store_true", help="Do not download; just report what would be done."
     )
+    ap.add_argument(
+        "--max-workers",
+        type=int,
+        default=16,
+        help="Number of parallel download workers (default: 16)",
+    )
     args = ap.parse_args(argv)
 
     return run_backfill(
@@ -489,6 +563,7 @@ def main(argv: list[str] | None = None) -> int:
         dry_run=bool(args.dry_run),
         api_version=str(args.api_version),
         access_token=args.access_token or None,
+        max_workers=int(args.max_workers),
     )
 
 

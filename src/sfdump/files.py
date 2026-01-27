@@ -113,7 +113,7 @@ def dump_content_versions(
     out_dir: str,
     *,
     where: Optional[str] = None,
-    max_workers: int = 8,
+    max_workers: int = 16,
 ) -> Dict[str, int | str | None]:
     """Download latest ContentVersion binaries + write metadata and links CSVs.
 
@@ -353,7 +353,7 @@ def dump_attachments(
     out_dir: str,
     *,
     where: Optional[str] = None,
-    max_workers: int = 8,
+    max_workers: int = 16,
 ) -> Dict[str, int | str | None]:
     """Download legacy Attachment binaries + write metadata CSV.
 
