@@ -56,29 +56,13 @@ jobs:
 
           Write-Host "Checking sfdump installation..."
 
-          # Debug: show pip list
-          Write-Host "pip list output:"
-          & $venvPython -m pip list
-
-          Write-Host ""
-          Write-Host "pip show sfdump output:"
-          $pipShow = & $venvPython -m pip show sfdump 2>&1
-          Write-Host $pipShow
-
-          Write-Host ""
-          Write-Host "Scripts directory contents:"
-          Get-ChildItem "${{ github.workspace }}\.venv\Scripts" | Where-Object { $_.Name -like "sf*" }
-
-          if ($pipShow -notmatch "Name: sfdump") {
-              throw "sfdump not found in pip show output"
-          }
-          Write-Host "  [OK] sfdump installed in venv"
-
+          # Check sfdump.exe exists
           if (-not (Test-Path $sfdump)) {
               throw "sfdump.exe not found at: $sfdump"
           }
           Write-Host "  [OK] sfdump.exe exists"
 
+          # Check sfdump version works
           $version = & $sfdump --version
           Write-Host "  [OK] sfdump version: $version"
 
