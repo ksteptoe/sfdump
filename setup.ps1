@@ -116,6 +116,18 @@ function Test-DiskSpace {
 }
 
 function Test-PythonInstalled {
+    # First check PATH (important for CI where Python is set up via actions/setup-python)
+    # This also handles cases where user has Python in PATH already
+    try {
+        $pythonPath = (Get-Command python -ErrorAction SilentlyContinue).Source
+        if ($pythonPath -and -not ($pythonPath -like "*WindowsApps*")) {
+            $version = & python --version 2>&1
+            if ($version -match "Python (\d+\.\d+\.\d+)") {
+                return $pythonPath
+            }
+        }
+    } catch {}
+
     # Check common Python locations (skip WindowsApps stub)
     $pythonPaths = @(
         "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
@@ -140,17 +152,6 @@ function Test-PythonInstalled {
             $pyVersion = & py --version 2>&1
             if ($LASTEXITCODE -eq 0 -and $pyVersion -match "Python \d+\.\d+") {
                 return "py"
-            }
-        }
-    } catch {}
-
-    # Try python but exclude WindowsApps
-    try {
-        $pythonPath = (Get-Command python -ErrorAction SilentlyContinue).Source
-        if ($pythonPath -and -not ($pythonPath -like "*WindowsApps*")) {
-            $version = & python --version 2>&1
-            if ($version -match "Python (\d+\.\d+\.\d+)") {
-                return $pythonPath
             }
         }
     } catch {}
