@@ -133,7 +133,7 @@ jobs:
           $sfdump = "${{ github.workspace }}\.venv\Scripts\sfdump.exe"
           $output = (& $sfdump login --help) -join "`n"
           Write-Host $output
-          if ($output -notmatch "Salesforce") { throw "login --help missing expected content" }
+          if ($output -notmatch "token") { throw "login --help missing expected content" }
           Write-Host "  [OK] sfdump login --help works"
 
       - name: Test sfdump files --help
@@ -142,7 +142,7 @@ jobs:
           $sfdump = "${{ github.workspace }}\.venv\Scripts\sfdump.exe"
           $output = (& $sfdump files --help) -join "`n"
           Write-Host $output
-          if ($output -notmatch "export") { throw "files --help missing expected content" }
+          if ($output -notmatch "Download") { throw "files --help missing expected content" }
           Write-Host "  [OK] sfdump files --help works"
 
   # Full end-to-end test: download release, install, and verify
@@ -249,12 +249,12 @@ jobs:
 
           # Test login --help
           $loginHelp = (& $sfdump login --help) -join "`n"
-          if ($loginHelp -notmatch "credentials") { throw "login --help missing content" }
+          if ($loginHelp -notmatch "token") { throw "login --help missing content" }
           Write-Host "  [OK] login --help works"
 
           # Test files --help
           $filesHelp = (& $sfdump files --help) -join "`n"
-          if ($filesHelp -notmatch "Attachment") { throw "files --help missing content" }
+          if ($filesHelp -notmatch "Download") { throw "files --help missing content" }
           Write-Host "  [OK] files --help works"
 
           # Test build-db --help
