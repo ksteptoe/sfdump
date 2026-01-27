@@ -55,33 +55,15 @@ This is the most important step. You need credentials from your Salesforce admin
 
 ### What to Request from IT
 
-Contact your Salesforce administrator and ask for **Connected App credentials** for sfdump. They will provide:
+Contact your Salesforce administrator and ask for **Connected App credentials** configured for the **Client Credentials OAuth flow**. They will provide:
 
 | Credential | What It Looks Like | Example |
 |------------|-------------------|---------|
-| **Consumer Key** (Client ID) | Long alphanumeric string | `3MVG9...ABC123` |
-| **Consumer Secret** | Shorter alphanumeric string | `8B7F2...XYZ789` |
-| **Your Username** | Your Salesforce login email | `jane.smith@company.com` |
-| **Your Password** | Your Salesforce password | (your normal login password) |
-| **Security Token** | 25-character code sent via email | `aB3cD5eF7gH9iJ1kL3mN5oP7q` |
+| **Client ID** (Consumer Key) | Long alphanumeric string | `3MVG9...vvxeVcp` |
+| **Client Secret** (Consumer Secret) | Long alphanumeric string | `D6BE...CF8091` |
+| **Login URL** | Your Salesforce instance URL | `https://yourcompany.my.salesforce.com` |
 
-### About the Security Token
-
-Salesforce requires a **security token** in addition to your password. If you don't have one:
-
-1. Log into Salesforce in your web browser
-2. Click your profile picture (top right) → **Settings**
-3. In the left sidebar, find **My Personal Information** → **Reset My Security Token**
-4. Click **Reset Security Token**
-5. Check your email — Salesforce will send you a new token
-
-**Important:** When entering your password during setup, you must append the security token directly after your password with no spaces:
-
-```
-Password:     MyPassword123
-Token:        aB3cD5eF7gH9iJ1kL3mN5oP7q
-You enter:    MyPassword123aB3cD5eF7gH9iJ1kL3mN5oP7q
-```
+**Note:** This uses OAuth Client Credentials flow — no username or password is required. Your IT department configures the Connected App to authenticate directly.
 
 ### Running Setup
 
@@ -96,11 +78,11 @@ You'll be prompted to enter each credential. The setup wizard saves them to a `.
 **What the .env file looks like:**
 
 ```
-SF_CLIENT_ID=3MVG9...your_consumer_key...
-SF_CLIENT_SECRET=8B7F2...your_consumer_secret...
-SF_USERNAME=jane.smith@company.com
-SF_PASSWORD=MyPassword123aB3cD5eF7gH9iJ1kL3mN5oP7q
-SF_HOST=login.salesforce.com
+SF_AUTH_FLOW=client_credentials
+SF_CLIENT_ID=3MVG9...your_client_id...
+SF_CLIENT_SECRET=D6BE...your_client_secret...
+SF_LOGIN_URL=https://yourcompany.my.salesforce.com
+SF_API_VERSION=v60.0
 ```
 
 ### Test Your Connection
@@ -130,13 +112,16 @@ Connection successful! Ready to export.
 | Error | Solution |
 |-------|----------|
 | `SF_CLIENT_ID not set` | Run `sf setup` to enter your credentials |
-| `Invalid client credentials` | Double-check Consumer Key and Secret with IT |
-| `Invalid username or password` | Make sure password includes security token (no space) |
-| `INVALID_LOGIN: Invalid Password` | Reset your security token and try again |
-| `Connection failed` | Check your network connection and verify `SF_HOST` is correct |
-| `Connection refused` | Check if `SF_HOST` should be `test.salesforce.com` (for sandbox) |
+| `SF_LOGIN_URL not set` | Add your Salesforce instance URL to `.env` |
+| `Invalid client credentials` | Double-check Client ID and Client Secret with IT |
+| `Token request failed (400)` | Verify the Connected App is configured for Client Credentials flow |
+| `Token request failed (401)` | Client ID or Secret is incorrect |
+| `Connection failed` | Check your network connection and verify `SF_LOGIN_URL` is correct |
 
-**Still stuck?** Ask your IT department to verify the Connected App is configured correctly and your user has API access enabled.
+**Still stuck?** Ask your IT department to verify:
+1. The Connected App is configured for **Client Credentials** OAuth flow
+2. The app has the required API permissions (e.g., `api`, `refresh_token`)
+3. A "run as" user is configured with appropriate Salesforce data access
 
 ---
 

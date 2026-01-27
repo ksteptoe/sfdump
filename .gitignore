@@ -50,6 +50,7 @@ cover/*
 MANIFEST
 
 # Per-project virtualenvs
+
 .venv*/
 .conda*/
 .miniconda/
@@ -60,6 +61,7 @@ src/sfdump/_version.py
 
 # DO NOT STORE CREDS
 .env
+.env.ex
 
 # Ignore Makefile Stamps
 /.stamps/*
