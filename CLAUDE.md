@@ -83,12 +83,11 @@ Key commands: `login`, `query`, `files`, `verify-files`, `retry-missing`, `analy
 
 ### Environment Variables (.env)
 ```env
+SF_AUTH_FLOW=client_credentials
 SF_CLIENT_ID=<consumer_key>
 SF_CLIENT_SECRET=<consumer_secret>
-SF_HOST=login.salesforce.com
-SF_USERNAME=user@example.com
-SF_PASSWORD=<password+token>
-SF_API_VERSION=v62.0  # optional
+SF_LOGIN_URL=https://yourcompany.my.salesforce.com
+SF_API_VERSION=v60.0  # optional, defaults to v60.0
 ```
 
 ### Code Style
@@ -125,4 +124,3 @@ For non-technical Windows users, there's a menu-driven installer:
 - `install.bat` / `setup.ps1` - Interactive setup with Python installation, disk space check, .env configuration
 - Targets 40GB+ free disk space for Salesforce exports
 - No admin rights required (per-user Python install)
-

@@ -58,14 +58,15 @@ If the quick install doesn't work, follow these steps:
 
 ## What You'll Need
 
-Before using sfdump, you'll need **Salesforce credentials** from your administrator:
+Before using sfdump, you'll need **Connected App credentials** from your Salesforce administrator:
 
 | What to ask for | Where it goes |
 |-----------------|---------------|
-| Consumer Key | `SF_CLIENT_ID` in .env file |
-| Consumer Secret | `SF_CLIENT_SECRET` in .env file |
-| Your Salesforce username | `SF_USERNAME` in .env file |
-| Your Salesforce password | `SF_PASSWORD` in .env file |
+| Client ID (Consumer Key) | `SF_CLIENT_ID` in .env file |
+| Client Secret (Consumer Secret) | `SF_CLIENT_SECRET` in .env file |
+| Your Salesforce URL | `SF_LOGIN_URL` in .env file |
+
+**Note:** sfdump uses OAuth Client Credentials flow — no username or password is needed. Ask your admin to set up a Connected App with Client Credentials authentication.
 
 The installer will help you create and fill in the `.env` configuration file.
 
