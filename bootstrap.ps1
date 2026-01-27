@@ -14,7 +14,9 @@
 .NOTES
     - Downloads the latest RELEASE from GitHub (stable, tested version)
     - Falls back to main branch if no releases exist
-    - Installs to user's home directory (no admin required)
+    - Installs to current directory by default (prompts for confirmation)
+    - Checks for existing installations in home directory
+    - No admin required
     - Automatically runs the setup wizard
 #>
 
@@ -22,7 +24,8 @@ $ErrorActionPreference = "Stop"
 
 # Configuration
 $GitHubRepo = "ksteptoe/sfdump"
-$InstallDir = "$env:USERPROFILE\sfdump"
+$DefaultInstallDir = (Get-Location).Path
+$HomeInstallDir = "$env:USERPROFILE\sfdump"
 
 function Write-Step {
     param([string]$Message)
@@ -55,16 +58,47 @@ Write-Host @"
 
 This will download and install sfdump from GitHub.
 
-  Source:  https://github.com/$GitHubRepo
-  Install: $InstallDir
+  Source: https://github.com/$GitHubRepo
 
 "@
 
-# Check if already installed
-if (Test-Path "$InstallDir\setup.ps1") {
-    Write-Host "sfdump is already installed at: $InstallDir" -ForegroundColor Yellow
+# Check for existing installations
+$existingInstalls = @()
+if (Test-Path "$HomeInstallDir\setup.ps1") {
+    $existingInstalls += $HomeInstallDir
+}
+if (($DefaultInstallDir -ne $HomeInstallDir) -and (Test-Path "$DefaultInstallDir\setup.ps1")) {
+    $existingInstalls += $DefaultInstallDir
+}
+
+if ($existingInstalls.Count -gt 0) {
+    Write-Host "Existing installation(s) found:" -ForegroundColor Yellow
+    foreach ($path in $existingInstalls) {
+        Write-Host "  - $path" -ForegroundColor Yellow
+    }
     Write-Host ""
-    $choice = Read-Host "Reinstall/update? (Y/n)"
+}
+
+# Prompt for install location with current directory as default
+Write-Host "Where would you like to install sfdump?" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Default: $DefaultInstallDir"
+Write-Host ""
+$customPath = Read-Host "Press Enter for default, or type a different path"
+
+if ([string]::IsNullOrWhiteSpace($customPath)) {
+    $InstallDir = $DefaultInstallDir
+} else {
+    $InstallDir = $customPath.Trim()
+}
+
+Write-Host ""
+Write-Host "  Install location: $InstallDir" -ForegroundColor Green
+Write-Host ""
+
+# Check if this location already has sfdump
+if (Test-Path "$InstallDir\setup.ps1") {
+    $choice = Read-Host "sfdump already exists here. Reinstall/update? (Y/n)"
     if ($choice -notmatch "^[Yy]?$") {
         Write-Host "`nTo run the existing installer:"
         Write-Host "  cd `"$InstallDir`"" -ForegroundColor White

@@ -294,7 +294,10 @@ To get these credentials, ask your Salesforce administrator for:
   2. Consumer Secret   -> SF_CLIENT_SECRET
      (From the same Connected App)
 
-  3. Your Salesforce login username and password
+  3. Your Salesforce instance URL -> SF_LOGIN_URL
+     (e.g., https://yourcompany.my.salesforce.com)
+
+The Connected App must be configured for OAuth Client Credentials flow.
 
 "@ -ForegroundColor Yellow
 
@@ -309,19 +312,18 @@ To get these credentials, ask your Salesforce administrator for:
 # IMPORTANT: Keep this file private! Do not share or commit to git.
 # ============================================================
 
+# Authentication flow (client_credentials is recommended for automation)
+SF_AUTH_FLOW=client_credentials
+
 # Connected App credentials (get these from your Salesforce admin)
 SF_CLIENT_ID=paste_your_consumer_key_here
 SF_CLIENT_SECRET=paste_your_consumer_secret_here
 
-# Salesforce instance (use test.salesforce.com for sandboxes)
-SF_HOST=login.salesforce.com
+# Your Salesforce instance URL (use test.salesforce.com for sandboxes)
+SF_LOGIN_URL=https://yourcompany.my.salesforce.com
 
-# Your Salesforce login credentials
-SF_USERNAME=your.email@company.com
-SF_PASSWORD=your_password_and_security_token
-
-# Optional: API version (default is v62.0)
-# SF_API_VERSION=v62.0
+# Optional: API version (default is v60.0)
+# SF_API_VERSION=v60.0
 "@
         $envTemplate | Out-File -FilePath $envFile -Encoding UTF8
         Write-Success "Created template .env file"
