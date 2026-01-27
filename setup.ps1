@@ -57,7 +57,14 @@ function Write-Err {
 }
 
 function Show-Banner {
-    Clear-Host
+    # Skip Clear-Host in non-interactive mode (CI) to avoid console errors
+    if (-not $Install) {
+        try {
+            Clear-Host
+        } catch {
+            # Ignore errors if no console available
+        }
+    }
     Write-Host @"
 ============================================================
              sfdump - Salesforce Data Export Tool
