@@ -1,0 +1,647 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Screenshot Guide for Documentation - sfdump Documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">sfdump Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  
+  <span class="sidebar-brand-text">sfdump Documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="user-guide/index.html">User Guide</a><input aria-label="Toggle navigation of User Guide" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/getting-started.html">Getting Started</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/finding_documents.html">Finding Documents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/faq.html">FAQ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/database_viewer.html">Database Viewer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/exporting_files.html">Exporting Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/verifying_and_retrying.html">Verifying and Retrying</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/generating_reports.html">Generating Reports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user-guide/interpreting_reports.html">Interpreting Reports</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="developer-guide/index.html">Developer Guide</a><input aria-label="Toggle navigation of Developer Guide" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="developer-guide/architecture_overview.html">Architecture Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="developer-guide/modules_and_flow.html">Modules and Data Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="developer-guide/limits_chunking_resume.html">Limits, Chunking and Resume Strategy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="developer-guide/indexing_logic.html">Indexing Logic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="developer-guide/cli_reference.html">CLI Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="developer-guide/redaction.html">Redaction System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="developer-guide/testing_and_ci.html">Testing and CI</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="admin-finance/index.html">Admin &amp; Finance Documentation</a><input aria-label="Toggle navigation of Admin &amp; Finance Documentation" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="admin-finance/finance_user_guide.html">Finance User Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="admin-finance/audit_completeness.html">Audit Completeness</a></li>
+<li class="toctree-l2"><a class="reference internal" href="admin-finance/internal_vs_redacted_reports.html">Internal vs Redacted Reports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="admin-finance/retention_recommendations.html">Retention Recommendations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="admin-finance/audit_results_template.html">Audit Results &amp; Data Completeness (Template)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="admin-finance/audit_completeness_results.html">Audit Completeness — Actual Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="admin-finance/audit_completeness_results.html#audit-summary-statistics">Audit Summary Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="admin-finance/cfo_detailed_report.html">Salesforce Offboarding – CFO Detailed Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="admin-finance/cfo_report_dynamic.html">CFO Detailed Audit Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="admin-finance/cfo_report_dynamic.html#cfo-forensic-audit-report">CFO Forensic Audit Report</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="reference/index.html">Reference</a><input aria-label="Toggle navigation of Reference" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="reference/changelog.html">Changelog</a></li>
+<li class="toctree-l2"><a class="reference internal" href="reference/contributing.html">Contributing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="reference/license.html">License</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/SCREENSHOT_GUIDE.md.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="screenshot-guide-for-documentation">
+<h1>Screenshot Guide for Documentation<a class="headerlink" href="#screenshot-guide-for-documentation" title="Link to this heading">¶</a></h1>
+<p>This guide lists all screenshots needed for the documentation. Please capture these screenshots while the viewer is running and save them to <code class="docutils literal notranslate"><span class="pre">docs/_static/images/viewer/</span></code>.</p>
+<section id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">¶</a></h2>
+<ol class="arabic">
+<li><p>Launch the viewer:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sfdump<span class="w"> </span>db-viewer<span class="w"> </span>--db<span class="w"> </span>exports/export-2025-12-31/meta/sfdata.db
+</pre></div>
+</div>
+</li>
+<li><p>Open browser to <a class="reference external" href="http://localhost:8503">http://localhost:8503</a></p></li>
+<li><p>Prepare for screenshots:</p>
+<ul class="simple">
+<li><p>Use a clean browser window (close extra tabs for clarity)</p></li>
+<li><p>Use default zoom level (100%)</p></li>
+<li><p>Capture full browser window OR just the viewer interface (your choice)</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="screenshot-list">
+<h2>Screenshot List<a class="headerlink" href="#screenshot-list" title="Link to this heading">¶</a></h2>
+<section id="section-1-getting-started">
+<h3>Section 1: Getting Started<a class="headerlink" href="#section-1-getting-started" title="Link to this heading">¶</a></h3>
+<p><strong>01-launch.png</strong> - Terminal showing viewer starting</p>
+<ul class="simple">
+<li><p>Show the terminal/command prompt</p></li>
+<li><p>Include the command: <code class="docutils literal notranslate"><span class="pre">sfdump</span> <span class="pre">db-viewer</span> <span class="pre">--db</span> <span class="pre">...</span></code></p></li>
+<li><p>Show the output with URLs (<a class="reference external" href="http://localhost:8503">http://localhost:8503</a>)</p></li>
+<li><p>Crop to show just the relevant terminal output</p></li>
+</ul>
+<p><strong>02-interface.png</strong> - Main viewer interface</p>
+<ul class="simple">
+<li><p>Open the viewer in browser</p></li>
+<li><p>Select any Account (e.g., search for “Acme Corp”)</p></li>
+<li><p>Show all three panels: Sidebar, Record List, Details</p></li>
+<li><p>This is the “overview” shot showing the whole interface</p></li>
+</ul>
+<p><strong>03-select-object.png</strong> - Object dropdown</p>
+<ul class="simple">
+<li><p>Click the Object dropdown in sidebar</p></li>
+<li><p>Capture the dropdown menu expanded</p></li>
+<li><p>Show various objects available (Account, Opportunity, Invoice, etc.)</p></li>
+</ul>
+</section>
+<section id="section-2-browsing-records">
+<h3>Section 2: Browsing Records<a class="headerlink" href="#section-2-browsing-records" title="Link to this heading">¶</a></h3>
+<p><strong>04-search-records.png</strong> - Searching for records</p>
+<ul class="simple">
+<li><p>In sidebar search box, type “Acme Corp”</p></li>
+<li><p>Show the filtered results in the middle panel</p></li>
+<li><p>Highlight that results update as you type</p></li>
+</ul>
+<p><strong>05-record-details.png</strong> - Account record details tab</p>
+<ul class="simple">
+<li><p>Select a Acme Corp account</p></li>
+<li><p>Show the Details tab selected</p></li>
+<li><p>Display showing account fields (Name, Type, etc.)</p></li>
+</ul>
+</section>
+<section id="section-3-navigating-relationships">
+<h3>Section 3: Navigating Relationships<a class="headerlink" href="#section-3-navigating-relationships" title="Link to this heading">¶</a></h3>
+<p><strong>06-children-tab.png</strong> - Children tab with relationships</p>
+<ul class="simple">
+<li><p>Still viewing a Acme Corp Account</p></li>
+<li><p>Click the Children tab</p></li>
+<li><p>Expand one relationship (e.g., Opportunity)</p></li>
+<li><p>Show the relationship name and count</p></li>
+</ul>
+<p><strong>07-navigate-down.png</strong> - Selecting and opening a child</p>
+<ul class="simple">
+<li><p>In expanded Opportunity relationship</p></li>
+<li><p>Show the dropdown with child records</p></li>
+<li><p>Show the “Open” button</p></li>
+<li><p>Optional: Include breadcrumbs at top</p></li>
+</ul>
+<p><strong>08-contextual-message.png</strong> - Closed Lost opportunity message</p>
+<ul>
+<li><p>Navigate to Opportunity: Acme Corp_BE-NPI-SC_Q2_2020</p></li>
+<li><p>Click Children tab</p></li>
+<li><p>Expand c2g__codaInvoice__c relationship</p></li>
+<li><p><strong>Capture the contextual message</strong>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">**</span><span class="n">Note</span><span class="p">:</span><span class="o">**</span> <span class="n">No</span> <span class="n">invoices</span> <span class="n">found</span><span class="o">.</span> <span class="n">This</span> <span class="ow">is</span> <span class="n">expected</span> <span class="k">for</span> <span class="n">Closed</span> <span class="n">Lost</span> <span class="n">opportunities</span>
+<span class="p">(</span><span class="n">Stage</span><span class="p">:</span> <span class="n">Closed</span> <span class="n">Lost</span><span class="p">),</span> <span class="k">as</span> <span class="n">they</span> <span class="n">typically</span> <span class="n">don</span><span class="s1">&#39;t generate invoices.</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</section>
+<section id="section-4-document-explorer">
+<h3>Section 4: Document Explorer<a class="headerlink" href="#section-4-document-explorer" title="Link to this heading">¶</a></h3>
+<p><strong>09-document-explorer.png</strong> - Document Explorer main interface</p>
+<ul class="simple">
+<li><p>Click Document Explorer tab</p></li>
+<li><p>Show the search interface BEFORE entering search</p></li>
+<li><p>Highlight: “Search by Account or Opportunity” section</p></li>
+<li><p>Show all the filter options</p></li>
+</ul>
+<p><strong>10-search-account.png</strong> - Search by Account (Acme Corp)</p>
+<ul class="simple">
+<li><p>Type “Acme Corp” in Account Name field</p></li>
+<li><p>Show “Matches: 65” (or whatever number shows)</p></li>
+<li><p>Show results table with account_name and opp_name columns visible</p></li>
+<li><p>Make sure columns are wide enough to read</p></li>
+</ul>
+<p><strong>11-search-opportunity.png</strong> - Search by Opportunity (Beta Industries)</p>
+<ul class="simple">
+<li><p>Clear Account search</p></li>
+<li><p>Type “Beta Industries” in Opportunity Name field</p></li>
+<li><p>Show “Matches: 75” (or whatever number)</p></li>
+<li><p>Results table visible</p></li>
+</ul>
+<p><strong>12-pdf-preview.png</strong> - PDF preview showing document</p>
+<ul class="simple">
+<li><p>Search for “RFP Response Acme”</p></li>
+<li><p>Select the document from dropdown</p></li>
+<li><p>Scroll down to show the PDF preview</p></li>
+<li><p>Capture the PDF rendering inline (at least first page visible)</p></li>
+</ul>
+<p><strong>13-open-parent.png</strong> - Open parent record button</p>
+<ul class="simple">
+<li><p>With a document selected</p></li>
+<li><p>Highlight the “Open parent record” button</p></li>
+<li><p>Optional: Show the parent info (Opportunity name) next to it</p></li>
+</ul>
+</section>
+<section id="section-5-finding-documents-simplified-guide">
+<h3>Section 5: Finding Documents (Simplified Guide)<a class="headerlink" href="#section-5-finding-documents-simplified-guide" title="Link to this heading">¶</a></h3>
+<p><strong>user-01-home.png</strong> - Viewer home page (simple view)</p>
+<ul class="simple">
+<li><p>Fresh viewer page</p></li>
+<li><p>No object selected or just default view</p></li>
+<li><p>Clean, uncluttered shot for beginners</p></li>
+</ul>
+<p><strong>user-02-doc-explorer-tab.png</strong> - Document Explorer tab location</p>
+<ul class="simple">
+<li><p>Highlight/circle where the “Document Explorer” tab is</p></li>
+<li><p>Make it obvious for naive users where to click</p></li>
+</ul>
+<p><strong>user-03-account-search.png</strong> - Account Name search box</p>
+<ul class="simple">
+<li><p>Close-up of the “Account Name” input field</p></li>
+<li><p>Maybe show cursor in the field or partially typed name</p></li>
+<li><p>Make it clear this is where to type</p></li>
+</ul>
+<p><strong>user-04-search-results.png</strong> - Search results after typing Acme Corp</p>
+<ul class="simple">
+<li><p>Results showing for Acme Corp</p></li>
+<li><p>Clear view of the “Matches: 73” counter</p></li>
+<li><p>Results table visible with account_name column</p></li>
+</ul>
+<p><strong>user-05-pdf-preview.png</strong> - PDF preview (user-friendly angle)</p>
+<ul class="simple">
+<li><p>Similar to #12 but emphasize the ease of use</p></li>
+<li><p>Show full document preview</p></li>
+<li><p>Maybe zoom in on the PDF content</p></li>
+</ul>
+<p><strong>user-06-opp-search.png</strong> - Opportunity Name search box</p>
+<ul class="simple">
+<li><p>Similar to user-03 but for Opportunity field</p></li>
+<li><p>Show where to type opportunity name</p></li>
+</ul>
+<p><strong>user-07-invoice-search.png</strong> - Finding specific invoice</p>
+<ul class="simple">
+<li><p>Sidebar showing Invoice object selected</p></li>
+<li><p>Search box with invoice number typed</p></li>
+<li><p>Invoice selected in list</p></li>
+</ul>
+<p><strong>user-08-contract-search.png</strong> - Finding contracts by keywords</p>
+<ul class="simple">
+<li><p>Document Explorer search results</p></li>
+<li><p>Results filtered to show PDFs</p></li>
+<li><p>Filenames showing “contract”, “RFP”, “Agreement” keywords</p></li>
+<li><p>Highlight a contract file in the results</p></li>
+</ul>
+</section>
+</section>
+<section id="screenshot-tips">
+<h2>Screenshot Tips<a class="headerlink" href="#screenshot-tips" title="Link to this heading">¶</a></h2>
+<section id="for-best-quality">
+<h3>For Best Quality<a class="headerlink" href="#for-best-quality" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p><strong>Resolution</strong>: 1920x1080 or higher recommended</p></li>
+<li><p><strong>Format</strong>: PNG (better quality than JPG for UI screenshots)</p></li>
+<li><p><strong>Naming</strong>: Use exact filenames listed above</p></li>
+<li><p><strong>Cropping</strong>:</p>
+<ul class="simple">
+<li><p>Crop out browser chrome (address bar, bookmarks) if distracting</p></li>
+<li><p>OR keep browser chrome for context (up to you)</p></li>
+<li><p>Keep screenshots consistent (all with chrome OR all without)</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="for-clarity">
+<h3>For Clarity<a class="headerlink" href="#for-clarity" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p><strong>Zoom</strong>: Use 100% browser zoom for crisp text</p></li>
+<li><p><strong>Window size</strong>: Make browser window large enough to show content clearly</p></li>
+<li><p><strong>Highlighting</strong>: You can add arrows/circles/highlights AFTER taking screenshots (optional)</p></li>
+<li><p><strong>Mouse cursor</strong>: Hide cursor for cleaner shots (or show it pointing at important elements)</p></li>
+</ol>
+</section>
+<section id="screenshot-tools">
+<h3>Screenshot Tools<a class="headerlink" href="#screenshot-tools" title="Link to this heading">¶</a></h3>
+<p><strong>Windows:</strong></p>
+<ul class="simple">
+<li><p>Windows + Shift + S (Snipping Tool)</p></li>
+<li><p>Save to <code class="docutils literal notranslate"><span class="pre">docs\_static\images\viewer\</span></code></p></li>
+</ul>
+<p><strong>Mac:</strong></p>
+<ul class="simple">
+<li><p>Cmd + Shift + 4 (select area)</p></li>
+<li><p>Cmd + Shift + 3 (full screen)</p></li>
+<li><p>Save to <code class="docutils literal notranslate"><span class="pre">docs/_static/images/viewer/</span></code></p></li>
+</ul>
+<p><strong>Linux:</strong></p>
+<ul class="simple">
+<li><p>Screenshot app (varies by distro)</p></li>
+<li><p>gnome-screenshot, flameshot, etc.</p></li>
+</ul>
+</section>
+</section>
+<section id="saving-screenshots">
+<h2>Saving Screenshots<a class="headerlink" href="#saving-screenshots" title="Link to this heading">¶</a></h2>
+<p>Save all screenshots to:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">docs</span><span class="o">/</span><span class="n">_static</span><span class="o">/</span><span class="n">images</span><span class="o">/</span><span class="n">viewer</span><span class="o">/</span>
+</pre></div>
+</div>
+<p>Directory structure:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>docs/
+└── _static/
+    └── images/
+        └── viewer/
+            ├── 01-launch.png
+            ├── 02-interface.png
+            ├── 03-select-object.png
+            ...
+            └── user-08-contract-search.png
+</pre></div>
+</div>
+</section>
+<section id="after-capturing-screenshots">
+<h2>After Capturing Screenshots<a class="headerlink" href="#after-capturing-screenshots" title="Link to this heading">¶</a></h2>
+<ol class="arabic">
+<li><p>Review each screenshot for clarity</p></li>
+<li><p>Ensure no sensitive data is visible (customer names are OK, but no SSNs, credit cards, etc.)</p></li>
+<li><p>Verify filenames match exactly (case-sensitive on some systems)</p></li>
+<li><p>Optional: Use image editing to add arrows/highlights to important areas</p></li>
+<li><p>Rebuild docs to see them in context:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>docs
+make<span class="w"> </span>html
+open<span class="w"> </span>_build/html/index.html
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+<section id="quick-checklist">
+<h2>Quick Checklist<a class="headerlink" href="#quick-checklist" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>[ ] All 21 screenshots captured</p></li>
+<li><p>[ ] Saved to correct directory with exact filenames</p></li>
+<li><p>[ ] No sensitive data visible</p></li>
+<li><p>[ ] Clear, readable text in all screenshots</p></li>
+<li><p>[ ] Consistent browser chrome (all with OR all without)</p></li>
+<li><p>[ ] Screenshots show the correct content per description above</p></li>
+</ul>
+</section>
+<section id="questions">
+<h2>Questions?<a class="headerlink" href="#questions" title="Link to this heading">¶</a></h2>
+<p>If any screenshot is unclear or you need guidance on what exactly to capture, the documentation includes descriptions of what each screenshot should show. You can also:</p>
+<ol class="arabic simple">
+<li><p>Look at the context where the image is referenced in the .md files</p></li>
+<li><p>Read the surrounding text to understand what the screenshot illustrates</p></li>
+<li><p>Prioritize screenshots for finding_documents.md first (most important for users)</p></li>
+</ol>
+</section>
+<section id="priority-order">
+<h2>Priority Order<a class="headerlink" href="#priority-order" title="Link to this heading">¶</a></h2>
+<p>If you’re short on time, capture screenshots in this order:</p>
+<p><strong>Critical (for naive users):</strong></p>
+<ol class="arabic simple">
+<li><p>user-01 through user-08 (Finding Documents guide)</p></li>
+<li><p>10-search-account.png (Account search)</p></li>
+<li><p>11-search-opportunity.png (Opportunity search)</p></li>
+<li><p>12-pdf-preview.png (PDF preview working)</p></li>
+</ol>
+<p><strong>Important (for complete documentation):</strong>
+5. 02-interface.png (Overview)
+6. 06-children-tab.png (Relationships)
+7. 08-contextual-message.png (Shows our new feature!)
+8. 09-document-explorer.png (Document Explorer interface)</p>
+<p><strong>Nice to have:</strong>
+9. All remaining screenshots for completeness</p>
+<p>Thank you for helping complete the documentation!</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Screenshot Guide for Documentation</a><ul>
+<li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li><a class="reference internal" href="#screenshot-list">Screenshot List</a><ul>
+<li><a class="reference internal" href="#section-1-getting-started">Section 1: Getting Started</a></li>
+<li><a class="reference internal" href="#section-2-browsing-records">Section 2: Browsing Records</a></li>
+<li><a class="reference internal" href="#section-3-navigating-relationships">Section 3: Navigating Relationships</a></li>
+<li><a class="reference internal" href="#section-4-document-explorer">Section 4: Document Explorer</a></li>
+<li><a class="reference internal" href="#section-5-finding-documents-simplified-guide">Section 5: Finding Documents (Simplified Guide)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#screenshot-tips">Screenshot Tips</a><ul>
+<li><a class="reference internal" href="#for-best-quality">For Best Quality</a></li>
+<li><a class="reference internal" href="#for-clarity">For Clarity</a></li>
+<li><a class="reference internal" href="#screenshot-tools">Screenshot Tools</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#saving-screenshots">Saving Screenshots</a></li>
+<li><a class="reference internal" href="#after-capturing-screenshots">After Capturing Screenshots</a></li>
+<li><a class="reference internal" href="#quick-checklist">Quick Checklist</a></li>
+<li><a class="reference internal" href="#questions">Questions?</a></li>
+<li><a class="reference internal" href="#priority-order">Priority Order</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=de1351e5"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>
