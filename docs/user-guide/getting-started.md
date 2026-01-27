@@ -35,7 +35,8 @@ The installer will:
 **If you see "Running scripts is disabled"**, use this command instead:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex"
+powershell -ExecutionPolicy Bypass -Command `
+  "irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex"
 ```
 
 ### Installing on macOS / Linux

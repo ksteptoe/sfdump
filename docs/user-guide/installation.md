@@ -42,7 +42,8 @@ Answer the prompts to complete setup.
 **"Running scripts is disabled"** — If you see this error, use this command instead:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex"
+powershell -ExecutionPolicy Bypass -Command `
+  "irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex"
 ```
 
 **Already installed?** — The installer will detect existing installations and offer to update.
