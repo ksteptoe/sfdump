@@ -14,22 +14,55 @@ def _glob_to_regex(pattern: str) -> str:
     """Convert glob-style wildcards to regex.
 
     Supports:
-      * -> .* (any characters)
-      ? -> .  (single character)
+      *      -> .*   (any characters)
+      ?      -> .    (single character)
+      [abc]  -> [abc] (character set)
+      [1-5]  -> [1-5] (character range)
+      [!abc] -> [^abc] (negated set, glob-style ! converted to ^)
 
     All other regex special characters are escaped for literal matching.
     """
-    # Escape regex special chars except * and ?
     result = []
-    for char in pattern:
+    i = 0
+    n = len(pattern)
+
+    while i < n:
+        char = pattern[i]
+
         if char == "*":
             result.append(".*")
         elif char == "?":
             result.append(".")
-        elif char in r"\.[]{}()+^$|":
+        elif char == "[":
+            # Character class - find matching ]
+            j = i + 1
+            # Handle negation: [! or [^
+            if j < n and pattern[j] in "!^":
+                j += 1
+            # Handle ] as first char in class (literal])
+            if j < n and pattern[j] == "]":
+                j += 1
+            # Find closing ]
+            while j < n and pattern[j] != "]":
+                j += 1
+            if j < n:
+                # Found complete character class
+                class_content = pattern[i + 1 : j]
+                # Convert glob negation ! to regex negation ^
+                if class_content.startswith("!"):
+                    class_content = "^" + class_content[1:]
+                result.append("[" + class_content + "]")
+                i = j
+            else:
+                # No closing ], escape the [
+                result.append("\\[")
+        elif char in r"\.{}()+^$|":
             result.append("\\" + char)
         else:
             result.append(char)
+
+        i += 1
+
     return "".join(result)
 
 
@@ -99,8 +132,22 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
         value="",
         key=f"{key_prefix}_q",
         placeholder="e.g. PIN01006*, SIN002469, Softcat...",
-        help="Search by file name, invoice number, record name, or ID. Use * for any characters, ? for single character.",
+        help="Search by file name, invoice number, record name, or ID. Supports wildcards.",
     ).strip()
+
+    # Search tips (collapsed by default)
+    with st.expander("Search tips"):
+        st.markdown(
+            """
+| Pattern | Meaning | Example |
+|---------|---------|---------|
+| `*` | Any characters | `PIN01006*` matches PIN010060, PIN010061, ... |
+| `?` | Single character | `PIN01006?` matches PIN010060 to PIN010069 |
+| `[1-5]` | Range | `PIN0100[6-9]*` matches PIN01006x, PIN01007x, ... |
+| `[abc]` | Any of a, b, c | `[SP]IN*` matches SIN... or PIN... |
+| `[!0-9]` | Not a digit | `*[!0-9].pdf` matches files not ending in digit |
+"""
+        )
 
     # PDF filter and match count on same row
     col_pdf, col_count = st.columns([1, 3])
