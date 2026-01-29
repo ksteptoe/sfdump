@@ -10,6 +10,29 @@ from sfdump.viewer_app.navigation.record_nav import open_record
 from sfdump.viewer_app.ui.documents_panel import render_documents_panel_from_rows
 
 
+def _glob_to_regex(pattern: str) -> str:
+    """Convert glob-style wildcards to regex.
+
+    Supports:
+      * -> .* (any characters)
+      ? -> .  (single character)
+
+    All other regex special characters are escaped for literal matching.
+    """
+    # Escape regex special chars except * and ?
+    result = []
+    for char in pattern:
+        if char == "*":
+            result.append(".*")
+        elif char == "?":
+            result.append(".")
+        elif char in r"\.[]{}()+^$|":
+            result.append("\\" + char)
+        else:
+            result.append(char)
+    return "".join(result)
+
+
 @st.cache_data(show_spinner=False)
 def _load_master_index(export_root: Path) -> pd.DataFrame:
     path = export_root / "meta" / "master_documents_index.csv"
@@ -75,8 +98,8 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
         "Search",
         value="",
         key=f"{key_prefix}_q",
-        placeholder="e.g. PIN010309, SIN002469, Softcat, Arm...",
-        help="Search by file name, invoice number, record name, or ID",
+        placeholder="e.g. PIN01006*, SIN002469, Softcat...",
+        help="Search by file name, invoice number, record name, or ID. Use * for any characters, ? for single character.",
     ).strip()
 
     # PDF filter and match count on same row
@@ -115,10 +138,10 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
 
     mask = pd.Series(True, index=df.index)
 
-    # Primary search filter (case-insensitive partial match)
+    # Primary search filter (case-insensitive, supports * and ? wildcards)
     if q:
-        qq = q.lower()
-        mask &= df["__search_blob"].str.contains(qq, na=False)
+        pattern = _glob_to_regex(q.lower())
+        mask &= df["__search_blob"].str.contains(pattern, na=False, regex=True)
 
     # PDF filter
     if pdf_only:
