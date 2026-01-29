@@ -188,11 +188,9 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
     limited = results.head(500).reset_index(drop=True)
 
     def _label(i: int, row: pd.Series) -> str:
+        rn = str(row.get("record_name", "")).strip() or "(no record)"
         fn = str(row.get("file_name", "")).strip() or "(no name)"
-        ot = str(row.get("object_type", "")).strip()
-        rn = str(row.get("record_name", "")).strip()
-        fid = str(row.get("file_id", "")).strip()
-        return f"{i + 1:03d} — {fn} | {ot} | {rn} [{fid}]"
+        return f"{i + 1:03d} — {rn} | {fn}"
 
     labels = [_label(i, limited.iloc[i]) for i in range(len(limited))]
 
