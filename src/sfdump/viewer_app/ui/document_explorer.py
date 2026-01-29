@@ -63,59 +63,68 @@ def _load_master_index(export_root: Path) -> pd.DataFrame:
 
 def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> None:
     st.subheader("Document Explorer")
-    st.caption("Search across all documents using meta/master_documents_index.csv")
+    st.caption("Search across all exported documents")
 
     df = _load_master_index(export_root)
     if df.empty:
         st.warning(f"master_documents_index.csv not found under: {export_root / 'meta'}")
         return
 
-    # --- Primary Filters (Account & Opportunity)
-    st.markdown("**Search by Account or Opportunity:**")
-    c1, c2 = st.columns(2)
-    with c1:
-        account_search = st.text_input(
-            "Account Name",
-            value="",
-            key=f"{key_prefix}_account",
-            help="Search for documents by Account name (e.g., 'Acme', 'Beta')",
-        ).strip()
-    with c2:
-        opp_search = st.text_input(
-            "Opportunity Name",
-            value="",
-            key=f"{key_prefix}_opp",
-            help="Search for documents by Opportunity name (e.g., 'Project-Alpha', 'NPI')",
-        ).strip()
+    # --- Primary Search (most important - front and center)
+    q = st.text_input(
+        "Search",
+        value="",
+        key=f"{key_prefix}_q",
+        placeholder="e.g. PIN010309, SIN002469, Softcat, Arm...",
+        help="Search by file name, invoice number, record name, or ID",
+    ).strip()
 
-    st.markdown("**Additional Filters:**")
-    # --- Filters
-    c1, c2, c3 = st.columns([2, 2, 2])
-    with c1:
-        q = st.text_input(
-            "General Search (filename/record/object/id)", value="", key=f"{key_prefix}_q"
-        ).strip()
-    with c2:
-        default_pdf_only = True
-        pdf_only = st.checkbox(
-            "PDF first (only .pdf)", value=default_pdf_only, key=f"{key_prefix}_pdf_only"
-        )
-    with c3:
-        sources = sorted([s for s in df["file_source"].unique().tolist() if str(s).strip()])
-        source = st.selectbox(
-            "Source", options=["(all)"] + sources, index=0, key=f"{key_prefix}_src"
-        )
+    # PDF filter and match count on same row
+    col_pdf, col_count = st.columns([1, 3])
+    with col_pdf:
+        pdf_only = st.checkbox("PDF only", value=False, key=f"{key_prefix}_pdf_only")
 
-    obj_types = sorted([s for s in df["object_type"].unique().tolist() if str(s).strip()])
-    selected_types = st.multiselect(
-        "Object types",
-        options=obj_types,
-        default=[],
-        key=f"{key_prefix}_types",
-        help="Leave empty for all object types.",
-    )
+    # --- Additional Filters (collapsed by default)
+    with st.expander("Additional Filters"):
+        col_acct, col_opp = st.columns(2)
+        with col_acct:
+            account_search = st.text_input(
+                "Account Name",
+                value="",
+                key=f"{key_prefix}_account",
+                placeholder="e.g. Arm Limited, Intel...",
+                help="Filter by Account name (partial match)",
+            ).strip()
+        with col_opp:
+            opp_search = st.text_input(
+                "Opportunity Name",
+                value="",
+                key=f"{key_prefix}_opp",
+                placeholder="e.g. Project-Alpha...",
+                help="Filter by Opportunity name (partial match)",
+            ).strip()
+
+        obj_types = sorted([s for s in df["object_type"].unique().tolist() if str(s).strip()])
+        selected_types = st.multiselect(
+            "Object types",
+            options=obj_types,
+            default=[],
+            key=f"{key_prefix}_types",
+            help="Leave empty for all object types",
+        )
 
     mask = pd.Series(True, index=df.index)
+
+    # Primary search filter (case-insensitive partial match)
+    if q:
+        qq = q.lower()
+        mask &= df["__search_blob"].str.contains(qq, na=False)
+
+    # PDF filter
+    if pdf_only:
+        mask &= df["file_extension"].astype(str).str.lower().eq(".pdf") | df[
+            "file_extension"
+        ].astype(str).str.lower().eq("pdf")
 
     # Account and Opportunity filters (case-insensitive partial match)
     if account_search:
@@ -126,38 +135,27 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
         opp_lower = opp_search.lower()
         mask &= df["opp_name"].astype(str).str.lower().str.contains(opp_lower, na=False)
 
-    if pdf_only:
-        mask &= df["file_extension"].astype(str).str.lower().eq(".pdf") | df[
-            "file_extension"
-        ].astype(str).str.lower().eq("pdf")
-
-    if source != "(all)":
-        mask &= df["file_source"].astype(str).eq(source)
-
     if selected_types:
         mask &= df["object_type"].astype(str).isin(selected_types)
 
-    if q:
-        qq = q.lower()
-        mask &= df["__search_blob"].str.contains(qq, na=False)
-
     results = df[mask].copy()
 
-    st.info(f"Matches: {len(results):,}")
+    # Show match count
+    with col_count:
+        st.markdown(f"**{len(results):,}** documents found")
+
     st.dataframe(
         results[
             [
                 c
                 for c in [
-                    "file_source",
                     "file_name",
-                    "file_extension",
+                    "record_name",
                     "account_name",
                     "opp_name",
                     "object_type",
-                    "record_name",
+                    "file_extension",
                     "record_id",
-                    "local_path",
                     "file_id",
                 ]
                 if c in results.columns
