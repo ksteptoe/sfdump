@@ -14,9 +14,9 @@ import os
 from unittest import mock
 
 from sfdump.files import (
+    _WINDOWS_MAX_PATH,
     _order_and_chunk_rows,
     _truncate_path_for_windows,
-    _WINDOWS_MAX_PATH,
 )
 
 

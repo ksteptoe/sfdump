@@ -161,7 +161,7 @@ def _truncate_path_for_windows(files_root: str, subdir: str, filename: str) -> s
 
     if name_space < 5:
         # Very tight, just use ID and extension
-        truncated = f"{id_prefix[:available - len(ext)]}{ext}"
+        truncated = f"{id_prefix[: available - len(ext)]}{ext}"
     elif len(name_part) <= name_space:
         # Name fits, no truncation needed (shouldn't happen but handle it)
         truncated = filename

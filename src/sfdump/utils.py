@@ -48,3 +48,59 @@ def write_csv(path: str, rows: Iterable[Dict[str, Any]], fieldnames: List[str]) 
             w.writerow(fixed)
             count += 1
     return count
+
+
+def glob_to_regex(pattern: str) -> str:
+    """Convert glob-style wildcards to regex.
+
+    Supports:
+      *      -> .*   (any characters)
+      ?      -> .    (single character)
+      [abc]  -> [abc] (character set)
+      [1-5]  -> [1-5] (character range)
+      [!abc] -> [^abc] (negated set, glob-style ! converted to ^)
+
+    All other regex special characters are escaped for literal matching.
+    """
+    result = []
+    i = 0
+    n = len(pattern)
+
+    while i < n:
+        char = pattern[i]
+
+        if char == "*":
+            result.append(".*")
+        elif char == "?":
+            result.append(".")
+        elif char == "[":
+            # Character class - find matching ]
+            j = i + 1
+            # Handle negation: [! or [^
+            if j < n and pattern[j] in "!^":
+                j += 1
+            # Handle ] as first char in class (literal])
+            if j < n and pattern[j] == "]":
+                j += 1
+            # Find closing ]
+            while j < n and pattern[j] != "]":
+                j += 1
+            if j < n:
+                # Found complete character class
+                class_content = pattern[i + 1 : j]
+                # Convert glob negation ! to regex negation ^
+                if class_content.startswith("!"):
+                    class_content = "^" + class_content[1:]
+                result.append("[" + class_content + "]")
+                i = j
+            else:
+                # No closing ], escape the [
+                result.append("\\[")
+        elif char in r"\.{}()+^$|":
+            result.append("\\" + char)
+        else:
+            result.append(char)
+
+        i += 1
+
+    return "".join(result)
