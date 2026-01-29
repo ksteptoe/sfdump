@@ -164,8 +164,8 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
             [
                 c
                 for c in [
-                    "file_name",
                     "record_name",
+                    "file_name",
                     "account_name",
                     "opp_name",
                     "object_type",
