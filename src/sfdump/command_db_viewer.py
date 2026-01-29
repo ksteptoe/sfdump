@@ -71,6 +71,7 @@ def db_viewer_command(export_dir: Optional[Path], db_path: Optional[Path]) -> No
         "streamlit",
         "run",
         str(script_path),
+        "--browser.gatherUsageStats=false",
         "--",
         str(db_path),
     ]

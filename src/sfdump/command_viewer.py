@@ -31,5 +31,6 @@ def viewer_cmd(export_root: Path, port: int) -> None:
         str(port),
         "--server.headless",
         "true",
+        "--browser.gatherUsageStats=false",
     ]
     raise SystemExit(subprocess.call(cmd, env=env))
