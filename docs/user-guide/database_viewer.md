@@ -86,18 +86,26 @@ Select any record and click the **Documents** tab to see:
 
 The **Explorer** tab searches across ALL documents in your export.
 
-**Search by Account:**
+**Search by invoice number (PIN/SIN):**
 1. Click the **Explorer** tab
-2. Type an account name (e.g., "Acme Corp")
-3. See all documents related to that account
+2. Type the invoice number in the Search box (e.g., "PIN010063")
+3. Results show the record name first for easy identification
 
-**Search by Opportunity:**
-1. Type an opportunity name
-2. See all documents for that deal
+**Using wildcards:**
+- `PIN01006*` — finds PIN010060, PIN010061, etc.
+- `SIN*` — finds all sales invoices
+- `PIN0100[6-9]*` — finds a range (PIN01006x through PIN01009x)
+
+Click **Search tips** for more wildcard examples.
+
+**Additional filters (click to expand):**
+- Filter by Account Name
+- Filter by Opportunity Name
+- Filter by Object Type
 
 **Filter results:**
 - Check "PDF only" to show only PDFs
-- Sort by filename, date, or type
+- Results show record_name first, then file_name
 
 ## Previewing Documents
 

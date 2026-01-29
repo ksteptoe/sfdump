@@ -16,54 +16,74 @@ Your web browser opens automatically with the document viewer.
 
 **Tip:** Keep the terminal window open — closing it stops the viewer.
 
-## Finding Documents by Customer Name
+## Finding Documents by Invoice Number (PIN/SIN)
 
-This is the most common task.
+This is the most common task for finance users.
 
 1. Click the **Explorer** tab
-2. Type the customer name in the **Account Name** box (e.g., "Acme Corp")
+2. Type the invoice number in the **Search** box (e.g., "PIN010063" or "SIN002469")
 3. Results appear automatically as you type
 
-**What you'll see:**
+**Results show:**
 
 | Column | Meaning |
 |--------|---------|
+| record_name | Invoice/record number (e.g., "PIN010063") |
 | file_name | Document name (e.g., "Invoice_2024.pdf") |
 | account_name | Customer name |
 | opp_name | Deal/project name |
-| object_type | Record type (Invoice, Opportunity, etc.) |
+
+## Using Wildcards
+
+The search box supports wildcards for powerful searching:
+
+| Pattern | Meaning | Example |
+|---------|---------|---------|
+| `*` | Any characters | `PIN01006*` finds PIN010060, PIN010061, etc. |
+| `?` | Single character | `PIN01006?` finds PIN010060 to PIN010069 |
+| `[1-5]` | Range of characters | `PIN0100[6-9]*` finds PIN01006x through PIN01009x |
+
+**Examples:**
+- `SIN*` — all sales invoices
+- `PIN01*` — all purchase invoices starting with PIN01
+- `*Softcat*` — anything containing "Softcat"
+
+Click **Search tips** below the search box for more examples.
+
+## Finding Documents by Customer Name
+
+1. Click the **Explorer** tab
+2. Click **Additional Filters** to expand
+3. Type the customer name in the **Account Name** box (e.g., "Acme Corp")
+4. Results show all documents for that customer
 
 ## Finding Documents by Deal Name
 
 If you know the project or opportunity name:
 
 1. Click the **Explorer** tab
-2. Type the deal name in the **Opportunity Name** box
-3. Results show all documents for that deal
+2. Click **Additional Filters** to expand
+3. Type the deal name in the **Opportunity Name** box
+4. Results show all documents for that deal
 
-**Combined search:** Type both Account and Opportunity names to narrow results.
+**Combined search:** Use multiple filters together to narrow results.
 
 ## Finding a Specific Invoice
 
-**Method 1: By invoice number**
-1. Select **Invoice** from the Object dropdown (sidebar)
-2. Type the invoice number (e.g., "SIN002795")
-3. Click the invoice to view details
+**Method 1: By invoice number (fastest)**
+1. Explorer tab → type invoice number in Search (e.g., "SIN002795")
+2. Click the invoice to view details
 
 **Method 2: Through customer**
-1. Explorer tab → type customer name
+1. Explorer tab → expand Additional Filters → type customer name
 2. Look for invoices in the results
 
 ## Finding Contracts
 
 1. Click **Explorer** tab
-2. Type the customer name
+2. Type keywords like "contract", "agreement", or "SOW"
 3. Check **"PDF only"** — contracts are usually PDFs
-4. Look for filenames containing:
-   - "Contract"
-   - "Agreement"
-   - "SOW" (Statement of Work)
-   - "MSA" (Master Service Agreement)
+4. Or search by customer name in Additional Filters
 
 ## Previewing Documents
 
@@ -75,24 +95,37 @@ Click any PDF to preview it:
 
 For non-PDF files, you'll see the file location to access directly.
 
+## Selecting Documents from Results
+
+After searching, use the **Select a document** dropdown:
+
+- Documents show as: `001 — PIN010063 | invoice_filename.pdf`
+- The record name (PIN/SIN) appears first for easy identification
+- Click to preview the document
+
 ## Common Tasks
 
 ### All invoices for a customer
 
 1. Explorer tab
-2. Account Name: [customer name]
-3. Filter to Invoice type if needed
+2. Additional Filters → Account Name: [customer name]
+3. Review all attached documents
 
 ### All documents for a deal
 
 1. Explorer tab
-2. Opportunity Name: [deal name]
+2. Additional Filters → Opportunity Name: [deal name]
 3. Review all attached documents
 
-### Purchase invoices (bills)
+### Purchase invoices (bills) in a range
 
-1. Select **Purchase Invoice** from Object dropdown
-2. Search by vendor name or invoice number
+1. Explorer tab → Search: `PIN0100[6-9]*`
+2. This finds PIN01006x through PIN01009x
+
+### All PDFs containing a keyword
+
+1. Explorer tab → Search: `*keyword*`
+2. Check "PDF only"
 
 ## Understanding the Data
 
@@ -103,6 +136,7 @@ For non-PDF files, you'll see the file location to access directly.
 | **Account** | Customer company | "Acme Corp" |
 | **Opportunity** | Specific deal or project | "Acme Corp Q2 2024" |
 | **Invoice** | Billing document | "SIN002795" |
+| **Purchase Invoice** | Bill from supplier | "PIN010063" |
 
 ### Why some records have no documents
 
@@ -118,14 +152,15 @@ This doesn't mean data is lost.
 
 - **Partial names work** — "Acme" finds "Acme Corp SA"
 - **Case doesn't matter** — "acme" = "ACME" = "Acme"
-- **Too many results?** — Check "PDF only" or add more search terms
-- **Can't find something?** — Try searching by customer instead of deal name
+- **Use wildcards** — `PIN*` finds all purchase invoices
+- **Too many results?** — Check "PDF only" or use more specific search terms
+- **Can't find something?** — Try wildcard search like `*keyword*`
 
 ## Troubleshooting
 
 **"No matches found"**
 - Check spelling
-- Try first few letters only
+- Try wildcards: `*partial*`
 - Uncheck "PDF only"
 
 **Viewer not loading**
@@ -133,16 +168,18 @@ This doesn't mean data is lost.
 - Run `sf view` again
 
 **Can't find a document**
-- Try searching by customer name
+- Try wildcard search: `*filename*`
+- Try searching by customer name in Additional Filters
 - Document might be attached to a different record
 
 ## Quick Reference
 
 | Task | Steps |
 |------|-------|
-| Find customer documents | Explorer → Account Name → type name |
-| Find deal documents | Explorer → Opportunity Name → type name |
-| Find invoice | Object dropdown → Invoice → search number |
+| Find by invoice number | Explorer → Search → type `PIN010063` |
+| Find invoice range | Explorer → Search → type `PIN0100[6-9]*` |
+| Find customer documents | Explorer → Additional Filters → Account Name |
+| Find deal documents | Explorer → Additional Filters → Opportunity Name |
 | Preview PDF | Click document in results |
 
 **You don't need technical skills — just type and click!**
