@@ -199,6 +199,7 @@ def _build_master_index(export_root: Path) -> Path:
     # ------------------------------------------------------------------
     df_att = index_df[index_df["file_source"] == "Attachment"].copy()
     df_file = index_df[index_df["file_source"] == "File"].copy()
+    df_other = index_df[~index_df["file_source"].isin(["Attachment", "File"])].copy()
 
     # 3a) Attachments: join on file_id == attachment_id
     if not attachments_meta.empty and not df_att.empty:
@@ -227,7 +228,15 @@ def _build_master_index(export_root: Path) -> Path:
     else:
         df_file["local_path"] = ""
 
-    master = pd.concat([df_att, df_file], ignore_index=True)
+    # 3c) Other sources (e.g. InvoicePDF): path is already in the files_index row
+    if not df_other.empty:
+        df_other["local_path"] = df_other.get("path", pd.Series("", index=df_other.index)).fillna(
+            ""
+        )
+    else:
+        df_other["local_path"] = ""
+
+    master = pd.concat([df_att, df_file, df_other], ignore_index=True)
     master["local_path"] = (
         master["local_path"].fillna("").map(lambda p: _prefer_existing(export_root, p))
     )
@@ -329,6 +338,88 @@ def _build_master_index(export_root: Path) -> Path:
                 "Account.csv has none of the expected columns; skipping enrichment (columns: %s)",
                 list(accounts.columns),
             )
+
+    # --- Invoices: enrich with Opportunity + Account via FK columns ----
+    is_invoice = master["object_type"] == "c2g__codaInvoice__c"
+    if is_invoice.any():
+        invoice_csv = csv_dir / "c2g__codaInvoice__c.csv"
+        inv_meta = _load_csv(invoice_csv)
+        if not inv_meta.empty:
+            inv_cols = ["Id"]
+            inv_rename: Dict[str, str] = {"Id": "inv_id"}
+            if "c2g__Opportunity__c" in inv_meta.columns:
+                inv_cols.append("c2g__Opportunity__c")
+                inv_rename["c2g__Opportunity__c"] = "inv_opp_id"
+            if "c2g__Account__c" in inv_meta.columns:
+                inv_cols.append("c2g__Account__c")
+                inv_rename["c2g__Account__c"] = "inv_acct_id"
+
+            inv_subset = inv_meta[inv_cols].copy().rename(columns=inv_rename)
+
+            master_inv = master[is_invoice].merge(
+                inv_subset, left_on="record_id", right_on="inv_id", how="left"
+            )
+
+            # Bring Opportunity name via inv_opp_id
+            if "inv_opp_id" in master_inv.columns and not opps.empty:
+                opp_names = (
+                    opps[["Id", "Name"]]
+                    .copy()
+                    .rename(columns={"Id": "_opp_id", "Name": "_opp_name"})
+                )
+                if "AccountId" in opps.columns:
+                    opp_names["_opp_acct_id"] = opps["AccountId"]
+                master_inv = master_inv.merge(
+                    opp_names, left_on="inv_opp_id", right_on="_opp_id", how="left"
+                )
+                if "opp_name" not in master_inv.columns:
+                    master_inv["opp_name"] = ""
+                master_inv["opp_name"] = master_inv["opp_name"].fillna("")
+                master_inv["opp_name"] = master_inv["opp_name"].where(
+                    master_inv["opp_name"] != "",
+                    master_inv.get("_opp_name", "").fillna("")
+                    if "_opp_name" in master_inv.columns
+                    else "",
+                )
+
+            # Bring Account name via inv_acct_id (or via Opportunity's AccountId)
+            if not accounts.empty:
+                acct_names = (
+                    accounts[["Id", "Name"]]
+                    .copy()
+                    .rename(columns={"Id": "_acct_id", "Name": "_acct_name"})
+                )
+
+                # Try direct account FK first
+                acct_id_col = None
+                if "inv_acct_id" in master_inv.columns:
+                    acct_id_col = "inv_acct_id"
+                elif "_opp_acct_id" in master_inv.columns:
+                    acct_id_col = "_opp_acct_id"
+
+                if acct_id_col:
+                    master_inv = master_inv.merge(
+                        acct_names, left_on=acct_id_col, right_on="_acct_id", how="left"
+                    )
+                    if "account_name" not in master_inv.columns:
+                        master_inv["account_name"] = ""
+                    master_inv["account_name"] = master_inv["account_name"].fillna("")
+                    master_inv["account_name"] = master_inv["account_name"].where(
+                        master_inv["account_name"] != "",
+                        master_inv.get("_acct_name", "").fillna("")
+                        if "_acct_name" in master_inv.columns
+                        else "",
+                    )
+
+            # Drop temp columns
+            drop_cols = [
+                c
+                for c in master_inv.columns
+                if c.startswith("inv_") or c.startswith("_opp_") or c.startswith("_acct_")
+            ]
+            master_inv = master_inv.drop(columns=drop_cols, errors="ignore")
+
+            master = pd.concat([master[~is_invoice], master_inv], ignore_index=True)
 
     # ------------------------------------------------------------------
     # 5) Final tidy + write

@@ -271,6 +271,118 @@ def test_build_master_index_detects_missing_files(tmp_path: Path) -> None:
         assert row["local_path"] == ""
 
 
+def test_build_master_index_includes_invoice_pdfs(tmp_path: Path) -> None:
+    """InvoicePDF entries appear in master index with Opp/Account enrichment."""
+    export_root = tmp_path / "export"
+    csv_dir = export_root / "csv"
+    links_dir = export_root / "links"
+
+    # Invoice PDF files_index (produced by build_invoice_pdf_index)
+    _write_csv(
+        links_dir / "c2g__codaInvoice__c_invoice_pdfs_files_index.csv",
+        [
+            {
+                "object_type": "c2g__codaInvoice__c",
+                "record_id": "INV1",
+                "record_name": "SIN001001",
+                "file_source": "InvoicePDF",
+                "file_id": "INV1",
+                "file_link_id": "",
+                "file_name": "SIN001001.pdf",
+                "file_extension": "pdf",
+                "path": "invoices/SIN001001.pdf",
+                "content_type": "application/pdf",
+                "size_bytes": "12345",
+            },
+            {
+                "object_type": "c2g__codaInvoice__c",
+                "record_id": "INV2",
+                "record_name": "SIN001002",
+                "file_source": "InvoicePDF",
+                "file_id": "INV2",
+                "file_link_id": "",
+                "file_name": "SIN001002.pdf",
+                "file_extension": "pdf",
+                "path": "",
+                "content_type": "application/pdf",
+                "size_bytes": "",
+            },
+        ],
+    )
+
+    # Empty attachment/content metadata (invoices don't use them)
+    _write_csv(links_dir / "attachments.csv", [])
+    _write_csv(links_dir / "content_versions.csv", [])
+
+    # Invoice CSV with FK to Opportunity and Account
+    _write_csv(
+        csv_dir / "c2g__codaInvoice__c.csv",
+        [
+            {
+                "Id": "INV1",
+                "Name": "SIN001001",
+                "c2g__InvoiceStatus__c": "Complete",
+                "c2g__Opportunity__c": "OPP1",
+                "c2g__Account__c": "ACC1",
+            },
+            {
+                "Id": "INV2",
+                "Name": "SIN001002",
+                "c2g__InvoiceStatus__c": "Complete",
+                "c2g__Opportunity__c": "OPP1",
+                "c2g__Account__c": "ACC1",
+            },
+        ],
+    )
+
+    # Opportunity CSV
+    _write_csv(
+        csv_dir / "Opportunity.csv",
+        [
+            {
+                "Id": "OPP1",
+                "Name": "Big Deal",
+                "AccountId": "ACC1",
+            }
+        ],
+    )
+
+    # Account CSV
+    _write_csv(
+        csv_dir / "Account.csv",
+        [
+            {
+                "Id": "ACC1",
+                "Name": "MegaCorp",
+            }
+        ],
+    )
+
+    out_path, docs_with_path, docs_missing_path = _build_master_index(export_root)
+
+    assert out_path.exists()
+    assert docs_with_path == 1  # SIN001001 has a path
+    assert docs_missing_path == 1  # SIN001002 has no path
+
+    df = pd.read_csv(out_path, dtype=str).fillna("")
+    assert len(df) == 2
+
+    # Both should be InvoicePDF source
+    assert list(df["file_source"]) == ["InvoicePDF", "InvoicePDF"]
+
+    # Check first invoice has local_path, second does not
+    row1 = df[df["record_name"] == "SIN001001"].iloc[0]
+    row2 = df[df["record_name"] == "SIN001002"].iloc[0]
+    assert row1["local_path"] == "invoices/SIN001001.pdf"
+    assert row2["local_path"] == ""
+
+    # Enrichment: both should have opp_name and account_name
+    assert row1.get("opp_name", "") == "Big Deal"
+    assert row1.get("account_name", "") == "MegaCorp"
+    assert row2.get("opp_name", "") == "Big Deal"
+    assert row2.get("account_name", "") == "MegaCorp"
+
+
 def test_docs_index_cli_warns_on_missing_files(tmp_path: Path) -> None:
     """CLI shows warning when documents are missing local files."""
     export_root = tmp_path / "export-test"
