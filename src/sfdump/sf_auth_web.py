@@ -235,7 +235,6 @@ def interactive_login() -> str:
                 "redirect_uri": REDIRECT_URI,
                 "code_challenge": code_challenge,
                 "code_challenge_method": "S256",
-                "scope": "full refresh_token",
             }
         )
         auth_url = f"{login_url}/services/oauth2/authorize?{auth_params}"
