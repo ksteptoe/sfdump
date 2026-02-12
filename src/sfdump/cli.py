@@ -10,6 +10,8 @@ from click import Command
 
 from sfdump.command_files_backfill import files_backfill_cmd
 from sfdump.sf_auth import get_salesforce_token, run_salesforce_query
+from sfdump.sf_auth_web import TOKEN_FILE as WEB_TOKEN_FILE
+from sfdump.sf_auth_web import interactive_login
 
 from . import __version__
 from .command_analyse_missing import analyse_missing_cmd
@@ -92,6 +94,25 @@ def cmd_login() -> None:
         click.echo(f"Token preview: {token[:10]}...{token[-6:]}")
     except Exception as e:
         click.echo(f"❌  Login failed: {e}", err=True)
+        raise click.Abort() from None
+
+
+@cli.command("login-web")
+def cmd_login_web() -> None:
+    """Login via browser (Web Server OAuth flow with PKCE).
+
+    Opens your browser to Salesforce login. After you authenticate,
+    the token is cached locally. Required for operations that need a
+    real user session (e.g. invoice PDF generation).
+    """
+    try:
+        click.echo("Opening browser for Salesforce login...")
+        token = interactive_login()
+        click.echo("Salesforce web login successful.")
+        click.echo(f"Cache file: {WEB_TOKEN_FILE}")
+        click.echo(f"Token preview: {token[:10]}...{token[-6:]}")
+    except Exception as e:
+        click.echo(f"Login failed: {e}", err=True)
         raise click.Abort() from None
 
 
