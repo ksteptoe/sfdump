@@ -223,6 +223,7 @@ def interactive_login() -> str:
 
     # Start local server
     server = HTTPServer(("localhost", CALLBACK_PORT), _CallbackHandler)
+    server.timeout = 0.5
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
 
@@ -244,16 +245,19 @@ def interactive_login() -> str:
         webbrowser.open(auth_url)
 
         # Wait for callback (timeout after 120 seconds)
+        # KeyboardInterrupt propagates immediately from the short sleep
         deadline = time.time() + 120
         while _CallbackHandler.auth_code is None and _CallbackHandler.error is None:
             if time.time() > deadline:
                 raise RuntimeError("Login timed out after 120 seconds")
-            time.sleep(0.2)
+            time.sleep(0.1)
 
         if _CallbackHandler.error:
             raise RuntimeError(f"Authorization failed: {_CallbackHandler.error}")
 
         auth_code = _CallbackHandler.auth_code
+    except KeyboardInterrupt:
+        raise
     finally:
         server.shutdown()
 

@@ -107,10 +107,14 @@ def cmd_login_web() -> None:
     """
     try:
         click.echo("Opening browser for Salesforce login...")
+        click.echo("Press Ctrl+C to cancel.")
         token = interactive_login()
         click.echo("Salesforce web login successful.")
         click.echo(f"Cache file: {WEB_TOKEN_FILE}")
         click.echo(f"Token preview: {token[:10]}...{token[-6:]}")
+    except KeyboardInterrupt:
+        click.echo("\nLogin cancelled.", err=True)
+        raise SystemExit(1) from None
     except Exception as e:
         click.echo(f"Login failed: {e}", err=True)
         raise click.Abort() from None
