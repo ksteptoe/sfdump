@@ -484,6 +484,104 @@ def usage() -> None:
         sys.exit(1)
 
 
+@cli.command()
+@click.option(
+    "--out",
+    "out_dir",
+    type=click.Path(path_type=Path),
+    help="Output directory for PDFs (default: {latest_export}/invoices/).",
+)
+@click.option(
+    "--workers",
+    type=int,
+    default=4,
+    show_default=True,
+    help="Number of parallel download workers.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Re-download existing PDFs.",
+)
+def sins(out_dir: Path | None, workers: int, force: bool) -> None:
+    """
+    Download invoice PDFs from Salesforce.
+
+    Fetches all Complete invoice PDFs using the deployed Apex REST endpoint.
+    Requires a web login session (run 'sfdump login-web' first).
+
+    \b
+    Examples:
+      sf sins                    # Download all invoices
+      sf sins --force            # Re-download everything
+      sf sins --out ./invoices   # Custom output directory
+    """
+    from .command_sins import build_invoice_pdf_index, download_invoice_pdfs
+    from .orchestrator import find_latest_export
+    from .progress import ProgressReporter
+    from .sf_auth_web import get_instance_url, get_web_token
+
+    reporter = ProgressReporter()
+    reporter.header("Invoice PDF Download")
+
+    # Find latest export and invoice CSV
+    export_dir = find_latest_export()
+    if export_dir is None:
+        click.echo("No export found. Run 'sf dump' first.", err=True)
+        sys.exit(1)
+
+    csv_path = export_dir / "csv" / "c2g__codaInvoice__c.csv"
+    if not csv_path.exists():
+        click.echo(f"Invoice CSV not found: {csv_path}", err=True)
+        sys.exit(1)
+
+    if out_dir is None:
+        out_dir = export_dir / "invoices"
+
+    reporter.info(f"CSV:    {csv_path}")
+    reporter.info(f"Output: {out_dir}")
+    reporter.blank()
+
+    # Authenticate
+    try:
+        token = get_web_token()
+    except RuntimeError as e:
+        click.echo(f"Auth error: {e}", err=True)
+        click.echo("Run 'sfdump login-web' to authenticate.", err=True)
+        sys.exit(1)
+
+    instance_url = get_instance_url()
+
+    try:
+        downloaded, skipped, failed = download_invoice_pdfs(
+            csv_path=csv_path,
+            out_dir=out_dir,
+            token=token,
+            instance_url=instance_url,
+            workers=workers,
+            force=force,
+            reporter=reporter,
+        )
+    except KeyboardInterrupt:
+        click.echo()
+        click.echo("Download cancelled.")
+        click.echo("Run 'sf sins' again to resume where you left off.")
+        sys.exit(130)
+
+    # Build viewer index so PDFs show up in the document panel
+    indexed = build_invoice_pdf_index(csv_path, out_dir, export_dir)
+    if indexed:
+        reporter.blank()
+        reporter.info(f"  Indexed {indexed} invoices for viewer")
+
+    reporter.blank()
+    if failed:
+        reporter.info("Some downloads failed. Re-run 'sf sins' to retry.")
+        sys.exit(1)
+    reporter.info("Done.")
+
+
 def main() -> None:
     """Entry point for the sf command."""
     cli()

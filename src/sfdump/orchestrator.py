@@ -186,7 +186,7 @@ def run_full_export(
         export_path = get_default_export_path()
 
     export_path = Path(export_path).resolve()
-    total_steps = 6
+    total_steps = 7
 
     # Track results
     files_exported = 0
@@ -363,11 +363,69 @@ def run_full_export(
         _logger.exception("Index building failed")
 
     # =========================================================================
-    # Step 5: Build SQLite database
+    # Step 5: Invoice PDFs
     # =========================================================================
-    ui.step_start(5, total_steps, "Building search database")
+    ui.step_start(5, total_steps, "Invoice PDFs")
     if progress_callback:
-        progress_callback(ExportProgress(5, total_steps, "Building database"))
+        progress_callback(ExportProgress(5, total_steps, "Invoice PDFs"))
+
+    invoice_csv = csv_dir / "c2g__codaInvoice__c.csv"
+    invoices_dir = export_path / "invoices"
+
+    if not invoice_csv.exists():
+        ui.step_done("no invoice CSV found, skipping")
+    else:
+        from .command_sins import build_invoice_pdf_index, download_invoice_pdfs
+
+        # Check if PDFs already exist
+        existing_pdfs = list(invoices_dir.glob("SIN*.pdf")) if invoices_dir.exists() else []
+
+        if existing_pdfs:
+            ui.step_done(f"{len(existing_pdfs)} PDFs found")
+        else:
+            # Try to download — requires web server OAuth token
+            try:
+                from .sf_auth_web import get_instance_url, get_web_token
+
+                token = get_web_token()
+                instance_url = get_instance_url()
+                ui.step_done("downloading")
+                try:
+                    downloaded, skipped, failed = download_invoice_pdfs(
+                        csv_path=invoice_csv,
+                        out_dir=invoices_dir,
+                        token=token,
+                        instance_url=instance_url,
+                        workers=4,
+                        reporter=ui,
+                    )
+                    if failed:
+                        ui.substep(
+                            f"{downloaded} downloaded, {failed} failed (re-run 'sf sins' to retry)"
+                        )
+                except KeyboardInterrupt:
+                    raise
+                except Exception as e:
+                    _logger.warning("Invoice PDF download failed: %s", e)
+                    ui.substep(f"Download error: {e}")
+                    ui.substep("Run 'sf sins' manually to download invoice PDFs")
+            except Exception:
+                ui.step_done("skipped (run 'sfdump login-web' then 'sf sins')")
+
+        # Always build the viewer index (shows documents even if not yet downloaded)
+        try:
+            indexed = build_invoice_pdf_index(invoice_csv, invoices_dir, export_path)
+            if indexed:
+                ui.substep(f"Indexed {indexed} invoices for viewer")
+        except Exception as e:
+            _logger.warning("Failed to build invoice PDF index: %s", e)
+
+    # =========================================================================
+    # Step 6: Build SQLite database
+    # =========================================================================
+    ui.step_start(6, total_steps, "Building search database")
+    if progress_callback:
+        progress_callback(ExportProgress(6, total_steps, "Building database"))
 
     try:
         database_path = meta_dir / "sfdata.db"
@@ -382,11 +440,11 @@ def run_full_export(
         database_path = None
 
     # =========================================================================
-    # Step 6: Verify files and recover any missing
+    # Step 7: Verify files and recover any missing
     # =========================================================================
-    ui.step_start(6, total_steps, "Checking files")
+    ui.step_start(7, total_steps, "Checking files")
     if progress_callback:
-        progress_callback(ExportProgress(6, total_steps, "Verifying files"))
+        progress_callback(ExportProgress(7, total_steps, "Verifying files"))
 
     if light:
         ui.step_done("skipped (light mode)")

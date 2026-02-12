@@ -35,6 +35,7 @@ from .command_rels import rels_cmd
 from .command_report_missing import report_missing_cmd
 from .command_retry_missing import retry_missing_cmd
 from .command_schema import schema_cmd
+from .command_sins import sins_cmd
 from .command_verify import verify_files_cmd
 from .command_view_record import view_record_command
 from .command_viewer import viewer_cmd
@@ -157,6 +158,7 @@ cli.add_command(cast(Command, rels_cmd))
 cli.add_command(cast(Command, docs_for_cmd))
 cli.add_command(cast(Command, probe_cmd))
 cli.add_command(cast(Command, files_backfill_cmd))
+cli.add_command(cast(Command, sins_cmd))
 
 
 # Keep the original name (probably "cfo-generate-docs")

@@ -90,6 +90,25 @@ def load_refresh_token() -> str | None:
     return None
 
 
+def get_instance_url() -> str:
+    """Return the Salesforce instance URL from the cached token file.
+
+    Falls back to SF_LOGIN_URL env var if token file is missing or lacks instance_url.
+    """
+    if TOKEN_FILE.exists():
+        try:
+            data = json.loads(TOKEN_FILE.read_text())
+            url = data.get("instance_url")
+            if url:
+                return url
+        except Exception:
+            pass
+    url = os.getenv("SF_LOGIN_URL")
+    if url:
+        return url
+    raise RuntimeError("No instance URL found. Run 'sfdump login-web' first or set SF_LOGIN_URL.")
+
+
 # ---------------------------------------------------------------------------
 # Token refresh
 # ---------------------------------------------------------------------------

@@ -124,7 +124,16 @@ def build_record_documents(db_path: Path, export_root: Path) -> None:
             content_type: Optional[str] = None
             size_bytes: Optional[int] = None
 
-            if file_source.lower() == "attachment":
+            # Check if the files_index row itself carries path metadata
+            # (used by sources like InvoicePDF that aren't in attachments/content_versions)
+            row_path = (r.get("path") or "").strip()
+            if row_path:
+                path = row_path
+                content_type = (r.get("content_type") or "").strip() or None
+                sb = (r.get("size_bytes") or "").strip()
+                if sb and sb.isdigit():
+                    size_bytes = int(sb)
+            elif file_source.lower() == "attachment":
                 a = attachments.get(file_id, {})
                 # your attachments.csv uses "path" (not "local_path")
                 path = (a.get("path") or a.get("local_path") or "").strip() or None
