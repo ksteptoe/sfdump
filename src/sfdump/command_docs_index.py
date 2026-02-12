@@ -449,17 +449,28 @@ def _build_master_index(export_root: Path) -> Path:
     # 6) Validate: check for documents without local files
     # ------------------------------------------------------------------
     total_docs = len(master)
-    docs_with_path = len(master[master["local_path"].str.strip() != ""])
+    has_path = master["local_path"].str.strip() != ""
+    docs_with_path = int(has_path.sum())
     docs_missing_path = total_docs - docs_with_path
 
+    # Per-source breakdown for logging
+    source_stats: Dict[str, tuple[int, int]] = {}
+    if "file_source" in master.columns:
+        for src, grp in master.groupby("file_source"):
+            n = len(grp)
+            n_local = int((grp["local_path"].str.strip() != "").sum())
+            source_stats[str(src)] = (n_local, n)
+
     if docs_missing_path > 0:
-        missing_pct = (docs_missing_path / total_docs) * 100 if total_docs > 0 else 0
         _logger.info(
-            "Master index: %d/%d documents (%.1f%%) pending download",
-            docs_missing_path,
+            "Master index: %d/%d documents have local files.",
+            docs_with_path,
             total_docs,
-            missing_pct,
         )
+        for src, (n_local, n_total) in sorted(source_stats.items()):
+            n_missing = n_total - n_local
+            if n_missing > 0:
+                _logger.info("  %s: %d/%d not yet downloaded", src, n_missing, n_total)
 
     _logger.info("Master documents index written to %s (%d rows).", out_path, len(master))
     return out_path, docs_with_path, docs_missing_path
@@ -481,8 +492,22 @@ def docs_index_cmd(export_root: Path) -> None:
 
     click.echo(f"Building master documents index under: {export_root}")
     out_path, docs_with_path, docs_missing_path = _build_master_index(export_root)
+    total = docs_with_path + docs_missing_path
     click.echo(f"Master documents index written to: {out_path}")
+    click.echo(f"  Indexed: {total} documents ({docs_with_path} downloaded locally)")
 
     if docs_missing_path > 0:
-        total = docs_with_path + docs_missing_path
-        click.echo(f"Note: {docs_missing_path}/{total} documents pending download")
+        # Read back master index for per-source breakdown
+        master_df = pd.read_csv(out_path, dtype=str).fillna("")
+        click.echo(f"  Not yet downloaded: {docs_missing_path} — breakdown by type:")
+        if "file_source" in master_df.columns:
+            for src, grp in sorted(master_df.groupby("file_source")):
+                n = len(grp)
+                n_local = int((grp["local_path"].str.strip() != "").sum())
+                n_missing = n - n_local
+                status = f"{n_local}/{n} downloaded" if n_missing > 0 else f"{n} all downloaded"
+                click.echo(f"    {src}: {status}")
+        click.echo(
+            "  (This is normal for chunked exports — "
+            "run 'sfdump files' or 'sf sins' to fetch remaining files.)"
+        )
