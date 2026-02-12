@@ -27,6 +27,7 @@ from .command_db_viewer import db_viewer_command
 from .command_docs_for import docs_for_cmd
 from .command_docs_index import docs_index_cmd
 from .command_files import files_cmd
+from .command_inventory import inventory_cmd
 from .command_list_records import list_records_command
 from .command_manifest import manifest_cmd
 from .command_objects import objects_cmd
@@ -159,6 +160,7 @@ cli.add_command(cast(Command, docs_for_cmd))
 cli.add_command(cast(Command, probe_cmd))
 cli.add_command(cast(Command, files_backfill_cmd))
 cli.add_command(cast(Command, sins_cmd))
+cli.add_command(cast(Command, inventory_cmd))
 
 
 # Keep the original name (probably "cfo-generate-docs")

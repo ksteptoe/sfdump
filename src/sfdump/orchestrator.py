@@ -635,6 +635,16 @@ def run_full_export(
     ui.info("  sf view")
     ui.blank()
 
+    # Generate inventory manifest (never breaks a successful export)
+    try:
+        from .inventory import InventoryManager
+
+        manager = InventoryManager(export_path)
+        inv_result = manager.run()
+        manager.write_manifest(inv_result)
+    except Exception:
+        _logger.warning("Inventory generation failed", exc_info=True)
+
     return ExportResult(
         success=True,
         export_path=export_path,

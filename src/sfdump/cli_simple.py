@@ -582,6 +582,39 @@ def sins(out_dir: Path | None, workers: int, force: bool) -> None:
     reporter.info("Done.")
 
 
+@cli.command()
+@click.argument(
+    "path",
+    required=False,
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+)
+@click.option(
+    "--json-only",
+    is_flag=True,
+    default=False,
+    help="Output raw JSON to stdout (for scripting).",
+)
+def inventory(path: Path | None, json_only: bool) -> None:
+    """
+    Check completeness of an export.
+
+    Inspects local files only (no API calls) and shows per-category
+    status: CSV objects, Attachments, ContentVersions, Invoice PDFs,
+    Indexes, and Database.
+
+    \b
+    Examples:
+      sf inventory                             # Check latest export
+      sf inventory ./exports/export-2026-01-26 # Check specific export
+      sf inventory --json-only | python -m json.tool
+    """
+    from .command_inventory import inventory_cmd
+
+    # Reuse the sfdump inventory command logic
+    ctx = click.Context(inventory_cmd)
+    ctx.invoke(inventory_cmd, export_root=path, json_only=json_only, verbose=False)
+
+
 def main() -> None:
     """Entry point for the sf command."""
     cli()
