@@ -387,7 +387,7 @@ def run_full_export(
             try:
                 from .sf_auth_web import get_instance_url, get_web_token
 
-                token = get_web_token()
+                token = get_web_token(allow_interactive=False)
                 instance_url = get_instance_url()
                 ui.step_done("downloading")
                 try:

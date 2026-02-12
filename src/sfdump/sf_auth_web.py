@@ -193,11 +193,14 @@ class _CallbackHandler(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------------------
 
 
-def get_web_token(*, force_login: bool = False) -> str:
+def get_web_token(*, force_login: bool = False, allow_interactive: bool = True) -> str:
     """Return an access token from the Web Server flow.
 
     Uses cached token if valid, refreshes if possible, otherwise requires
     interactive login (force_login=True or no cached tokens).
+
+    Set allow_interactive=False to only try cached/refresh tokens without
+    falling back to browser login (useful for automated pipelines like sf dump).
     """
     if not force_login:
         # Try cached access token
@@ -218,6 +221,9 @@ def get_web_token(*, force_login: bool = False) -> str:
                 return data["access_token"]
             except RuntimeError:
                 pass  # Refresh token expired, need interactive login
+
+    if not allow_interactive:
+        raise RuntimeError("No cached web token available. Run 'sfdump login-web' first.")
 
     return interactive_login()
 
@@ -260,15 +266,27 @@ def interactive_login() -> str:
         )
         auth_url = f"{login_url}/services/oauth2/authorize?{auth_params}"
 
-        # Open browser
-        webbrowser.open(auth_url)
+        # Try to open browser; print URL for headless/remote environments
+        browser_opened = webbrowser.open(auth_url)
+        print()
+        if not browser_opened:
+            print("Could not open a browser automatically.")
+        print("Open this URL in your browser to log in:")
+        print()
+        print(f"  {auth_url}")
+        print()
+        print(f"Listening on http://localhost:{CALLBACK_PORT}{CALLBACK_PATH}")
+        print()
+        print("If you are on a remote machine, set up an SSH tunnel first:")
+        print(f"  ssh -L {CALLBACK_PORT}:localhost:{CALLBACK_PORT} <your-server>")
+        print()
 
-        # Wait for callback (timeout after 120 seconds)
+        # Wait for callback (timeout after 300 seconds — longer for manual URL copy)
         # KeyboardInterrupt propagates immediately from the short sleep
-        deadline = time.time() + 120
+        deadline = time.time() + 300
         while _CallbackHandler.auth_code is None and _CallbackHandler.error is None:
             if time.time() > deadline:
-                raise RuntimeError("Login timed out after 120 seconds")
+                raise RuntimeError("Login timed out after 300 seconds")
             time.sleep(0.1)
 
         if _CallbackHandler.error:
