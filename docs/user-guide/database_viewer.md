@@ -118,9 +118,10 @@ Click any document to preview it in the right column. The viewer supports inline
 | **Excel** (XLSX, XLS, XLTX, XLSM) | Table preview with sheet selection |
 | **CSV / TSV** | Table preview |
 | **HTML / HTM** | Source preview |
-| **EML emails** | Headers and body preview |
+| **EML emails** (.eml) | Headers and body preview |
+| **Outlook emails** (.msg) | Headers and body preview |
 | **Text files** | Code-style preview |
-| **Other files** (.msg, .docx, .pptx, .zip, etc.) | Download button |
+| **Other files** (.docx, .pptx, .zip, etc.) | Download button |
 
 All previewable file types also include a download button.
 

@@ -96,8 +96,9 @@ Click any document to preview it directly in the browser:
 | **Excel** (XLSX, XLS) | Table with sheet selection |
 | **CSV / TSV** | Table preview |
 | **HTML / EML emails** | Content preview |
+| **Outlook emails** (.msg) | Headers and body preview |
 | **Text files** | Code-style preview |
-| **Other files** (.msg, .docx, .zip, etc.) | Download button |
+| **Other files** (.docx, .zip, etc.) | Download button |
 
 No download required for most file types — everything previews in the browser.
 

@@ -123,6 +123,11 @@ def preview_file(
             _preview_eml(full_path, data, expanded=expanded, context=title or "")
             return
 
+        # Outlook messages (.msg) — parse headers + body
+        if ext == ".msg":
+            _preview_msg(full_path, data, expanded=expanded, context=title or "")
+            return
+
         # Text files — show first chunk
         try:
             txt = data.decode("utf-8")
@@ -234,6 +239,38 @@ def _preview_eml(full_path: Path, data: bytes, *, expanded: bool = True, context
         st.divider()
 
         body = _extract_email_body(msg)
+        if body:
+            st.text(body[:20000])
+        else:
+            st.info("(no text body found)")
+
+
+def _preview_msg(full_path: Path, data: bytes, *, expanded: bool = True, context: str = "") -> None:
+    """Preview an Outlook .msg email: download + parsed headers and body."""
+    _download_button(full_path, data, context=context)
+
+    try:
+        import extract_msg
+
+        msg = extract_msg.Message(str(full_path))
+    except Exception as exc:
+        st.info(f"Could not parse Outlook message: {exc}")
+        return
+
+    with st.expander("Email preview", expanded=expanded):
+        for label, val in [
+            ("From", msg.sender),
+            ("To", msg.to),
+            ("Cc", msg.cc),
+            ("Date", msg.date),
+            ("Subject", msg.subject),
+        ]:
+            if val:
+                st.markdown(f"**{label}:** {val}")
+
+        st.divider()
+
+        body = msg.body
         if body:
             st.text(body[:20000])
         else:
