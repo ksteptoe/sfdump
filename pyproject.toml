@@ -20,6 +20,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "dotenv",
     "pandas",
+    "openpyxl>=3.1",
     "pypandoc",
     "pymupdf",
     "streamlit>=1.30",
