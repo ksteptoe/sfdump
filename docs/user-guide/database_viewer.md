@@ -15,7 +15,7 @@ This opens a web browser where you can:
 - Search for records by name
 - Navigate relationships (Account → Opportunity → Invoice)
 - Find documents by Account or Opportunity
-- Preview PDFs inline
+- Preview documents inline (PDFs, images, spreadsheets, and more)
 
 The viewer automatically finds your most recent export.
 
@@ -35,7 +35,7 @@ The viewer has a clean two-column layout:
 |------|---------|
 | **Left sidebar** | Object selector, search box, filters |
 | **Left column** | Record details, relationships, documents |
-| **Right column** | Document list and PDF preview |
+| **Right column** | Document list and file preview |
 
 ### Selecting Records
 
@@ -109,13 +109,20 @@ Click **Search tips** for more wildcard examples.
 
 ## Previewing Documents
 
-Click any PDF to preview it in the right column:
+Click any document to preview it in the right column. The viewer supports inline preview for many file types:
 
-- Multi-page PDFs scroll smoothly
-- No download required
-- Works for large files
+| File type | Preview |
+|-----------|---------|
+| **PDF** | Multi-page inline preview with smooth scrolling |
+| **Images** (JPG, PNG, GIF, BMP, TIFF, JFIF) | Inline image preview |
+| **Excel** (XLSX, XLS, XLTX, XLSM) | Table preview with sheet selection |
+| **CSV / TSV** | Table preview |
+| **HTML / HTM** | Source preview |
+| **EML emails** | Headers and body preview |
+| **Text files** | Code-style preview |
+| **Other files** (.msg, .docx, .pptx, .zip, etc.) | Download button |
 
-For non-PDF files, you'll see a download link and file location.
+All previewable file types also include a download button.
 
 ## Common Tasks
 

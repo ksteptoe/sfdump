@@ -87,13 +87,19 @@ If you know the project or opportunity name:
 
 ## Previewing Documents
 
-Click any PDF to preview it:
+Click any document to preview it directly in the browser:
 
-- Multi-page documents scroll smoothly
-- No download required
-- Works directly in the browser
+| File type | What you see |
+|-----------|-------------|
+| **PDF** | Multi-page preview with smooth scrolling |
+| **Images** (JPG, PNG, GIF, BMP, TIFF, JFIF) | Inline image |
+| **Excel** (XLSX, XLS) | Table with sheet selection |
+| **CSV / TSV** | Table preview |
+| **HTML / EML emails** | Content preview |
+| **Text files** | Code-style preview |
+| **Other files** (.msg, .docx, .zip, etc.) | Download button |
 
-For non-PDF files, you'll see the file location to access directly.
+No download required for most file types — everything previews in the browser.
 
 ## Selecting Documents from Results
 
@@ -180,6 +186,6 @@ This doesn't mean data is lost.
 | Find invoice range | Explorer → Search → type `PIN0100[6-9]*` |
 | Find customer documents | Explorer → Additional Filters → Account Name |
 | Find deal documents | Explorer → Additional Filters → Opportunity Name |
-| Preview PDF | Click document in results |
+| Preview document | Click document in results |
 
 **You don't need technical skills — just type and click!**

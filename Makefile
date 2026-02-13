@@ -129,7 +129,7 @@ help:
 	@echo "Common targets:"
 	@echo "  make bootstrap           - create .venv and install .[dev] (installs Python if needed)"
 	@echo "  make precommit           - install pre-commit hook"
-	@echo "  make docs                - build Sphinx/MyST docs to docs/_build/html"
+	@echo "  make docs                - build Sphinx/MyST docs (HTML + PDF) to docs/"
 	@echo "  make lint                - run Ruff checks"
 	@echo "  make format              - auto-fix via Ruff"
 	@echo "  make test                - run cached unit+integration tests (not live)"
@@ -226,6 +226,9 @@ precommit:
 # Docs
 docs:
 	$(PYTHON) -m sphinx -b html docs docs/_build/html
+	$(PYTHON) -m sphinx -b latex docs docs/_build/latex && $(MAKE) -C docs/_build/latex all-pdf
+	cp docs/_build/latex/sfdump.pdf docs/sf.pdf
+	@echo "HTML: docs/_build/html/  PDF: docs/sf.pdf"
 
 
 # -----------------------------------------------------------------------------#

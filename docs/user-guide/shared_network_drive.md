@@ -8,20 +8,20 @@ Each user installs sfdump on their own PC and runs the viewer locally. The expor
 
 ```
 Shared Drive (\\server\sfdump-export\)
-├── files/           ← Downloaded Salesforce files
-├── csv/             ← Exported object data
-├── meta/
-│   └── sfdata.db    ← SQLite database (viewer uses this)
-└── indexes/         ← Search indexes
+|-- files/           <- Downloaded Salesforce files
+|-- csv/             <- Exported object data
+|-- meta/
+|   +-- sfdata.db    <- SQLite database (viewer uses this)
++-- indexes/         <- Search indexes
 ```
 
 ```
 User A's PC                    User B's PC
-┌─────────────┐                ┌─────────────┐
-│ sfdump      │                │ sfdump      │
-│ (installed  │──reads from──▶ │ (installed  │──reads from──▶
-│  locally)   │  shared drive  │  locally)   │  shared drive
-└─────────────┘                └─────────────┘
++---------------+              +---------------+
+| sfdump        |              | sfdump        |
+| (installed    |--reads from->| (installed    |--reads from->
+|  locally)     | shared drive |  locally)     | shared drive
++---------------+              +---------------+
 ```
 
 ---
