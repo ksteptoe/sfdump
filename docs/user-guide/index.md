@@ -25,7 +25,8 @@ That's all most users need. The Getting Started guide walks you through:
 Once you're comfortable with the basics:
 
 4. [Database Viewer](database_viewer.md) — Advanced viewer features and navigation
-5. [Installation](installation.md) — Platform-specific installation details
+5. [Shared Network Drive](shared_network_drive.md) — Set up multi-user access to the viewer
+6. [Installation](installation.md) — Platform-specific installation details
 
 ---
 
@@ -33,10 +34,10 @@ Once you're comfortable with the basics:
 
 For power users and custom workflows:
 
-6. [Exporting Files](exporting_files.md) — Custom exports, chunking, filtering
-7. [Verifying and Retrying](verifying_and_retrying.md) — Manual verification commands
-8. [Generating Reports](generating_reports.md) — Missing file reports for compliance
-9. [Interpreting Reports](interpreting_reports.md) — Understanding export metrics
+7. [Exporting Files](exporting_files.md) — Custom exports, chunking, filtering
+8. [Verifying and Retrying](verifying_and_retrying.md) — Manual verification commands
+9. [Generating Reports](generating_reports.md) — Missing file reports for compliance
+10. [Interpreting Reports](interpreting_reports.md) — Understanding export metrics
 
 ```{toctree}
 :maxdepth: 1
@@ -46,6 +47,7 @@ getting-started
 finding_documents
 faq
 database_viewer
+shared_network_drive
 installation
 exporting_files
 verifying_and_retrying
