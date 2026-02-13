@@ -85,6 +85,7 @@ docs/*audit-*.pdf
 
 private_reports
 *.pdf
+!docs/sf.pdf
 *.png
 *.docx
 sfdump_missing_report*.md
