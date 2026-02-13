@@ -8,7 +8,13 @@ from pathlib import Path
 
 import click
 
-from .inventory import CategoryStatus, InventoryManager, InventoryResult, _result_to_dict
+from .inventory import (
+    CategoryStatus,
+    FileCategory,
+    InventoryManager,
+    InventoryResult,
+    _result_to_dict,
+)
 from .progress import ProgressReporter
 
 
@@ -22,6 +28,19 @@ def _fmt_count(n: int) -> str:
     return f"{n:,}"
 
 
+def _file_row_notes(cat: FileCategory) -> str:
+    """Build inline notes for a file-category row."""
+    downloaded = cat.expected - cat.missing
+    parts: list[str] = []
+    if cat.missing > 0:
+        parts.append(f"{_fmt_count(cat.missing)} missing")
+    if cat.actual != downloaded and cat.status != CategoryStatus.NOT_CHECKED:
+        parts.append(f"{_fmt_count(cat.actual)} on disk")
+    if not parts:
+        return ""
+    return "  (" + " · ".join(parts) + ")"
+
+
 def _print_table(result: InventoryResult, ui: ProgressReporter) -> None:
     """Print the summary table."""
     ui.header("Export Inventory")
@@ -29,7 +48,7 @@ def _print_table(result: InventoryResult, ui: ProgressReporter) -> None:
     ui.blank()
 
     # Table header
-    ui.info(f"  {'Category':<20} {'Status':<14} {'Expected':>10}  {'Present':>10}")
+    ui.info(f"  {'Category':<20} {'Status':<14} {'Tracked':>10}  {'Downloaded':>10}")
     ui.info(f"  {'─' * 20} {'─' * 14} {'─' * 10}  {'─' * 10}")
 
     # CSV Objects
@@ -39,24 +58,22 @@ def _print_table(result: InventoryResult, ui: ProgressReporter) -> None:
         f" {_fmt_count(c.expected_count):>10}  {_fmt_count(c.found_count):>10}"
     )
 
-    # Attachments
+    # Attachments — show verified-present count (tracked - missing)
     a = result.attachments
-    extra = ""
-    if a.status != CategoryStatus.NOT_CHECKED and a.missing > 0:
-        extra = f"  ({_fmt_count(a.missing)} missing)"
+    a_downloaded = a.expected - a.missing
     ui.info(
         f"  {'Attachments':<20} {_status_label(a.status):<14}"
-        f" {_fmt_count(a.expected):>10}  {_fmt_count(a.actual):>10}{extra}"
+        f" {_fmt_count(a.expected):>10}  {_fmt_count(a_downloaded):>10}"
+        f"{_file_row_notes(a)}"
     )
 
-    # ContentVersions
+    # ContentVersions — show verified-present count (tracked - missing)
     cv = result.content_versions
-    extra = ""
-    if cv.status != CategoryStatus.NOT_CHECKED and cv.missing > 0:
-        extra = f"  ({_fmt_count(cv.missing)} missing)"
+    cv_downloaded = cv.expected - cv.missing
     ui.info(
         f"  {'ContentVersions':<20} {_status_label(cv.status):<14}"
-        f" {_fmt_count(cv.expected):>10}  {_fmt_count(cv.actual):>10}{extra}"
+        f" {_fmt_count(cv.expected):>10}  {_fmt_count(cv_downloaded):>10}"
+        f"{_file_row_notes(cv)}"
     )
 
     # Invoice PDFs
@@ -84,11 +101,17 @@ def _print_table(result: InventoryResult, ui: ProgressReporter) -> None:
     )
 
     ui.blank()
+
+    # Legend
+    ui.info("  Tracked = records in metadata CSVs")
+    ui.info("  Downloaded = verified present (Tracked minus Missing)")
+
+    ui.blank()
     ui.info(f"  Overall: {_status_label(result.overall_status)}")
 
     if result.warnings:
         ui.blank()
-        ui.info("  Warnings:")
+        ui.info("  Actions needed:")
         for w in result.warnings:
             ui.info(f"    - {w}")
 
@@ -148,9 +171,13 @@ def inventory_cmd(
     if result.content_versions.missing > 0:
         result.warnings.append(
             f"ContentVersions: {result.content_versions.missing} not yet downloaded"
+            " — run: sfdump retry-missing"
         )
     if result.attachments.missing > 0:
-        result.warnings.append(f"Attachments: {result.attachments.missing} not yet downloaded")
+        result.warnings.append(
+            f"Attachments: {result.attachments.missing} not yet downloaded"
+            " — run: sfdump retry-missing"
+        )
     if result.invoices.status == CategoryStatus.INCOMPLETE:
         result.warnings.append(f"Invoice PDFs: {result.invoices.missing} not yet downloaded")
     if result.indexes.master_rows_missing_path > 0:
