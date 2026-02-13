@@ -286,7 +286,7 @@ def build_invoice_pdf_index(
             size = ""
             if pdf_path.exists() and pdf_path.stat().st_size > 0:
                 try:
-                    rel_path = str(pdf_path.relative_to(export_root))
+                    rel_path = pdf_path.relative_to(export_root).as_posix()
                 except ValueError:
                     rel_path = str(pdf_path)
                 size = str(pdf_path.stat().st_size)
