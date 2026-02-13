@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import requests
+from requests.adapters import HTTPAdapter
 
 from .env_loader import load_env_files
 from .exceptions import MissingCredentialsError, RateLimitError
@@ -64,9 +65,12 @@ class SFConfig:
 class SalesforceAPI:
     """Minimal Salesforce REST API client using OAuth client-credentials."""
 
-    def __init__(self, cfg: Optional[SFConfig] = None) -> None:
+    def __init__(self, cfg: Optional[SFConfig] = None, pool_maxsize: int = 20) -> None:
         self.cfg = cfg or SFConfig.from_env()
         self.session = requests.Session()
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=pool_maxsize)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.access_token: Optional[str] = None
         self.instance_url: Optional[str] = None
         self.api_version: Optional[str] = None
