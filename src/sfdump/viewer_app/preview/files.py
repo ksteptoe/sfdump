@@ -5,6 +5,7 @@ import mimetypes
 import os
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 from typing import Optional, Union
 
@@ -161,7 +162,9 @@ def _preview_excel(
     try:
         import pandas as pd
 
-        dfs = pd.read_excel(full_path, sheet_name=None, engine=None)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="Cannot parse header or footer")
+            dfs = pd.read_excel(full_path, sheet_name=None, engine=None)
     except ImportError:
         st.info("Install openpyxl for Excel preview: `pip install openpyxl`")
         return
@@ -172,7 +175,7 @@ def _preview_excel(
     for sheet_name, df in dfs.items():
         label = f"Sheet: {sheet_name}" if len(dfs) > 1 else "Spreadsheet preview"
         with st.expander(label, expanded=expanded):
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df.astype(str), width="stretch")
 
 
 def _preview_csv(full_path: Path, data: bytes, *, expanded: bool = True, context: str = "") -> None:
@@ -189,7 +192,7 @@ def _preview_csv(full_path: Path, data: bytes, *, expanded: bool = True, context
         return
 
     with st.expander("Table preview", expanded=expanded):
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width="stretch")
 
 
 def _preview_html(
