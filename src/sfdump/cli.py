@@ -86,16 +86,20 @@ def cli(ctx: click.Context, loglevel: Optional[int]) -> None:
     _logger.debug("CLI start, version=%s", __version__)
 
     # Notify novice users about available updates on every invocation
+    # Only in interactive terminals (skip in tests / piped output)
     try:
-        from .update_check import is_update_available
+        import sys
 
-        available, current, latest = is_update_available()
-        if available:
-            click.echo(
-                f"\n  Update available: {current} -> {latest}"
-                f"\n  Run 'sfdump upgrade' to install.\n",
-                err=True,
-            )
+        if sys.stderr.isatty():
+            from .update_check import is_update_available
+
+            available, current, latest = is_update_available()
+            if available:
+                click.echo(
+                    f"\n  Update available: {current} -> {latest}"
+                    f"\n  Run 'sfdump upgrade' to install.\n",
+                    err=True,
+                )
     except Exception:
         pass
 
