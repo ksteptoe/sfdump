@@ -91,13 +91,13 @@ Anyone on your local network can access it.
 
 ### Can I search across all documents?
 
-Yes. In the viewer, click the **Explorer** tab and search by Account or Opportunity name to find all related documents.
+Yes. The viewer opens in Explorer mode where you can search by Account name, Opportunity name, invoice number, or any keyword to find all related documents.
 
 ### How do I find a specific invoice?
 
-1. Select **Invoice** from the Object dropdown
-2. Type the invoice number in the search box
-3. Click the invoice to view details
+1. Type the invoice number in the search box (e.g., "SIN002795")
+2. Click the matching result to preview the document
+3. Click **Open parent record** to see the full invoice details in DB Viewer
 
 ## Reports
 

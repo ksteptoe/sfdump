@@ -10,10 +10,10 @@ This guide lists all screenshots needed for the documentation. Please capture th
 
 1. Launch the viewer:
    ```bash
-   sfdump db-viewer --db exports/export-2025-12-31/meta/sfdata.db
+   sfdump db-viewer -d exports/export-2026-01-26
    ```
 
-2. Open browser to http://localhost:8503
+2. Open browser to http://localhost:8501
 
 3. Prepare for screenshots:
    - Use a clean browser window (close extra tabs for clarity)
@@ -26,48 +26,54 @@ This guide lists all screenshots needed for the documentation. Please capture th
 
 **01-launch.png** - Terminal showing viewer starting
 - Show the terminal/command prompt
-- Include the command: `sfdump db-viewer --db ...`
-- Show the output with URLs (http://localhost:8503)
+- Include the command: `sfdump db-viewer -d ...`
+- Show the output with URLs (http://localhost:8501)
 - Crop to show just the relevant terminal output
 
-**02-interface.png** - Main viewer interface
+**02-explorer-landing.png** - Explorer view (default landing page)
 - Open the viewer in browser
-- Select any Account (e.g., search for "Acme Corp")
-- Show all three panels: Sidebar, Record List, Details
-- This is the "overview" shot showing the whole interface
+- Show the full-width Explorer with search box, no sidebar visible
+- Show the "DB Viewer" button in the top-right corner
+- This is the "overview" shot showing the landing page
 
-**03-select-object.png** - Object dropdown
+**03-db-viewer-interface.png** - DB Viewer with record selected
+- Click "DB Viewer" button to switch to DB Viewer mode
+- Select any Account (e.g., search for "Acme Corp")
+- Show all panels: Sidebar (with "Back to Explorer" button), Record List, Details
+- This shows the full DB Viewer layout
+
+**04-select-object.png** - Object dropdown in DB Viewer sidebar
 - Click the Object dropdown in sidebar
 - Capture the dropdown menu expanded
 - Show various objects available (Account, Opportunity, Invoice, etc.)
 
-### Section 2: Browsing Records
+### Section 2: Browsing Records (DB Viewer)
 
-**04-search-records.png** - Searching for records
+**05-search-records.png** - Searching for records
 - In sidebar search box, type "Acme Corp"
-- Show the filtered results in the middle panel
+- Show the filtered results in the left column
 - Highlight that results update as you type
 
-**05-record-details.png** - Account record details tab
-- Select a Acme Corp account
+**06-record-details.png** - Account record details tab
+- Select an Acme Corp account
 - Show the Details tab selected
 - Display showing account fields (Name, Type, etc.)
 
-### Section 3: Navigating Relationships
+### Section 3: Navigating Relationships (DB Viewer)
 
-**06-children-tab.png** - Children tab with relationships
-- Still viewing a Acme Corp Account
+**07-children-tab.png** - Children tab with relationships
+- Still viewing an Acme Corp Account
 - Click the Children tab
 - Expand one relationship (e.g., Opportunity)
 - Show the relationship name and count
 
-**07-navigate-down.png** - Selecting and opening a child
+**08-navigate-down.png** - Selecting and opening a child
 - In expanded Opportunity relationship
 - Show the dropdown with child records
 - Show the "Open" button
-- Optional: Include breadcrumbs at top
+- Optional: Include breadcrumbs in sidebar
 
-**08-contextual-message.png** - Closed Lost opportunity message
+**09-contextual-message.png** - Closed Lost opportunity message
 - Navigate to Opportunity: Acme Corp_BE-NPI-SC_Q2_2020
 - Click Children tab
 - Expand c2g__codaInvoice__c relationship
@@ -77,60 +83,60 @@ This guide lists all screenshots needed for the documentation. Please capture th
   (Stage: Closed Lost), as they typically don't generate invoices.
   ```
 
-### Section 4: Document Explorer
+### Section 4: Explorer (Document Search)
 
-**09-document-explorer.png** - Document Explorer main interface
-- Click Document Explorer tab
+**10-explorer-search.png** - Explorer search interface
+- Switch back to Explorer (click "Back to Explorer" in sidebar)
 - Show the search interface BEFORE entering search
-- Highlight: "Search by Account or Opportunity" section
-- Show all the filter options
+- Highlight: Search box and filter options
+- Full-width layout, no sidebar
 
-**10-search-account.png** - Search by Account (Acme Corp)
-- Type "Acme Corp" in Account Name field
-- Show "Matches: 65" (or whatever number shows)
+**11-search-account.png** - Search by Account (Acme Corp)
+- Click Additional Filters, type "Acme Corp" in Account Name field
+- Show match count
 - Show results table with account_name and opp_name columns visible
 - Make sure columns are wide enough to read
 
-**11-search-opportunity.png** - Search by Opportunity (Beta Industries)
+**12-search-opportunity.png** - Search by Opportunity (Beta Industries)
 - Clear Account search
 - Type "Beta Industries" in Opportunity Name field
-- Show "Matches: 75" (or whatever number)
+- Show match count
 - Results table visible
 
-**12-pdf-preview.png** - PDF preview showing document
+**13-pdf-preview.png** - PDF preview showing document
 - Search for "RFP Response Acme"
 - Select the document from dropdown
 - Scroll down to show the PDF preview
 - Capture the PDF rendering inline (at least first page visible)
 
-**13-open-parent.png** - Open parent record button
+**14-open-parent.png** - Open parent record button
 - With a document selected
 - Highlight the "Open parent record" button
-- Optional: Show the parent info (Opportunity name) next to it
+- Show that clicking it switches to DB Viewer with the record
 
 ### Section 5: Finding Documents (Simplified Guide)
 
-**user-01-home.png** - Viewer home page (simple view)
-- Fresh viewer page
-- No object selected or just default view
+**user-01-home.png** - Viewer home page (Explorer landing)
+- Fresh viewer page showing Explorer
+- Full-width search, no sidebar
 - Clean, uncluttered shot for beginners
 
-**user-02-doc-explorer-tab.png** - Document Explorer tab location
-- Highlight/circle where the "Document Explorer" tab is
-- Make it obvious for naive users where to click
+**user-02-search-box.png** - Search box location
+- Highlight/circle the search box
+- Make it obvious for naive users where to type
 
 **user-03-account-search.png** - Account Name search box
-- Close-up of the "Account Name" input field
+- Close-up of the "Additional Filters" expanded
+- Show the "Account Name" input field
 - Maybe show cursor in the field or partially typed name
-- Make it clear this is where to type
 
 **user-04-search-results.png** - Search results after typing Acme Corp
 - Results showing for Acme Corp
-- Clear view of the "Matches: 73" counter
+- Clear view of the match counter
 - Results table visible with account_name column
 
 **user-05-pdf-preview.png** - PDF preview (user-friendly angle)
-- Similar to #12 but emphasize the ease of use
+- Similar to #13 but emphasize the ease of use
 - Show full document preview
 - Maybe zoom in on the PDF content
 
@@ -138,13 +144,13 @@ This guide lists all screenshots needed for the documentation. Please capture th
 - Similar to user-03 but for Opportunity field
 - Show where to type opportunity name
 
-**user-07-invoice-search.png** - Finding specific invoice
-- Sidebar showing Invoice object selected
-- Search box with invoice number typed
-- Invoice selected in list
+**user-07-invoice-search.png** - Finding specific invoice by search
+- Explorer view with invoice number typed in search box
+- Show matching result in the table
+- Highlight the simplicity: just type and find
 
 **user-08-contract-search.png** - Finding contracts by keywords
-- Document Explorer search results
+- Explorer search results
 - Results filtered to show PDFs
 - Filenames showing "contract", "RFP", "Agreement" keywords
 - Highlight a contract file in the results
@@ -197,8 +203,8 @@ docs/
     └── images/
         └── viewer/
             ├── 01-launch.png
-            ├── 02-interface.png
-            ├── 03-select-object.png
+            ├── 02-explorer-landing.png
+            ├── 03-db-viewer-interface.png
             ...
             └── user-08-contract-search.png
 ```
@@ -218,7 +224,7 @@ docs/
 
 ## Quick Checklist
 
-- [ ] All 21 screenshots captured
+- [ ] All screenshots captured
 - [ ] Saved to correct directory with exact filenames
 - [ ] No sensitive data visible
 - [ ] Clear, readable text in all screenshots
@@ -239,15 +245,15 @@ If you're short on time, capture screenshots in this order:
 
 **Critical (for naive users):**
 1. user-01 through user-08 (Finding Documents guide)
-2. 10-search-account.png (Account search)
-3. 11-search-opportunity.png (Opportunity search)
-4. 12-pdf-preview.png (PDF preview working)
+2. 11-search-account.png (Account search)
+3. 12-search-opportunity.png (Opportunity search)
+4. 13-pdf-preview.png (PDF preview working)
 
 **Important (for complete documentation):**
-5. 02-interface.png (Overview)
-6. 06-children-tab.png (Relationships)
-7. 08-contextual-message.png (Shows our new feature!)
-8. 09-document-explorer.png (Document Explorer interface)
+5. 02-explorer-landing.png (Explorer landing page)
+6. 03-db-viewer-interface.png (DB Viewer layout)
+7. 07-children-tab.png (Relationships)
+8. 09-contextual-message.png (Shows contextual feature)
 
 **Nice to have:**
 9. All remaining screenshots for completeness

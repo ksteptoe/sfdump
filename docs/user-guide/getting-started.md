@@ -254,20 +254,20 @@ This opens your web browser to the sfdump viewer (usually at `http://localhost:8
 
 ### Finding Documents
 
-1. Click the **Explorer** tab in the sidebar
-2. Type a customer name, project name, or keyword in the search box
-3. Results show matching Accounts, Contacts, Opportunities, and files
-4. Click any result to see details and related documents
+The viewer opens in Explorer mode — a full-width search page:
 
-### Browsing by Account
+1. Type a customer name, invoice number, or keyword in the search box
+2. Results show matching documents across the entire export
+3. Click any result to preview it
 
-1. Go to **Accounts** in the sidebar
-2. Scroll or search for the account you want
-3. Click an account to see:
-   - Account details
-   - Related Contacts
-   - Related Opportunities
-   - Attached files and documents
+### Browsing Records
+
+Click the **DB Viewer** button (top-right) to switch to the record browser:
+
+1. Choose an object type (Account, Opportunity, Invoice, etc.)
+2. Search for the record you want
+3. View details, related records, and attached documents
+4. Click **Back to Explorer** in the sidebar to return to search
 
 ### Viewing Files
 

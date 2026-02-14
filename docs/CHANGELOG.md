@@ -4,6 +4,16 @@ orphan: true
 
 # Changelog
 
+## v2.4.15
+
+### Viewer Two-View Architecture
+
+- **Explorer as default view**: The viewer now opens in full-width Explorer mode — document search is front and center with no sidebar clutter
+- **DB Viewer mode**: Click "DB Viewer" button (top-right) to switch to the record browser with sidebar controls, relationship navigation, and subtree documents
+- **Seamless bridging**: "Open parent record" in Explorer automatically switches to DB Viewer with the correct record selected
+- **Back to Explorer**: One-click return from DB Viewer sidebar
+- **Debug cleanup**: Removed debug expanders from production UI
+
 ## v2.4.14
 
 ### Document Explorer Improvements

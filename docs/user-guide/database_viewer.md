@@ -12,9 +12,8 @@ sf view
 
 This opens a web browser where you can:
 
-- Search for records by name
+- Search for documents by name, invoice number, or customer
 - Navigate relationships (Account → Opportunity → Invoice)
-- Find documents by Account or Opportunity
 - Preview documents inline (PDFs, images, spreadsheets, and more)
 
 The viewer automatically finds your most recent export.
@@ -27,15 +26,54 @@ To view a specific export:
 sf view ./exports/export-2026-01-15
 ```
 
-## Viewer Interface
+## Two Views
 
-The viewer has a clean two-column layout:
+The viewer has two modes you can switch between:
+
+| View | Purpose | Default? |
+|------|---------|----------|
+| **Explorer** | Full-width document search across all exported files | Yes (landing page) |
+| **DB Viewer** | Record browser with sidebar controls and relationship navigation | No (click "DB Viewer" button) |
+
+### Switching Between Views
+
+- **Explorer → DB Viewer**: Click the **DB Viewer** button in the top-right corner
+- **DB Viewer → Explorer**: Click **Back to Explorer** at the top of the sidebar
+- **Explorer → DB Viewer (via record)**: Click **Open parent record** on any search result to jump to that record in DB Viewer
+
+## Explorer (Default View)
+
+The Explorer is a full-width document search with no sidebar. This is where most users spend their time.
+
+**Search by invoice number (PIN/SIN):**
+1. Type the invoice number in the Search box (e.g., "PIN010063")
+2. Results show the record name first for easy identification
+
+**Using wildcards:**
+- `PIN01006*` — finds PIN010060, PIN010061, etc.
+- `SIN*` — finds all sales invoices
+- `PIN0100[6-9]*` — finds a range (PIN01006x through PIN01009x)
+
+Click **Search tips** for more wildcard examples.
+
+**Additional filters (click to expand):**
+- Filter by Account Name
+- Filter by Opportunity Name
+- Filter by Object Type
+
+**Filter results:**
+- Check "PDF only" to show only PDFs
+- Results show record_name first, then file_name
+
+## DB Viewer
+
+The DB Viewer has a sidebar and two-column layout for browsing records and their relationships:
 
 | Area | Purpose |
 |------|---------|
-| **Left sidebar** | Object selector, search box, filters |
-| **Left column** | Record details, relationships, documents |
-| **Right column** | Document list and file preview |
+| **Sidebar** | Object selector, search box, filters, navigation breadcrumbs |
+| **Left column** | Record list, record details, relationships, documents |
+| **Right column** | Subtree document list and file preview |
 
 ### Selecting Records
 
@@ -55,7 +93,7 @@ Toggle "Show all fields" in the sidebar to see everything.
 
 ## Navigating Relationships
 
-The **Children** tab shows related records. This is how you drill down through your data.
+The **Children** tab (in DB Viewer) shows related records. This is how you drill down through your data.
 
 **Example navigation:**
 
@@ -73,43 +111,30 @@ The **Children** tab shows related records. This is how you drill down through y
 
 ## Finding Documents
 
-### From a Record
+### From the Explorer
 
-Select any record and click the **Documents** tab to see:
+The easiest way to find documents — just search:
+
+1. Type a customer name, invoice number, or keyword
+2. Results show all matching documents across the entire export
+3. Click any result to preview it
+
+### From a Record (DB Viewer)
+
+Select any record in DB Viewer and click the **Documents** tab to see:
 
 - Documents attached to the current record
 - Documents from parent records in your navigation path
 
 **Example:** Viewing an Invoice shows documents from the Invoice, its parent Opportunity, and the parent Account.
 
-### Document Explorer
+### Jumping Between Views
 
-The **Explorer** tab searches across ALL documents in your export.
-
-**Search by invoice number (PIN/SIN):**
-1. Click the **Explorer** tab
-2. Type the invoice number in the Search box (e.g., "PIN010063")
-3. Results show the record name first for easy identification
-
-**Using wildcards:**
-- `PIN01006*` — finds PIN010060, PIN010061, etc.
-- `SIN*` — finds all sales invoices
-- `PIN0100[6-9]*` — finds a range (PIN01006x through PIN01009x)
-
-Click **Search tips** for more wildcard examples.
-
-**Additional filters (click to expand):**
-- Filter by Account Name
-- Filter by Opportunity Name
-- Filter by Object Type
-
-**Filter results:**
-- Check "PDF only" to show only PDFs
-- Results show record_name first, then file_name
+When viewing a document in Explorer, click **Open parent record** to jump to DB Viewer with that record selected. This lets you explore the record's relationships and other attached documents.
 
 ## Previewing Documents
 
-Click any document to preview it in the right column. The viewer supports inline preview for many file types:
+Click any document to preview it. The viewer supports inline preview for many file types:
 
 | File type | Preview |
 |-----------|---------|
@@ -129,23 +154,22 @@ All previewable file types also include a download button.
 
 ### Find All Documents for a Customer
 
-1. Click **Explorer** tab
-2. Type the customer/account name
-3. Review all related documents
+1. Type the customer/account name in the Search box
+2. Review all related documents
 
 ### Review Invoices for a Deal
 
-1. Select **Account** → search for customer
-2. Navigate to **Children** → **Opportunities**
-3. Open the specific opportunity
-4. Navigate to **Children** → **Invoices**
-5. Browse all invoices and attached documents
+1. Click **DB Viewer** to switch to record browser
+2. Select **Account** → search for customer
+3. Navigate to **Children** → **Opportunities**
+4. Open the specific opportunity
+5. Navigate to **Children** → **Invoices**
+6. Browse all invoices and attached documents
 
 ### Find a Specific Invoice
 
-1. Select **Invoice** from the object dropdown
-2. Search by invoice number (e.g., "SIN003926")
-3. View details and attached documents
+1. Type the invoice number in the Search box (e.g., "SIN003926")
+2. Click **Open parent record** to view the full invoice details in DB Viewer
 
 ## Tips
 
