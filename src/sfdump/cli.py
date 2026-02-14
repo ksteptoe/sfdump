@@ -84,6 +84,19 @@ def cli(ctx: click.Context, loglevel: Optional[int]) -> None:
     """SF Dump CLI. Use subcommands like 'login' or 'query'."""
     configure_logging(loglevel)
     _logger.debug("CLI start, version=%s", __version__)
+
+    # Notify novice users about available updates on every invocation
+    try:
+        from .update_check import is_update_available
+
+        available, current, latest = is_update_available()
+        if available:
+            click.echo(
+                f"\n  Update available: {current} -> {latest}\n  Run 'sfdump upgrade' to install.\n"
+            )
+    except Exception:
+        pass
+
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
