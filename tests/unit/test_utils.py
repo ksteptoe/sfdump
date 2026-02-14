@@ -1,7 +1,8 @@
 # tests/unit/test_utils.py
 import csv
+from pathlib import Path
 
-from sfdump.utils import ensure_dir, sanitize_filename, sha256_of_file, write_csv
+from sfdump.utils import ensure_dir, find_file_on_disk, sanitize_filename, sha256_of_file, write_csv
 
 
 def test_ensure_dir_idempotent(tmp_path):
@@ -53,3 +54,44 @@ def test_write_csv_creates_and_orders_headers(tmp_path):
     with open(f, newline="", encoding="utf-8") as fh:
         r = list(csv.DictReader(fh))
     assert r == [{"a": "1", "b": "2", "c": ""}, {"a": "3", "b": "4", "c": "5"}]
+
+
+class TestFindFileOnDisk:
+    def test_finds_content_version_file(self, tmp_path: Path):
+        """Finds a ContentVersion file under files/<shard>/<id>_*."""
+        fdir = tmp_path / "files" / "do"
+        fdir.mkdir(parents=True)
+        (fdir / "DOC123_Proposal.docx").write_bytes(b"data")
+
+        result = find_file_on_disk(tmp_path, "DOC123", "File")
+        assert result == "files/do/DOC123_Proposal.docx"
+
+    def test_finds_attachment_file(self, tmp_path: Path):
+        """Finds an Attachment file under files_legacy/<shard>/<id>_*."""
+        fdir = tmp_path / "files_legacy" / "at"
+        fdir.mkdir(parents=True)
+        (fdir / "ATT99_Contract.pdf").write_bytes(b"data")
+
+        result = find_file_on_disk(tmp_path, "ATT99", "Attachment")
+        assert result == "files_legacy/at/ATT99_Contract.pdf"
+
+    def test_returns_empty_when_no_match(self, tmp_path: Path):
+        """Returns empty string when no file is found on disk."""
+        (tmp_path / "files" / "do").mkdir(parents=True)
+        assert find_file_on_disk(tmp_path, "DOC999", "File") == ""
+
+    def test_returns_empty_when_multiple_matches(self, tmp_path: Path):
+        """Returns empty string when multiple files match (ambiguous)."""
+        fdir = tmp_path / "files" / "do"
+        fdir.mkdir(parents=True)
+        (fdir / "DOC1_v1.pdf").write_bytes(b"a")
+        (fdir / "DOC1_v2.pdf").write_bytes(b"b")
+
+        assert find_file_on_disk(tmp_path, "DOC1", "File") == ""
+
+    def test_returns_empty_for_empty_file_id(self, tmp_path: Path):
+        assert find_file_on_disk(tmp_path, "", "File") == ""
+
+    def test_returns_empty_when_shard_dir_missing(self, tmp_path: Path):
+        """Returns empty string when the shard directory doesn't exist."""
+        assert find_file_on_disk(tmp_path, "DOC1", "File") == ""

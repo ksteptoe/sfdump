@@ -5,6 +5,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from sfdump.utils import find_file_on_disk
+
 DDL = """
 CREATE TABLE IF NOT EXISTS record_documents (
   object_type      TEXT NOT NULL,
@@ -35,16 +37,21 @@ CREATE INDEX IF NOT EXISTS idx_record_documents_file
 
 def _read_csv_map_by_id(csv_path: Path) -> Dict[str, Dict[str, str]]:
     """Read a CSV and return {Id: rowdict} if it has an Id column."""
+    return _read_csv_map_by_key(csv_path, "Id")
+
+
+def _read_csv_map_by_key(csv_path: Path, key_col: str) -> Dict[str, Dict[str, str]]:
+    """Read a CSV and return {key_col_value: rowdict}."""
     if not csv_path.exists():
         return {}
 
     with csv_path.open(newline="", encoding="utf-8") as f:
         r = csv.DictReader(f)
-        if not r.fieldnames or "Id" not in r.fieldnames:
+        if not r.fieldnames or key_col not in r.fieldnames:
             return {}
         out: Dict[str, Dict[str, str]] = {}
         for row in r:
-            rid = (row.get("Id") or "").strip()
+            rid = (row.get(key_col) or "").strip()
             if rid:
                 out[rid] = row
         return out
@@ -92,7 +99,7 @@ def build_record_documents(db_path: Path, export_root: Path) -> None:
     meta_dir = export_root / "meta"
 
     attachments = _read_csv_map_by_id(links_dir / "attachments.csv")
-    versions = _read_csv_map_by_id(links_dir / "content_versions.csv")
+    versions = _read_csv_map_by_key(links_dir / "content_versions.csv", "ContentDocumentId")
     master_index = _read_master_index_by_file_id(meta_dir / "master_documents_index.csv")
 
     conn = sqlite3.connect(str(db_path))
@@ -164,6 +171,12 @@ def build_record_documents(db_path: Path, export_root: Path) -> None:
                     sb = (m.get("size_bytes") or "").strip()
                     if sb.isdigit():
                         size_bytes = int(sb)
+
+            # Final fallback: scan disk for the file
+            if not path:
+                disk_path = find_file_on_disk(export_root, file_id, file_source)
+                if disk_path:
+                    path = disk_path
 
             rows.append(
                 (

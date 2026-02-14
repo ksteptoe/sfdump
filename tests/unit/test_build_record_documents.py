@@ -104,3 +104,112 @@ class TestPathFromRow:
         # File name and extension should still be set
         assert rows[0]["file_name"] == "SIN001002.pdf"
         assert rows[0]["record_name"] == "SIN001002"
+
+
+class TestContentDocumentIdKey:
+    def test_content_version_looked_up_by_content_document_id(self, export_root: Path):
+        """content_versions.csv is keyed by ContentDocumentId, not Id."""
+        links = export_root / "links"
+        _write_files_index(
+            links,
+            [
+                {
+                    "object_type": "Opportunity",
+                    "record_id": "OPP1",
+                    "record_name": "Deal",
+                    "file_source": "File",
+                    "file_id": "069DOCID",
+                    "file_link_id": "CDL1",
+                    "file_name": "Proposal.docx",
+                    "file_extension": "docx",
+                },
+            ],
+        )
+        # content_versions.csv has Id (ContentVersionId) and ContentDocumentId
+        cv_path = links / "content_versions.csv"
+        with cv_path.open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(
+                f, fieldnames=["Id", "ContentDocumentId", "path", "FileType", "ContentSize"]
+            )
+            w.writeheader()
+            w.writerow(
+                {
+                    "Id": "068VERID",
+                    "ContentDocumentId": "069DOCID",
+                    "path": "files/06/069DOCID_Proposal.docx",
+                    "FileType": "DOCX",
+                    "ContentSize": "5000",
+                }
+            )
+
+        db_path = export_root / "meta" / "test.db"
+        build_record_documents(db_path, export_root)
+
+        rows = _query_record_documents(db_path)
+        assert len(rows) == 1
+        assert rows[0]["path"] == "files/06/069DOCID_Proposal.docx"
+        assert rows[0]["content_type"] == "DOCX"
+        assert rows[0]["size_bytes"] == 5000
+
+
+class TestDiskScanFallback:
+    def test_finds_file_on_disk_when_csv_empty(self, export_root: Path):
+        """Disk-scan fallback finds ContentVersion files on disk."""
+        _write_files_index(
+            export_root / "links",
+            [
+                {
+                    "object_type": "Opportunity",
+                    "record_id": "OPP1",
+                    "record_name": "Deal",
+                    "file_source": "File",
+                    "file_id": "DOC123",
+                    "file_link_id": "CDL1",
+                    "file_name": "Proposal.docx",
+                    "file_extension": "docx",
+                },
+            ],
+        )
+        # No content_versions.csv, no master index
+
+        # Create the file on disk
+        fdir = export_root / "files" / "do"
+        fdir.mkdir(parents=True)
+        (fdir / "DOC123_Proposal.docx").write_bytes(b"content")
+
+        db_path = export_root / "meta" / "test.db"
+        build_record_documents(db_path, export_root)
+
+        rows = _query_record_documents(db_path)
+        assert len(rows) == 1
+        assert rows[0]["path"] == "files/do/DOC123_Proposal.docx"
+
+    def test_finds_attachment_on_disk_when_csv_empty(self, export_root: Path):
+        """Disk-scan fallback finds Attachment files on disk."""
+        _write_files_index(
+            export_root / "links",
+            [
+                {
+                    "object_type": "Opportunity",
+                    "record_id": "OPP1",
+                    "record_name": "Deal",
+                    "file_source": "Attachment",
+                    "file_id": "ATT99",
+                    "file_link_id": "",
+                    "file_name": "Contract.pdf",
+                    "file_extension": "pdf",
+                },
+            ],
+        )
+
+        # Create the file on disk
+        fdir = export_root / "files_legacy" / "at"
+        fdir.mkdir(parents=True)
+        (fdir / "ATT99_Contract.pdf").write_bytes(b"content")
+
+        db_path = export_root / "meta" / "test.db"
+        build_record_documents(db_path, export_root)
+
+        rows = _query_record_documents(db_path)
+        assert len(rows) == 1
+        assert rows[0]["path"] == "files_legacy/at/ATT99_Contract.pdf"

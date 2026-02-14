@@ -383,6 +383,66 @@ def test_build_master_index_includes_invoice_pdfs(tmp_path: Path) -> None:
     assert row2.get("account_name", "") == "MegaCorp"
 
 
+def test_build_master_index_disk_scan_recovers_paths(tmp_path: Path) -> None:
+    """Disk-scan fallback finds files on disk when CSV paths are missing.
+
+    Simulates a chunked export where content_versions.csv only has the last
+    chunk's data, but earlier chunk files exist on disk.
+    """
+    export_root = tmp_path / "export-test"
+    links_dir = export_root / "links"
+
+    # Create an index with 2 Files, neither in content_versions.csv
+    _write_csv(
+        links_dir / "Opportunity_files_index.csv",
+        [
+            {
+                "object_type": "Opportunity",
+                "record_id": "OPP1",
+                "record_name": "Deal 1",
+                "file_source": "File",
+                "file_id": "DOC1",
+                "file_link_id": "CDL1",
+                "file_name": "Proposal.docx",
+                "file_extension": "docx",
+            },
+            {
+                "object_type": "Opportunity",
+                "record_id": "OPP1",
+                "record_name": "Deal 1",
+                "file_source": "Attachment",
+                "file_id": "ATT1",
+                "file_link_id": "",
+                "file_name": "Contract.pdf",
+                "file_extension": "pdf",
+            },
+        ],
+    )
+    _write_csv(links_dir / "attachments.csv", [])
+    _write_csv(links_dir / "content_versions.csv", [])
+
+    # Create actual files on disk matching the naming convention
+    files_dir = export_root / "files" / "do"
+    files_dir.mkdir(parents=True)
+    (files_dir / "DOC1_Proposal.docx").write_bytes(b"content")
+
+    legacy_dir = export_root / "files_legacy" / "at"
+    legacy_dir.mkdir(parents=True)
+    (legacy_dir / "ATT1_Contract.pdf").write_bytes(b"content")
+
+    out_path, docs_with_path, docs_missing_path = _build_master_index(export_root)
+
+    assert docs_with_path == 2
+    assert docs_missing_path == 0
+
+    df = pd.read_csv(out_path, dtype=str).fillna("")
+    file_row = df[df["file_source"] == "File"].iloc[0]
+    assert file_row["local_path"] == "files/do/DOC1_Proposal.docx"
+
+    att_row = df[df["file_source"] == "Attachment"].iloc[0]
+    assert att_row["local_path"] == "files_legacy/at/ATT1_Contract.pdf"
+
+
 def test_docs_index_cli_warns_on_missing_files(tmp_path: Path) -> None:
     """CLI shows warning when documents are missing local files."""
     export_root = tmp_path / "export-test"

@@ -6,6 +6,8 @@ from typing import Dict, List, Optional
 
 import click
 
+from sfdump.utils import find_file_on_disk
+
 _logger = logging.getLogger(__name__)
 
 try:
@@ -240,6 +242,27 @@ def _build_master_index(export_root: Path) -> Path:
     master["local_path"] = (
         master["local_path"].fillna("").map(lambda p: _prefer_existing(export_root, p))
     )
+
+    # 3d) Disk-scan fallback: find files that exist on disk but were not
+    #     recorded in the per-chunk CSV (e.g. from earlier export chunks).
+    missing_path = (master["local_path"].str.strip() == "") & (
+        master["file_id"].fillna("").str.strip() != ""
+    )
+    if missing_path.any():
+        _logger.info(
+            "Attempting disk scan for %d documents with no CSV path...",
+            int(missing_path.sum()),
+        )
+        found_count = 0
+        for idx in master.index[missing_path]:
+            fid = master.at[idx, "file_id"]
+            fsrc = master.at[idx, "file_source"]
+            disk_path = find_file_on_disk(export_root, fid, fsrc)
+            if disk_path:
+                master.at[idx, "local_path"] = disk_path
+                found_count += 1
+        if found_count:
+            _logger.info("Disk scan recovered paths for %d documents.", found_count)
 
     # ------------------------------------------------------------------
     # 4) Enrich with basic CRM context (Account & Opportunity)

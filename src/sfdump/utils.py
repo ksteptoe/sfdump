@@ -4,6 +4,7 @@ import csv
 import hashlib
 import os
 import re
+from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 
@@ -48,6 +49,38 @@ def write_csv(path: str, rows: Iterable[Dict[str, Any]], fieldnames: List[str]) 
             w.writerow(fixed)
             count += 1
     return count
+
+
+def find_file_on_disk(export_root: Path, file_id: str, file_source: str) -> str:
+    """Try to locate a downloaded file on disk by its Salesforce ID.
+
+    Uses the same naming convention as files.py: files are stored under
+    ``<root>/<id[:2].lower()>/<id>_*`` where root is ``files/`` for
+    ContentVersions (file_source="File") and ``files_legacy/`` for
+    Attachments (file_source="Attachment").
+
+    Returns the relative path (from export_root) if exactly one match is
+    found, otherwise returns an empty string.
+    """
+    if not file_id:
+        return ""
+
+    if file_source.lower() == "attachment":
+        root_name = "files_legacy"
+    else:
+        root_name = "files"
+
+    shard = file_id[:2].lower()
+    shard_dir = export_root / root_name / shard
+
+    if not shard_dir.is_dir():
+        return ""
+
+    matches = list(shard_dir.glob(f"{file_id}_*"))
+    if len(matches) == 1:
+        return matches[0].relative_to(export_root).as_posix()
+
+    return ""
 
 
 def glob_to_regex(pattern: str) -> str:
