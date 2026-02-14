@@ -72,7 +72,13 @@ def upgrade_cmd(check: bool) -> None:
     release = get_latest_release()
     if release is None or not release.get("asset_url"):
         click.echo("Could not find a release asset to install.", err=True)
-        raise click.Abort()
+        click.echo("")
+        click.echo("To upgrade manually, run setup.ps1 and choose option 1,")
+        click.echo("or install the wheel directly with:")
+        click.echo(
+            f"  pip install https://github.com/ksteptoe/sfdump/releases/download/v{latest}/sfdump-{latest}-py3-none-any.whl"
+        )
+        raise SystemExit(1)
 
     asset_url = release["asset_url"]
     click.echo(f"Installing from {asset_url} ...")
