@@ -187,6 +187,72 @@ def _check_database(export_root: Path) -> tuple[int, int, int]:
     return total, missing_path, path_not_on_disk
 
 
+def _needs_fix(export_root: Path) -> bool:
+    """Quick check whether index or DB paths have issues (no output)."""
+    index_path = export_root / "meta" / "master_documents_index.csv"
+    if index_path.exists():
+        with index_path.open(newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                lp = (row.get("local_path") or "").strip()
+                if not lp or not (export_root / lp).exists():
+                    return True
+
+    db_path = export_root / "meta" / "sfdata.db"
+    if db_path.exists():
+        conn = sqlite3.connect(str(db_path))
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='record_documents'"
+            )
+            if cur.fetchone():
+                cur.execute(
+                    "SELECT COUNT(*) FROM record_documents WHERE path IS NULL OR TRIM(path) = ''"
+                )
+                if cur.fetchone()[0] > 0:
+                    return True
+                cur.execute(
+                    "SELECT path FROM record_documents WHERE path IS NOT NULL AND TRIM(path) != ''"
+                )
+                for (p,) in cur.fetchall():
+                    if not (export_root / p).exists():
+                        return True
+        finally:
+            conn.close()
+
+    return False
+
+
+def _run_fix(export_root: Path) -> None:
+    """Rebuild master index and record_documents table."""
+    from .command_docs_index import _build_master_index
+
+    click.echo("Rebuilding master_documents_index.csv ...")
+    _build_master_index(export_root)
+    click.echo("Done.")
+
+    db_path = export_root / "meta" / "sfdata.db"
+    if db_path.exists():
+        from .indexing.build_record_documents import build_record_documents
+
+        click.echo("Rebuilding record_documents table ...")
+        build_record_documents(db_path, export_root)
+        click.echo("Done.")
+
+
+def auto_check_and_fix(export_root: Path) -> None:
+    """Run integrity check and auto-fix if needed. Suitable for calling from other commands."""
+    export_root = export_root.resolve()
+    if not (export_root / "links").is_dir():
+        return  # not a valid export root, skip silently
+
+    if _needs_fix(export_root):
+        click.echo("Export integrity issues detected — auto-fixing ...")
+        _run_fix(export_root)
+        click.echo("")
+
+
 @click.command(name="check-export")
 @click.option(
     "--export-root",
@@ -217,22 +283,7 @@ def check_export_cmd(export_root: Path, fix: bool, verbose: int) -> None:
 
     if fix and needs_fix:
         click.echo("\n--- Rebuilding ---")
-
-        # Rebuild master_documents_index.csv
-        from .command_docs_index import _build_master_index
-
-        click.echo("Rebuilding master_documents_index.csv ...")
-        _build_master_index(export_root)
-        click.echo("Done.")
-
-        # Rebuild record_documents table
-        db_path = export_root / "meta" / "sfdata.db"
-        if db_path.exists():
-            from .indexing.build_record_documents import build_record_documents
-
-            click.echo("Rebuilding record_documents table ...")
-            build_record_documents(db_path, export_root)
-            click.echo("Done.")
+        _run_fix(export_root)
 
         # Re-run checks to show "after" numbers
         click.echo("\n--- After fix ---")

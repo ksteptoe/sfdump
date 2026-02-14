@@ -48,6 +48,12 @@ def db_viewer_command(export_dir: Optional[Path], db_path: Optional[Path]) -> No
             "Run 'sfdump build-db --export-dir <export-dir>' first."
         )
 
+    # Auto-check and fix export integrity before launching viewer
+    if export_dir is not None:
+        from .command_check_export import auto_check_and_fix
+
+        auto_check_and_fix(export_dir)
+
     # Check that Streamlit is available
     if importlib.util.find_spec("streamlit") is None:
         raise click.ClickException(
