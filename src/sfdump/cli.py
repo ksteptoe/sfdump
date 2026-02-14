@@ -19,6 +19,7 @@ from .command_audit import audit_docs_cmd
 from .command_audit_missing_files import audit_missing_files_cmd
 from .command_build_db import build_db_command
 from .command_cfo import cfo_generate_docs, cfo_report
+from .command_check_export import check_export_cmd
 
 # Command Files
 from .command_csv import csv_cmd
@@ -161,6 +162,7 @@ cli.add_command(cast(Command, probe_cmd))
 cli.add_command(cast(Command, files_backfill_cmd))
 cli.add_command(cast(Command, sins_cmd))
 cli.add_command(cast(Command, inventory_cmd))
+cli.add_command(cast(Command, check_export_cmd))
 
 
 # Keep the original name (probably "cfo-generate-docs")
