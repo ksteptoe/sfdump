@@ -415,30 +415,39 @@ gh-release:
 	@echo "=== Creating GitHub Release $(VERSION) ==="
 	$(MAKE) release-zip VERSION=$(VERSION)
 	@echo "=== Uploading to GitHub ==="
-	gh release create $(VERSION) \
-	  $(DIST_DIR)/sfdump-$(VERSION).zip \
-	  --title "sfdump $(VERSION)" \
-	  --notes "$(CHANGELOG)" \
-	  --latest
+	_notes=$$(mktemp) && \
+	  git log $(LAST_TAG)..HEAD --pretty=format:"- %s (%h)" --no-merges > "$$_notes" && \
+	  gh release create $(VERSION) \
+	    $(DIST_DIR)/sfdump-$(VERSION).zip \
+	    --title "sfdump $(VERSION)" \
+	    --notes-file "$$_notes" \
+	    --latest && \
+	  rm -f "$$_notes"
 	@echo "✅ GitHub Release $(VERSION) created with ZIP attached"
 
 release-patch: fetch-tags check-clean
 	NEW=v$(MAJOR).$(MINOR).$$(($$(printf '%d' $(PATCH)) + 1))
-	git tag -a "$$NEW" -m "release: $$NEW$(NL)$(NL)$(CHANGELOG)"
+	_msg=$$(mktemp) && \
+	  { printf 'release: %s\n\n' "$$NEW"; git log $(LAST_TAG)..HEAD --pretty=format:"- %s (%h)" --no-merges; } > "$$_msg" && \
+	  git tag -a "$$NEW" -F "$$_msg" && rm -f "$$_msg"
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
 	$(MAKE) gh-release VERSION=$$NEW
 
 release-minor: fetch-tags check-clean
 	NEW=v$(MAJOR).$$(($$(printf '%d' $(MINOR)) + 1)).0
-	git tag -a "$$NEW" -m "release: $$NEW$(NL)$(NL)$(CHANGELOG)"
+	_msg=$$(mktemp) && \
+	  { printf 'release: %s\n\n' "$$NEW"; git log $(LAST_TAG)..HEAD --pretty=format:"- %s (%h)" --no-merges; } > "$$_msg" && \
+	  git tag -a "$$NEW" -F "$$_msg" && rm -f "$$_msg"
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
 	$(MAKE) gh-release VERSION=$$NEW
 
 release-major: fetch-tags check-clean
 	NEW=v$$(($$(printf '%d' $(MAJOR)) + 1)).0.0
-	git tag -a "$$NEW" -m "release: $$NEW$(NL)$(NL)$(CHANGELOG)"
+	_msg=$$(mktemp) && \
+	  { printf 'release: %s\n\n' "$$NEW"; git log $(LAST_TAG)..HEAD --pretty=format:"- %s (%h)" --no-merges; } > "$$_msg" && \
+	  git tag -a "$$NEW" -F "$$_msg" && rm -f "$$_msg"
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
 	$(MAKE) gh-release VERSION=$$NEW
