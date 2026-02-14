@@ -52,8 +52,29 @@ def _initial_db_path_from_argv() -> Optional[Path]:
     return None
 
 
+@st.cache_data(ttl=3600)
+def _check_for_update() -> tuple[bool, str, str]:
+    """Cached update check (1-hour TTL). Returns (available, current, latest)."""
+    from sfdump.update_check import is_update_available
+
+    return is_update_available()
+
+
 def main() -> None:
     st.set_page_config(page_title="SF Dump Viewer", layout="wide")
+
+    # Update banner (silent on failure)
+    try:
+        available, current, latest = _check_for_update()
+        if available:
+            st.info(
+                f"A new version of sfdump is available: **{latest}** "
+                f"(you have {current}). "
+                f"Run `sfdump upgrade` to update."
+            )
+    except Exception:
+        pass
+
     st.markdown(
         """
         <style>
