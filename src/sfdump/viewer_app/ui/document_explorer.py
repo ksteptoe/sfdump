@@ -208,9 +208,24 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
 
     rel_path = str(row.get("local_path", "")).strip()
     if not rel_path:
+        file_id = str(row.get("file_id", "")).strip() or "(unknown)"
+        file_source = str(row.get("file_source", "")).strip() or "(unknown)"
         st.warning(
-            "This row has no local_path/path (index knows it exists, but no on-disk path is recorded)."
+            "No file path recorded for this document. "
+            "The index metadata may be incomplete (common after chunked "
+            "downloads or copying an export between machines)."
         )
+        if st.button("Rebuild indexes", key=f"{key_prefix}_rebuild"):
+            from sfdump.command_check_export import auto_check_and_fix
+
+            with st.spinner("Rebuilding indexes..."):
+                auto_check_and_fix(export_root)
+            _load_master_index.clear()
+            st.success("Indexes rebuilt.")
+            st.rerun()
+        with st.expander("Details"):
+            st.text(f"file_id:     {file_id}")
+            st.text(f"file_source: {file_source}")
         return
 
     chosen: dict[str, Any] = {

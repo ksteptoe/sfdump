@@ -87,17 +87,23 @@ def _render_documents_panel_rows(
     rel_path = _rel_path(row)
 
     if not rel_path:
-        # Show info about missing file
         file_id = row.get("file_id") or row.get("Id") or "(unknown)"
         file_source = row.get("file_source") or "(unknown)"
         st.warning(
-            "This document is not available locally. "
-            "It may have been deleted from Salesforce or not yet downloaded."
+            "No file path recorded for this document. "
+            "The index metadata may be incomplete (common after chunked "
+            "downloads or copying an export between machines)."
         )
+        if st.button("Rebuild indexes", key=f"{key_prefix}_rebuild"):
+            from sfdump.command_check_export import auto_check_and_fix
+
+            with st.spinner("Rebuilding indexes..."):
+                auto_check_and_fix(export_root)
+            st.success("Indexes rebuilt — please reload the page.")
+            st.rerun()
         with st.expander("Details", expanded=False):
             st.text(f"File ID: {file_id}")
             st.text(f"Source: {file_source}")
-            st.info("To re-download, run: `sf dump`")
         return
 
     c1, c2, c3 = st.columns([1, 1, 6])
