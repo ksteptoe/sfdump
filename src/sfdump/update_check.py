@@ -25,7 +25,7 @@ def _parse_version(v: str) -> tuple[int, ...]:
 def get_latest_release() -> dict | None:
     """Fetch latest release from GitHub API.
 
-    Returns ``{version, tag, url, zip_url}`` or *None* on any error.
+    Returns ``{version, tag, url, asset_url}`` or *None* on any error.
     """
     try:
         resp = requests.get(
@@ -42,14 +42,21 @@ def get_latest_release() -> dict | None:
     html_url: str = data.get("html_url", "")
     version = tag.lstrip("v")
 
-    zip_url = ""
+    # Prefer wheel (version baked in, no build deps) over source ZIP
+    asset_url = ""
     for asset in data.get("assets", []):
         name: str = asset.get("name", "")
-        if name.endswith(".zip") and "sfdump" in name.lower():
-            zip_url = asset.get("browser_download_url", "")
+        if name.endswith(".whl") and "sfdump" in name.lower():
+            asset_url = asset.get("browser_download_url", "")
             break
+    if not asset_url:
+        for asset in data.get("assets", []):
+            name = asset.get("name", "")
+            if name.endswith(".zip") and "sfdump" in name.lower():
+                asset_url = asset.get("browser_download_url", "")
+                break
 
-    return {"version": version, "tag": tag, "url": html_url, "zip_url": zip_url}
+    return {"version": version, "tag": tag, "url": html_url, "asset_url": asset_url}
 
 
 def is_update_available() -> tuple[bool, str, str]:

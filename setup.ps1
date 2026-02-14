@@ -79,18 +79,19 @@ function Get-LatestRelease {
 
         $version = $release.tag_name -replace "^v", ""
 
-        # Look for the sfdump ZIP in release assets
-        $asset = $release.assets |
+        # Look for wheel first (version baked in, faster install, no build deps)
+        $whlAsset = $release.assets |
+            Where-Object { $_.name -match "^sfdump-.*\.whl$" } |
+            Select-Object -First 1
+        $whlUrl = if ($whlAsset) { $whlAsset.browser_download_url } else { "" }
+
+        # Also find the source ZIP (needed for fresh editable installs)
+        $zipAsset = $release.assets |
             Where-Object { $_.name -match "^sfdump-.*\.zip$" } |
             Select-Object -First 1
+        $zipUrl = if ($zipAsset) { $zipAsset.browser_download_url } else { $release.zipball_url }
 
-        if ($asset) {
-            $zipUrl = $asset.browser_download_url
-        } else {
-            $zipUrl = $release.zipball_url
-        }
-
-        return @{ Version = $version; ZipUrl = $zipUrl; TagName = $release.tag_name }
+        return @{ Version = $version; ZipUrl = $zipUrl; WhlUrl = $whlUrl; TagName = $release.tag_name }
     } catch {
         return $null
     }
@@ -135,6 +136,36 @@ function Update-SfdumpFromGitHub {
         }
     }
 
+    # Prefer wheel for upgrades (version baked in, no build deps needed)
+    if ($latest.WhlUrl) {
+        Write-Step "Installing wheel for $($latest.TagName)..."
+
+        $venvPython = Join-Path $ScriptDir ".venv\Scripts\python.exe"
+        if (-not (Test-Path $venvPython)) {
+            Write-Err "  Virtual environment not found. Use option 1 for a fresh install."
+            return
+        }
+
+        try {
+            & $venvPython -m pip install $latest.WhlUrl
+            if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
+            $newVersion = Get-CurrentVersion
+            if ($newVersion) {
+                Write-Host ""
+                Write-Success "  Upgrade complete! Now running sfdump v$newVersion"
+            }
+        } catch {
+            Write-Err "  Wheel install failed: $($_.Exception.Message)"
+            Write-Host ""
+            $reinstall = Read-Host "Reinstall from local source files instead? (Y/n)"
+            if ($reinstall -eq "" -or $reinstall -match "^[Yy]") {
+                Install-Sfdump | Out-Null
+            }
+        }
+        return
+    }
+
+    # Fallback: download source ZIP, extract, and editable-install
     Write-Step "Downloading $($latest.TagName)..."
 
     $zipPath = "$env:TEMP\sfdump-update.zip"

@@ -53,20 +53,20 @@ def _initial_db_path_from_argv() -> Optional[Path]:
 
 
 def _run_upgrade(latest: str) -> None:
-    """Run pip install from the latest GitHub release ZIP and prompt restart."""
+    """Run pip install from the latest GitHub release asset and prompt restart."""
     import subprocess
     import sys as _sys
 
     from sfdump.update_check import get_latest_release
 
     release = get_latest_release()
-    if release is None or not release.get("zip_url"):
-        st.error("Could not find a release ZIP to install.")
+    if release is None or not release.get("asset_url"):
+        st.error("Could not find a release asset to install.")
         return
 
     with st.spinner(f"Upgrading to {latest}..."):
         result = subprocess.run(
-            [_sys.executable, "-m", "pip", "install", release["zip_url"]],
+            [_sys.executable, "-m", "pip", "install", release["asset_url"]],
             capture_output=True,
             text=True,
         )

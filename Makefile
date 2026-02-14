@@ -122,7 +122,7 @@ SYSTEM_DIR  := tests/system  # live/system tests (opt-in, uncached)
         test test-all test-live clean-tests \
         build upload version fetch-tags changelog changelog-md \
         release-show release release-patch release-minor release-major \
-        release-zip gh-release \
+        release-zip release-wheel gh-release \
         clean clean-venv clean-miniconda run-cli sf-export sf-exportcheck-clean
 
 help:
@@ -409,7 +409,19 @@ release-zip:
 	git archive --format=zip --prefix=sfdump/ -o $(DIST_DIR)/sfdump-$(VERSION).zip HEAD
 	@echo "✅ Created $(DIST_DIR)/sfdump-$(VERSION).zip"
 
-# Create GitHub Release with ZIP attached (requires gh CLI)
+# Build a wheel with the version baked in (no setuptools_scm/git needed at install time)
+# Usage: make release-wheel VERSION=v2.1.1
+release-wheel:
+	@if [ -z "$(VERSION)" ]; then \
+	  echo "ERROR: VERSION required. Usage: make release-wheel VERSION=v2.1.1"; \
+	  exit 1; \
+	fi
+	@echo "=== Building wheel for $(VERSION) ==="
+	$(PYTHON) -m pip install -U build
+	$(PYTHON) -m build --wheel
+	@echo "✅ Wheel built in $(DIST_DIR)/"
+
+# Create GitHub Release with wheel + ZIP attached (requires gh CLI)
 # Usage: make gh-release VERSION=v2.1.1
 gh-release:
 	@if [ -z "$(VERSION)" ]; then \
@@ -422,16 +434,21 @@ gh-release:
 	fi
 	@echo "=== Creating GitHub Release $(VERSION) ==="
 	$(MAKE) release-zip VERSION=$(VERSION)
+	$(MAKE) release-wheel VERSION=$(VERSION)
 	@echo "=== Uploading to GitHub ==="
-	_notes=$$(mktemp) && \
+	@# Find the wheel file (standard naming: sfdump-{ver}-py3-none-any.whl)
+	_whl=$$(ls $(DIST_DIR)/sfdump-*.whl 2>/dev/null | head -n1) && \
+	  if [ -z "$$_whl" ]; then echo "ERROR: No wheel found in $(DIST_DIR)/"; exit 1; fi && \
+	  _notes=$$(mktemp) && \
 	  git log $(LAST_TAG)..HEAD --pretty=format:"- %s (%h)" --no-merges > "$$_notes" && \
 	  gh release create $(VERSION) \
+	    "$$_whl" \
 	    $(DIST_DIR)/sfdump-$(VERSION).zip \
 	    --title "sfdump $(VERSION)" \
 	    --notes-file "$$_notes" \
 	    --latest && \
 	  rm -f "$$_notes"
-	@echo "✅ GitHub Release $(VERSION) created with ZIP attached"
+	@echo "✅ GitHub Release $(VERSION) created with wheel + ZIP attached"
 
 release-patch: fetch-tags check-clean
 	NEW=v$(MAJOR).$(MINOR).$$(($$(printf '%d' $(PATCH)) + 1))
