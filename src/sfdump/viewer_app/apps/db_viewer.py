@@ -52,6 +52,32 @@ def _initial_db_path_from_argv() -> Optional[Path]:
     return None
 
 
+def _run_upgrade(latest: str) -> None:
+    """Run pip install from the latest GitHub release ZIP and prompt restart."""
+    import subprocess
+    import sys as _sys
+
+    from sfdump.update_check import get_latest_release
+
+    release = get_latest_release()
+    if release is None or not release.get("zip_url"):
+        st.error("Could not find a release ZIP to install.")
+        return
+
+    with st.spinner(f"Upgrading to {latest}..."):
+        result = subprocess.run(
+            [_sys.executable, "-m", "pip", "install", release["zip_url"]],
+            capture_output=True,
+            text=True,
+        )
+
+    if result.returncode == 0:
+        st.success(f"Upgraded to {latest}. Please restart the viewer to use the new version.")
+        _check_for_update.clear()
+    else:
+        st.error(f"Upgrade failed:\n```\n{result.stderr}\n```")
+
+
 @st.cache_data(ttl=3600)
 def _check_for_update() -> tuple[bool, str, str]:
     """Cached update check (1-hour TTL). Returns (available, current, latest)."""
@@ -63,15 +89,17 @@ def _check_for_update() -> tuple[bool, str, str]:
 def main() -> None:
     st.set_page_config(page_title="SF Dump Viewer", layout="wide")
 
-    # Update banner (silent on failure)
+    # Update banner with upgrade button (silent on failure)
     try:
         available, current, latest = _check_for_update()
         if available:
-            st.info(
-                f"A new version of sfdump is available: **{latest}** "
-                f"(you have {current}). "
-                f"Run `sfdump upgrade` to update."
-            )
+            col_msg, col_btn = st.columns([4, 1])
+            with col_msg:
+                st.info(f"A new version of sfdump is available: **{latest}** (you have {current}).")
+            with col_btn:
+                st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
+                if st.button("Upgrade now", type="primary", key="upgrade_btn"):
+                    _run_upgrade(latest)
     except Exception:
         pass
 
