@@ -229,6 +229,7 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
         ):
             if parent_api and parent_id:
                 open_record(parent_api, parent_id, label=parent_label)
+                st.session_state["_sfdump_view"] = "db_viewer"
                 st.rerun()
             else:
                 st.warning(

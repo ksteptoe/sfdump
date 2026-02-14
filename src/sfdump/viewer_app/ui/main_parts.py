@@ -122,15 +122,6 @@ def render_sidebar(
 
     st.sidebar.divider()
 
-    # DEBUG: Show last navigation info
-    if "_debug_last_nav" in st.session_state:
-        st.sidebar.markdown("---")
-        st.sidebar.caption("🐛 Last Navigation Debug")
-        debug = st.session_state["_debug_last_nav"]
-        st.sidebar.code(f"""API: {debug.get("child_api", "N/A")}
-ID: {debug.get("extracted_id", "N/A")}
-Selection: {debug.get("current_sel", "N/A")[:50]}...""")
-
     bc = breadcrumbs()
     if bc:
         st.sidebar.caption("Navigation")
@@ -224,14 +215,6 @@ def render_record_list(
 
         table = _pick_table(cur, api_name)
 
-        # DEBUG: Show what we're looking for
-        with st.expander("🐛 Record List Debug", expanded=False):
-            st.code(f"""API Name: {api_name}
-Table: {table}
-Selected ID: {selected_id}
-Selected Label: {selected_label}
-Search Term: '{search_term}'""")
-
         if not table:
             st.warning(f"No table found for object `{api_name}` in this DB.")
             return ([], "")
@@ -297,9 +280,6 @@ Search Term: '{search_term}'""")
 
         if not rows:
             st.info("No records found.")
-            st.caption(
-                f"Debug: Query returned 0 rows from table '{table}' with search term '{term}'"
-            )
             return ([], "")
 
         # CRITICAL FIX: If we have a selected_id from navigation, ensure that record is in the list

@@ -17,30 +17,26 @@ from sfdump.viewer_app.ui.documents_panel import render_documents_panel
 from sfdump.viewer_app.ui.main_parts import render_record_list, render_sidebar_controls
 from sfdump.viewer_app.ui.record_tabs import render_children_with_navigation
 
+_VIEW_KEY = "_sfdump_view"
+
 
 def _export_root_from_db_path(db_path: Path) -> Optional[Path]:
-    """
-    Best-effort: infer EXPORT_ROOT from db_path.
-    Typical layout: EXPORT_ROOT/meta/sfdata.db
-    """
+    """Best-effort: infer EXPORT_ROOT from db_path (EXPORT_ROOT/meta/sfdata.db)."""
     return infer_export_root(db_path)
 
 
 def _initial_db_path_from_argv() -> Optional[Path]:
     import os
 
-    # First check environment variable (set by orchestrator)
     env_db = os.environ.get("SFDUMP_DB_PATH")
     if env_db:
         return Path(env_db)
 
-    # Check command line: streamlit run <entry> -- <db-path>
     args = sys.argv[1:]
     for arg in args:
         if not arg.startswith("-"):
             return Path(arg)
 
-    # Fallback: find the latest export with a database
     exports_dir = Path("./exports")
     if exports_dir.exists():
         exports = sorted(
@@ -57,7 +53,7 @@ def _initial_db_path_from_argv() -> Optional[Path]:
 
 
 def main() -> None:
-    st.set_page_config(page_title="SF Dump DB Viewer", layout="wide")
+    st.set_page_config(page_title="SF Dump Viewer", layout="wide")
     st.markdown(
         """
         <style>
@@ -72,244 +68,311 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    st.title("SF Dump DB Viewer")
-
     initial_db = _initial_db_path_from_argv()
-    state = render_sidebar_controls(initial_db=initial_db)
+    if initial_db is None:
+        st.error("No database path provided.")
+        return
+
+    db_path = initial_db
+    export_root = _export_root_from_db_path(db_path)
+
+    view = st.session_state.get(_VIEW_KEY, "explorer")
+
+    if view == "db_viewer":
+        _render_db_viewer(db_path=db_path, export_root=export_root)
+    else:
+        _render_explorer(db_path=db_path, export_root=export_root)
+
+
+# ---------------------------------------------------------------------------
+# Explorer view — full-width document search, no sidebar
+# ---------------------------------------------------------------------------
+
+
+def _render_explorer(*, db_path: Path, export_root: Optional[Path]) -> None:
+    # Hide sidebar via CSS
+    st.markdown(
+        """
+        <style>
+          section[data-testid="stSidebar"] { display: none; }
+          button[data-testid="stSidebarCollapsedControl"] { display: none; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Header row with title + DB Viewer button
+    col_title, col_btn = st.columns([4, 1])
+    with col_title:
+        st.title("SF Dump Viewer")
+    with col_btn:
+        st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
+        if st.button("DB Viewer", type="secondary"):
+            st.session_state[_VIEW_KEY] = "db_viewer"
+            st.rerun()
+
+    if export_root is None:
+        st.warning(
+            "Could not infer export root from DB path (expected EXPORT_ROOT/meta/sfdata.db)."
+        )
+        return
+
+    render_document_explorer(export_root=export_root, key_prefix="explorer_main")
+
+
+# ---------------------------------------------------------------------------
+# DB Viewer view — sidebar controls + 2-column record browser
+# ---------------------------------------------------------------------------
+
+
+def _render_db_viewer(*, db_path: Path, export_root: Optional[Path]) -> None:
+    st.title("SF Dump Viewer")
+
+    # Sidebar: "Back to Explorer" at top, then normal controls
+    with st.sidebar:
+        if st.button("Back to Explorer", type="secondary", use_container_width=True):
+            st.session_state[_VIEW_KEY] = "explorer"
+            st.rerun()
+        st.divider()
+
+    state = render_sidebar_controls(db_path=db_path)
     if state is None:
         return
 
-    db_path = state.db_path
     api_name = state.api_name
-    selected_label = state.selected_label
-    search_term = state.search_term
-    limit = state.limit
-    regex_search = state.regex_search
     show_all_fields = state.show_all_fields
 
-    # Two-column layout: Left = Record navigator, Right = Document viewer
+    # Two-column layout: Left = Record navigator, Right = Subtree documents
     col_left, col_right = st.columns([2, 3])
 
-    # ------------------------------------------------------------------
-    # LEFT COLUMN: Record list + record detail tabs (always visible)
-    # ------------------------------------------------------------------
     with col_left:
         st.subheader("Records")
-
         rows, selected_id = render_record_list(
             db_path=db_path,
             api_name=api_name,
-            selected_label=selected_label,
+            selected_label=state.selected_label,
             selected_id=state.selected_id,
-            search_term=search_term,
-            regex_search=regex_search,
-            limit=int(limit),
+            search_term=state.search_term,
+            regex_search=state.regex_search,
+            limit=int(state.limit),
             show_all_fields=show_all_fields,
             show_ids=state.show_ids,
         )
 
-    # ------------------------------------------------------------------
-    # RIGHT COLUMN: Two tabs — Record Documents vs Explorer
-    # ------------------------------------------------------------------
     with col_right:
-        export_root = _export_root_from_db_path(db_path)
+        _render_subtree_documents(
+            db_path=db_path,
+            api_name=api_name,
+            selected_id=selected_id,
+            rows=rows,
+            export_root=export_root,
+        )
 
-        tab_record_docs, tab_explorer = st.tabs(["Record Documents", "Explorer"])
-
-        # -- Tab 1: Documents for the selected record (subtree) ----------
-        with tab_record_docs:
-            if not rows or not selected_id:
-                st.info("Select a record on the left to see its documents.")
-            elif export_root is None:
-                st.warning(
-                    "Could not infer EXPORT_ROOT from DB path. "
-                    "Expected EXPORT_ROOT/meta/sfdata.db layout."
-                )
-            else:
-                # Controls in collapsed expander
-                with st.expander("Recursive docs controls", expanded=False):
-                    st.caption(f"Export root: {export_root}")
-
-                    max_depth = st.slider("Max traversal depth", 1, 6, 3, 1)
-                    max_children = st.slider("Max children per relationship", 10, 500, 100, 10)
-
-                    allow_filter = st.checkbox("Filter to specific object types", value=False)
-                    allow_objects: Optional[set[str]] = None
-                    if allow_filter:
-                        all_api_names = sorted(OBJECTS.keys())
-                        selected = st.multiselect(
-                            "Allowed objects",
-                            options=all_api_names,
-                            default=[
-                                "Opportunity",
-                                "c2g__codaInvoice__c",
-                                "fferpcore__BillingDocument__c",
-                            ],
-                        )
-                        allow_objects = set(selected)
-
-                # Collect subtree (children of current record)
-                subtree = collect_subtree_ids(
-                    db_path=db_path,
-                    root_api=api_name,
-                    root_id=selected_id,
-                    max_depth=int(max_depth) if "max_depth" in locals() else 3,
-                    max_children_per_rel=(int(max_children) if "max_children" in locals() else 100),
-                    allow_objects=(allow_objects if "allow_objects" in locals() else None),
-                )
-
-                # ALSO include parent records from navigation stack
-                from sfdump.viewer_app.navigation.record_nav import breadcrumbs
-
-                nav_stack = breadcrumbs()
-                for nav_item in nav_stack:
-                    if nav_item.api_name not in subtree:
-                        subtree[nav_item.api_name] = set()
-                    subtree[nav_item.api_name].add(nav_item.record_id)
-
-                total_records = sum(len(v) for v in subtree.values())
-
-                # Load and filter documents
-                docs_df = load_master_documents_index(export_root)
-                if docs_df is None:
-                    st.error(
-                        "meta/master_documents_index.csv not found. "
-                        "Run: `sfdump docs-index --export-root <EXPORT_ROOT>`"
-                    )
-                else:
-                    all_ids: set[str] = set()
-                    for ids in subtree.values():
-                        all_ids.update(ids)
-
-                    sub_docs = docs_df[docs_df["record_id"].isin(list(all_ids))].copy()
-
-                    st.write(
-                        f"**{total_records}** records across "
-                        f"**{len(subtree)}** types  "
-                        f"|  **{len(sub_docs)}** documents"
-                    )
-
-                    if len(sub_docs) == 0:
-                        st.info("No documents attached to any record in the subtree.")
-                    else:
-                        show_cols = [
-                            "file_extension",
-                            "file_name",
-                            "object_type",
-                            "record_name",
-                            "account_name",
-                            "opp_name",
-                        ]
-                        show_cols = [c for c in show_cols if c in sub_docs.columns]
-                        st.dataframe(
-                            sub_docs[show_cols],
-                            height=260,
-                            hide_index=True,
-                        )
-
-                        from sfdump.viewer_app.ui.documents_panel import (
-                            render_documents_panel_from_rows,
-                        )
-
-                        render_documents_panel_from_rows(
-                            export_root=export_root,
-                            rows=sub_docs.to_dict(orient="records"),
-                            title="Document Preview",
-                            key_prefix=f"subtree_docs_{api_name}_{selected_id}",
-                            pdf_height=800,
-                        )
-
-        # -- Tab 2: Explorer (independent global document search) --------
-        with tab_explorer:
-            if export_root is None:
-                st.warning(
-                    "Could not infer EXPORT_ROOT from DB path "
-                    "(expected EXPORT_ROOT/meta/sfdata.db)."
-                )
-            else:
-                st.caption(
-                    "Search all exported documents independently of the "
-                    "record selected on the left."
-                )
-                render_document_explorer(
-                    export_root=export_root,
-                    key_prefix="explorer_global",
-                )
-
-    # ------------------------------------------------------------------
-    # LEFT COLUMN continued: Record detail tabs
-    # ------------------------------------------------------------------
+    # Record detail tabs (below the record list)
     with col_left:
-        if not rows or not selected_id:
-            st.info("Use the sidebar to search and select records.")
-            st.stop()
+        _render_record_detail_tabs(
+            db_path=db_path,
+            api_name=api_name,
+            selected_id=selected_id,
+            rows=rows,
+            show_all_fields=show_all_fields,
+            show_ids=state.show_ids,
+        )
 
-        try:
-            record = get_record_with_children(
-                db_path=db_path,
-                api_name=api_name,
-                record_id=selected_id,
-                max_children_per_rel=50,
+
+# ---------------------------------------------------------------------------
+# Subtree documents panel (right column in DB Viewer)
+# ---------------------------------------------------------------------------
+
+
+def _render_subtree_documents(
+    *,
+    db_path: Path,
+    api_name: str,
+    selected_id: str,
+    rows: list,
+    export_root: Optional[Path],
+) -> None:
+    if not rows or not selected_id:
+        st.info("Select a record on the left to see its documents.")
+        return
+
+    if export_root is None:
+        st.warning(
+            "Could not infer EXPORT_ROOT from DB path. Expected EXPORT_ROOT/meta/sfdata.db layout."
+        )
+        return
+
+    with st.expander("Recursive docs controls", expanded=False):
+        st.caption(f"Export root: {export_root}")
+
+        max_depth = st.slider("Max traversal depth", 1, 6, 3, 1)
+        max_children = st.slider("Max children per relationship", 10, 500, 100, 10)
+
+        allow_filter = st.checkbox("Filter to specific object types", value=False)
+        allow_objects: Optional[set[str]] = None
+        if allow_filter:
+            all_api_names = sorted(OBJECTS.keys())
+            selected = st.multiselect(
+                "Allowed objects",
+                options=all_api_names,
+                default=[
+                    "Opportunity",
+                    "c2g__codaInvoice__c",
+                    "fferpcore__BillingDocument__c",
+                ],
             )
-        except Exception as exc:
-            st.error(f"Error loading record {selected_id}: {exc}")
-            st.stop()
+            allow_objects = set(selected)
 
-        parent = record.parent
-        parent_label = getattr(parent.sf_object, "label", None) or parent.sf_object.api_name
+    subtree = collect_subtree_ids(
+        db_path=db_path,
+        root_api=api_name,
+        root_id=selected_id,
+        max_depth=int(max_depth),
+        max_children_per_rel=int(max_children),
+        allow_objects=allow_objects,
+    )
 
-        import pandas as pd  # type: ignore[import-not-found]
+    # Also include parent records from navigation stack
+    from sfdump.viewer_app.navigation.record_nav import breadcrumbs
 
-        # NAV-002: Back button (main pane) pops the navigation stack
-        from sfdump.viewer_app.navigation.record_nav import pop
+    nav_stack = breadcrumbs()
+    for nav_item in nav_stack:
+        if nav_item.api_name not in subtree:
+            subtree[nav_item.api_name] = set()
+        subtree[nav_item.api_name].add(nav_item.record_id)
 
-        _nav_stack = st.session_state.get("_sfdump_nav_stack", [])
-        _can_back = isinstance(_nav_stack, list) and len(_nav_stack) > 1
+    total_records = sum(len(v) for v in subtree.values())
 
-        if _can_back:
-            if st.button("Back", key="nav_back_main", type="secondary"):
-                pop()
-                st.rerun()
+    docs_df = load_master_documents_index(export_root)
+    if docs_df is None:
+        st.error(
+            "meta/master_documents_index.csv not found. "
+            "Run: `sfdump docs-index --export-root <EXPORT_ROOT>`"
+        )
+        return
 
-        tab_details, tab_children, tab_docs = st.tabs(["Details", "Children", "Documents"])
+    all_ids: set[str] = set()
+    for ids in subtree.values():
+        all_ids.update(ids)
 
-        with tab_details:
-            st.markdown(
-                f"**{parent_label}** "
-                f"`{parent.data.get('Name', '')}` "
-                f"(`{parent.data.get(parent.sf_object.id_field, selected_id)}`)"
-            )
+    sub_docs = docs_df[docs_df["record_id"].isin(list(all_ids))].copy()
 
-            with st.expander("Parent fields", expanded=True):
-                all_items = sorted(parent.data.items())
-                all_df = pd.DataFrame([{"Field": k, "Value": v} for k, v in all_items])
+    st.write(
+        f"**{total_records}** records across "
+        f"**{len(subtree)}** types  "
+        f"|  **{len(sub_docs)}** documents"
+    )
 
-                if show_all_fields:
-                    parent_df = all_df
-                else:
-                    important = get_important_fields(parent.sf_object.api_name)
-                    parent_df = all_df[all_df["Field"].isin(important)] if important else all_df
+    if len(sub_docs) == 0:
+        st.info("No documents attached to any record in the subtree.")
+        return
 
-                st.table(parent_df)
+    show_cols = [
+        "file_extension",
+        "file_name",
+        "object_type",
+        "record_name",
+        "account_name",
+        "opp_name",
+    ]
+    show_cols = [c for c in show_cols if c in sub_docs.columns]
+    st.dataframe(sub_docs[show_cols], height=260, hide_index=True)
 
-        with tab_children:
-            st.caption(
-                "Open a relationship expander → pick a child in "
-                "**Select a child record** → click **Open**."
-            )
-            render_children_with_navigation(
-                record=record,
-                show_all_fields=show_all_fields,
-                show_ids=state.show_ids,
-            )
+    from sfdump.viewer_app.ui.documents_panel import render_documents_panel_from_rows
 
-        with tab_docs:
-            render_documents_panel(
-                db_path=db_path,
-                object_type=api_name,
-                record_id=selected_id,
-                title="Documents tab preview",
-            )
+    render_documents_panel_from_rows(
+        export_root=export_root,
+        rows=sub_docs.to_dict(orient="records"),
+        title="Document Preview",
+        key_prefix=f"subtree_docs_{api_name}_{selected_id}",
+        pdf_height=800,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Record detail tabs (left column in DB Viewer)
+# ---------------------------------------------------------------------------
+
+
+def _render_record_detail_tabs(
+    *,
+    db_path: Path,
+    api_name: str,
+    selected_id: str,
+    rows: list,
+    show_all_fields: bool,
+    show_ids: bool,
+) -> None:
+    if not rows or not selected_id:
+        st.info("Use the sidebar to search and select records.")
+        st.stop()
+
+    try:
+        record = get_record_with_children(
+            db_path=db_path,
+            api_name=api_name,
+            record_id=selected_id,
+            max_children_per_rel=50,
+        )
+    except Exception as exc:
+        st.error(f"Error loading record {selected_id}: {exc}")
+        st.stop()
+
+    parent = record.parent
+    parent_label = getattr(parent.sf_object, "label", None) or parent.sf_object.api_name
+
+    import pandas as pd
+
+    from sfdump.viewer_app.navigation.record_nav import pop
+
+    _nav_stack = st.session_state.get("_sfdump_nav_stack", [])
+    _can_back = isinstance(_nav_stack, list) and len(_nav_stack) > 1
+
+    if _can_back:
+        if st.button("Back", key="nav_back_main", type="secondary"):
+            pop()
+            st.rerun()
+
+    tab_details, tab_children, tab_docs = st.tabs(["Details", "Children", "Documents"])
+
+    with tab_details:
+        st.markdown(
+            f"**{parent_label}** "
+            f"`{parent.data.get('Name', '')}` "
+            f"(`{parent.data.get(parent.sf_object.id_field, selected_id)}`)"
+        )
+
+        with st.expander("Parent fields", expanded=True):
+            all_items = sorted(parent.data.items())
+            all_df = pd.DataFrame([{"Field": k, "Value": v} for k, v in all_items])
+
+            if show_all_fields:
+                parent_df = all_df
+            else:
+                important = get_important_fields(parent.sf_object.api_name)
+                parent_df = all_df[all_df["Field"].isin(important)] if important else all_df
+
+            st.table(parent_df)
+
+    with tab_children:
+        st.caption(
+            "Open a relationship expander → pick a child in "
+            "**Select a child record** → click **Open**."
+        )
+        render_children_with_navigation(
+            record=record,
+            show_all_fields=show_all_fields,
+            show_ids=show_ids,
+        )
+
+    with tab_docs:
+        render_documents_panel(
+            db_path=db_path,
+            object_type=api_name,
+            record_id=selected_id,
+            title="Documents tab preview",
+        )
 
 
 if __name__ == "__main__":
