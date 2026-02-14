@@ -92,7 +92,9 @@ def cli(ctx: click.Context, loglevel: Optional[int]) -> None:
         available, current, latest = is_update_available()
         if available:
             click.echo(
-                f"\n  Update available: {current} -> {latest}\n  Run 'sfdump upgrade' to install.\n"
+                f"\n  Update available: {current} -> {latest}"
+                f"\n  Run 'sfdump upgrade' to install.\n",
+                err=True,
             )
     except Exception:
         pass
