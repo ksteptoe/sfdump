@@ -42,9 +42,13 @@ def open_local_file(*args) -> None:
         if os.name == "nt":
             os.startfile(str(p))  # type: ignore[attr-defined]
         elif sys.platform == "darwin":
-            subprocess.run(["open", str(p)], check=False)
+            subprocess.run(["open", str(p)], check=False, capture_output=True)
         else:
-            subprocess.run(["xdg-open", str(p)], check=False)
+            result = subprocess.run(
+                ["xdg-open", str(p)], check=False, capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                st.warning(f"No application found to open: {p.name}")
     except Exception as exc:
         st.error(f"Failed to open file: {exc}")
 
