@@ -39,6 +39,8 @@ powershell -ExecutionPolicy Bypass -Command `
   "irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex"
 ```
 
+**To update later:** Double-click `install.bat` and choose option [1] to upgrade to the latest version.
+
 ### Installing on macOS / Linux
 
 ```bash

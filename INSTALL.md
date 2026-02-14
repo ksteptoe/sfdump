@@ -146,8 +146,11 @@ To run commands, open PowerShell or Command Prompt and type the command.
 
 To update to the latest version:
 
-1. Run `install.bat` again, or
-2. Run the quick install command again - it will detect the existing installation and offer to update
+1. Open the sfdump folder
+2. Double-click **install.bat**
+3. Choose option **[1] Upgrade to latest version**
+
+The installer will check GitHub for the latest release, show you the current vs latest version, download the update, and reinstall automatically. Your `.env` credentials and exported data are not affected.
 
 ---
 

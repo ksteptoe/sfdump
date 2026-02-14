@@ -31,6 +31,7 @@ $PythonInstallerUrl = "https://www.python.org/ftp/python/3.12.4/python-3.12.4-am
 $PythonInstallerPath = "$env:TEMP\python-installer.exe"
 $RequiredDiskSpaceGB = 40
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$GitHubRepo = "ksteptoe/sfdump"
 
 # ============================================================================
 # Helper Functions
@@ -54,6 +55,138 @@ function Write-Warn {
 function Write-Err {
     param([string]$Message)
     Write-Host $Message -ForegroundColor Red
+}
+
+function Get-CurrentVersion {
+    $venvPython = Join-Path $ScriptDir ".venv\Scripts\python.exe"
+    if (-not (Test-Path $venvPython)) { return $null }
+
+    try {
+        $ver = & $venvPython -c "import sfdump; print(sfdump.__version__)" 2>&1
+        if ($LASTEXITCODE -eq 0 -and $ver -match "^\d+\.\d+") {
+            return $ver.Trim()
+        }
+    } catch {}
+    return $null
+}
+
+function Get-LatestRelease {
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $releaseApiUrl = "https://api.github.com/repos/$GitHubRepo/releases/latest"
+        $headers = @{ "User-Agent" = "sfdump-setup" }
+        $release = Invoke-RestMethod -Uri $releaseApiUrl -Headers $headers -ErrorAction Stop
+
+        $version = $release.tag_name -replace "^v", ""
+
+        # Look for the sfdump ZIP in release assets
+        $asset = $release.assets |
+            Where-Object { $_.name -match "^sfdump-.*\.zip$" } |
+            Select-Object -First 1
+
+        if ($asset) {
+            $zipUrl = $asset.browser_download_url
+        } else {
+            $zipUrl = $release.zipball_url
+        }
+
+        return @{ Version = $version; ZipUrl = $zipUrl; TagName = $release.tag_name }
+    } catch {
+        return $null
+    }
+}
+
+function Update-SfdumpFromGitHub {
+    Show-Banner
+
+    Write-Step "Checking for updates..."
+
+    $currentVersion = Get-CurrentVersion
+    $latest = Get-LatestRelease
+
+    if ($currentVersion) {
+        Write-Host "  Installed: $currentVersion"
+    } else {
+        Write-Host "  Installed: (unknown version)"
+    }
+
+    if (-not $latest) {
+        Write-Err "  Could not check for updates (no internet?)"
+        Write-Host ""
+        $reinstall = Read-Host "Reinstall from local source files instead? (Y/n)"
+        if ($reinstall -eq "" -or $reinstall -match "^[Yy]") {
+            Install-Sfdump | Out-Null
+        }
+        return
+    }
+
+    Write-Host "  Latest:    $($latest.Version)"
+    Write-Host ""
+
+    # Compare versions — strip any dev/post suffix for a clean comparison
+    $cleanCurrent = ($currentVersion -split '[\.\+]dev|\.post')[0]
+
+    if ($currentVersion -and $cleanCurrent -eq $latest.Version) {
+        Write-Success "  Already up to date!"
+        Write-Host ""
+        $reinstall = Read-Host "Reinstall anyway? (y/N)"
+        if ($reinstall -notmatch "^[Yy]") {
+            return
+        }
+    }
+
+    Write-Step "Downloading $($latest.TagName)..."
+
+    $zipPath = "$env:TEMP\sfdump-update.zip"
+    $extractPath = "$env:TEMP\sfdump-update-extract"
+
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $webClient = New-Object System.Net.WebClient
+        $webClient.Headers.Add("User-Agent", "sfdump-setup")
+        $webClient.DownloadFile($latest.ZipUrl, $zipPath)
+        Write-Success "  Downloaded successfully"
+    } catch {
+        Write-Err "  Download failed: $($_.Exception.Message)"
+        Write-Host ""
+        $reinstall = Read-Host "Reinstall from local source files instead? (Y/n)"
+        if ($reinstall -eq "" -or $reinstall -match "^[Yy]") {
+            Install-Sfdump | Out-Null
+        }
+        return
+    }
+
+    Write-Step "Extracting and updating source files..."
+    try {
+        if (Test-Path $extractPath) {
+            Remove-Item $extractPath -Recurse -Force
+        }
+
+        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+
+        $extractedFolder = Get-ChildItem $extractPath | Select-Object -First 1
+        if (-not $extractedFolder) {
+            throw "No files found in downloaded archive"
+        }
+
+        Copy-Item -Path "$($extractedFolder.FullName)\*" -Destination $ScriptDir -Recurse -Force
+        Write-Success "  Source files updated"
+    } catch {
+        Write-Err "  Extract failed: $($_.Exception.Message)"
+        return
+    } finally {
+        Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+        Remove-Item $extractPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Step "Installing updated dependencies..."
+    Install-Sfdump | Out-Null
+
+    $newVersion = Get-CurrentVersion
+    if ($newVersion) {
+        Write-Host ""
+        Write-Success "  Upgrade complete! Now running sfdump v$newVersion"
+    }
 }
 
 function Show-Banner {
@@ -517,7 +650,12 @@ function Show-Menu {
     }
 
     if ($sfdumpInstalled) {
-        Write-Host "  [OK] sfdump installed" -ForegroundColor Green
+        $sfdumpVersion = Get-CurrentVersion
+        if ($sfdumpVersion) {
+            Write-Host "  [OK] sfdump v$sfdumpVersion installed" -ForegroundColor Green
+        } else {
+            Write-Host "  [OK] sfdump installed" -ForegroundColor Green
+        }
     } else {
         Write-Host "  [--] sfdump not installed" -ForegroundColor Gray
     }
@@ -543,7 +681,7 @@ function Show-Menu {
     if (-not $sfdumpInstalled) {
         Write-Host "  [1] Install sfdump (fresh installation)"
     } else {
-        Write-Host "  [1] Update sfdump (reinstall/upgrade)"
+        Write-Host "  [1] Upgrade to latest version"
     }
 
     Write-Host "  [2] Configure .env file (Salesforce credentials)"
@@ -664,46 +802,51 @@ while ($running) {
 
     switch ($choice) {
         "1" {
-            # Install/Update
-            Show-Banner
+            if (Test-SfdumpInstalled) {
+                # Upgrade existing installation
+                Update-SfdumpFromGitHub
+            } else {
+                # Fresh install
+                Show-Banner
 
-            if (-not (Test-DiskSpace)) {
-                Read-Host "`nPress Enter to continue"
-                continue
-            }
+                if (-not (Test-DiskSpace)) {
+                    Read-Host "`nPress Enter to continue"
+                    continue
+                }
 
-            $pythonPath = Test-PythonInstalled
+                $pythonPath = Test-PythonInstalled
 
-            if (-not $pythonPath) {
-                Write-Step "Python not found - installing..."
+                if (-not $pythonPath) {
+                    Write-Step "Python not found - installing..."
 
-                # Show info about MS Store alias
-                Write-Host @"
+                    # Show info about MS Store alias
+                    Write-Host @"
 
 NOTE: If you see 'Python was not found' errors, Windows may have
 a Microsoft Store redirect enabled. The installer will work around this.
 
 "@ -ForegroundColor Gray
 
-                $installPython = Read-Host "Install Python now? (Y/n)"
-                if ($installPython -eq "" -or $installPython -match "^[Yy]") {
-                    if (-not (Install-Python)) {
+                    $installPython = Read-Host "Install Python now? (Y/n)"
+                    if ($installPython -eq "" -or $installPython -match "^[Yy]") {
+                        if (-not (Install-Python)) {
+                            Read-Host "`nPress Enter to continue"
+                            continue
+                        }
+                    } else {
+                        Write-Host "Please install Python 3.12+ manually from: https://www.python.org/downloads/"
                         Read-Host "`nPress Enter to continue"
                         continue
                     }
                 } else {
-                    Write-Host "Please install Python 3.12+ manually from: https://www.python.org/downloads/"
-                    Read-Host "`nPress Enter to continue"
-                    continue
+                    $version = Get-PythonVersion $pythonPath
+                    Write-Host "`nUsing existing Python $version" -ForegroundColor Green
                 }
-            } else {
-                $version = Get-PythonVersion $pythonPath
-                Write-Host "`nUsing existing Python $version" -ForegroundColor Green
-            }
 
-            if (Install-Sfdump) {
-                Setup-EnvFile
-                Show-PostInstallHelp
+                if (Install-Sfdump) {
+                    Setup-EnvFile
+                    Show-PostInstallHelp
+                }
             }
 
             Read-Host "Press Enter to continue"
