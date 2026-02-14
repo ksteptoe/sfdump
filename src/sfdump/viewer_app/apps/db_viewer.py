@@ -64,18 +64,59 @@ def _run_upgrade(latest: str) -> None:
         st.error("Could not find a release asset to install.")
         return
 
-    with st.spinner(f"Upgrading to {latest}..."):
-        result = subprocess.run(
-            [_sys.executable, "-m", "pip", "install", release["asset_url"]],
-            capture_output=True,
-            text=True,
-        )
+    asset_url = release["asset_url"]
 
-    if result.returncode == 0:
-        st.success(f"Upgraded to {latest}. Please restart the viewer to use the new version.")
+    if _sys.platform == "win32":
+        # On Windows, pip can fail with WinError 32 if files are locked by the
+        # running Streamlit process.  Spawn a detached cmd window so the user
+        # can close the viewer while pip runs.
+        import tempfile
+
+        script = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".cmd", delete=False, prefix="sfdump_upgrade_"
+        )
+        script.write(f"""\
+@echo off
+echo.
+echo Installing sfdump {latest} ...
+echo.
+"{_sys.executable}" -m pip install "{asset_url}"
+if %ERRORLEVEL% EQU 0 (
+    echo.
+    echo Successfully upgraded to {latest}.
+    echo You can now restart the viewer with: sfdump db-viewer
+) else (
+    echo.
+    echo pip install failed. See output above for details.
+)
+echo.
+pause
+""")
+        script.close()
+
+        CREATE_NEW_CONSOLE = 0x00000010
+        subprocess.Popen(
+            ["cmd.exe", "/c", script.name],
+            creationflags=CREATE_NEW_CONSOLE,
+        )
+        st.success(
+            f"Upgrade to {latest} started in a new window. "
+            "Please close this viewer and reopen it once the upgrade finishes."
+        )
         _check_for_update.clear()
     else:
-        st.error(f"Upgrade failed:\n```\n{result.stderr}\n```")
+        with st.spinner(f"Upgrading to {latest}..."):
+            result = subprocess.run(
+                [_sys.executable, "-m", "pip", "install", asset_url],
+                capture_output=True,
+                text=True,
+            )
+
+        if result.returncode == 0:
+            st.success(f"Upgraded to {latest}. Please restart the viewer to use the new version.")
+            _check_for_update.clear()
+        else:
+            st.error(f"Upgrade failed:\n```\n{result.stderr}\n```")
 
 
 @st.cache_data(ttl=3600)
