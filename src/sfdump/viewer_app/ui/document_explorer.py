@@ -153,11 +153,19 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
     if selected_types:
         mask &= df["object_type"].astype(str).isin(selected_types)
 
+    has_filter = bool(q or pdf_only or account_search or opp_search or selected_types)
+
     results = df[mask].copy()
 
     # Show match count
     with col_count:
-        st.markdown(f"**{len(results):,}** documents found")
+        if has_filter:
+            st.markdown(f"**{len(results):,}** documents found")
+        else:
+            st.markdown(f"**{len(df):,}** documents available for search")
+
+    if not has_filter:
+        return
 
     st.dataframe(
         results[
