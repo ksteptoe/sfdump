@@ -6,7 +6,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from sfdump.utils import glob_to_regex
+from sfdump.utils import find_file_on_disk, glob_to_regex
 from sfdump.viewer_app.navigation.record_nav import open_record
 from sfdump.viewer_app.ui.documents_panel import render_documents_panel_from_rows
 
@@ -208,12 +208,19 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
 
     rel_path = str(row.get("local_path", "")).strip()
     if not rel_path:
+        file_id = str(row.get("file_id", "")).strip()
+        file_source = str(row.get("file_source", "")).strip()
+        # Try to find the file on disk (handles chunked-export CSV gaps)
+        if file_id and file_source:
+            rel_path = find_file_on_disk(export_root, file_id, file_source)
+
+    if not rel_path:
         file_id = str(row.get("file_id", "")).strip() or "(unknown)"
         file_source = str(row.get("file_source", "")).strip() or "(unknown)"
         st.warning(
-            "No file path recorded for this document. "
-            "The index metadata may be incomplete (common after chunked "
-            "downloads or copying an export between machines)."
+            "This file has not been downloaded yet. "
+            "Click **Rebuild indexes** to re-scan, or run "
+            "`sfdump files` to download missing files."
         )
         if st.button("Rebuild indexes", key=f"{key_prefix}_rebuild"):
             from sfdump.command_check_export import auto_check_and_fix
