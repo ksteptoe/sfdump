@@ -372,13 +372,21 @@ release-show: fetch-tags
 # Safety check: ensure clean working tree and synced branch before tagging
 check-clean:
 	@if ! git diff --quiet || ! git diff --cached --quiet; then \
-		echo "❌ Working directory not clean. Commit or stash changes before releasing."; \
-		git status -s; \
-		exit 1; \
+		echo "⏳ Stashing uncommitted changes for release..."; \
+		git stash push -m "release-auto-stash" || true; \
+		echo "RELEASE_STASHED=1" > .release-stash-flag; \
 	fi
 	@if [ "$$(git rev-parse @ 2>/dev/null)" != "$$(git rev-parse @{u} 2>/dev/null)" ]; then \
 		echo "❌ Local branch not in sync with upstream (push/pull first)."; \
 		exit 1; \
+	fi
+
+# Restore auto-stashed changes after release
+release-unstash:
+	@if [ -f .release-stash-flag ]; then \
+		rm -f .release-stash-flag; \
+		echo "⏳ Restoring stashed changes..."; \
+		git stash pop || echo "⚠️  Could not auto-pop stash. Run 'git stash pop' manually."; \
 	fi
 
 # Allow newline in tag messages
@@ -433,6 +441,7 @@ release-patch: fetch-tags check-clean
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
 	$(MAKE) gh-release VERSION=$$NEW
+	$(MAKE) release-unstash
 
 release-minor: fetch-tags check-clean
 	NEW=v$(MAJOR).$$(($$(printf '%d' $(MINOR)) + 1)).0
@@ -442,6 +451,7 @@ release-minor: fetch-tags check-clean
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
 	$(MAKE) gh-release VERSION=$$NEW
+	$(MAKE) release-unstash
 
 release-major: fetch-tags check-clean
 	NEW=v$$(($$(printf '%d' $(MAJOR)) + 1)).0.0
@@ -451,6 +461,7 @@ release-major: fetch-tags check-clean
 	git push origin "$$NEW"
 	@echo "Tagged $$NEW"
 	$(MAKE) gh-release VERSION=$$NEW
+	$(MAKE) release-unstash
 
 # Meta-release: run tests, show changelog, then dispatch to patch/minor/major
 # Creates git tag AND GitHub Release with downloadable ZIP
