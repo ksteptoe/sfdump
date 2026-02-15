@@ -417,6 +417,7 @@ release-wheel:
 	  exit 1; \
 	fi
 	@echo "=== Building wheel for $(VERSION) ==="
+	rm -f $(DIST_DIR)/sfdump-*.whl
 	$(PYTHON) -m pip install -U build
 	$(PYTHON) -m build --wheel
 	@echo "✅ Wheel built in $(DIST_DIR)/"
