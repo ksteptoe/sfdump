@@ -168,7 +168,7 @@ All previewable file types also include a download button.
 
 ### Find a Specific Invoice
 
-1. Type the invoice number in the Search box (e.g., "SIN003926")
+1. Type the invoice number in the Search box (e.g., "SIN001234")
 2. Click **Open parent record** to view the full invoice details in DB Viewer
 
 ## Tips

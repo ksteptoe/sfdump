@@ -76,7 +76,7 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
         "Search",
         value="",
         key=f"{key_prefix}_q",
-        placeholder="e.g. PIN01006*, SIN002469, Softcat...",
+        placeholder="e.g. PIN01006*, SIN001234, Acme Corp...",
         help="Search by file name, invoice number, record name, or ID. Supports wildcards.",
     ).strip()
 
@@ -107,7 +107,7 @@ def render_document_explorer(*, export_root: Path, key_prefix: str = "docx") -> 
                 "Account Name",
                 value="",
                 key=f"{key_prefix}_account",
-                placeholder="e.g. Arm Limited, Intel...",
+                placeholder="e.g. Acme Corp, Global Inc...",
                 help="Filter by Account name (partial match)",
             ).strip()
         with col_opp:

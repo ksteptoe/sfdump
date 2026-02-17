@@ -59,13 +59,13 @@ The ``inventory`` command provides a single authoritative answer to
 
     Export Inventory
     ==================================================
-    Location:  /home/kevin/sfdump/exports/export-2026-01-26
+    Location:  ./exports/export-2025-03-15
 
       Category             Status         Expected     Present
       CSV Objects          COMPLETE             44          44
-      Attachments          INCOMPLETE       39,917      39,917  (15 missing)
-      ContentVersions      COMPLETE            285      13,194
-      Invoice PDFs         INCOMPLETE        3,445           0  (3,445 missing)
+      Attachments          COMPLETE         12,456      12,456
+      ContentVersions      COMPLETE            285       1,194
+      Invoice PDFs         INCOMPLETE        1,200           0  (1,200 missing)
       Indexes              COMPLETE             11          11
       Database             COMPLETE                  14 tables
 
@@ -171,7 +171,7 @@ they are **not** stored as files. A deployed Apex REST class
 ::
 
     sfdump login-web          # Authenticate via browser (SSO)
-    sf sins                   # Download all ~3,445 Complete invoice PDFs
+    sf sins                   # Download all Complete invoice PDFs
     sf sins --force           # Re-download everything
 
 PDFs are saved to ``{export}/invoices/SIN001234.pdf`` and indexed for the

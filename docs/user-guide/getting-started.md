@@ -62,8 +62,8 @@ Contact your Salesforce administrator and ask for **Connected App credentials** 
 
 | Credential | What It Looks Like | Example |
 |------------|-------------------|---------|
-| **Client ID** (Consumer Key) | Long alphanumeric string | `3MVG9...vvxeVcp` |
-| **Client Secret** (Consumer Secret) | Long alphanumeric string | `D6BE...CF8091` |
+| **Client ID** (Consumer Key) | Long alphanumeric string | `3MVG9_YOUR_CONSUMER_KEY_HERE` |
+| **Client Secret** (Consumer Secret) | Long alphanumeric string | `YOUR_CONSUMER_SECRET_HERE` |
 | **Login URL** | Your Salesforce instance URL | `https://yourcompany.my.salesforce.com` |
 
 **Note:** This uses OAuth Client Credentials flow — no username or password is required. Your IT department configures the Connected App to authenticate directly.
@@ -82,8 +82,8 @@ You'll be prompted to enter each credential. The setup wizard saves them to a `.
 
 ```
 SF_AUTH_FLOW=client_credentials
-SF_CLIENT_ID=3MVG9...your_client_id...
-SF_CLIENT_SECRET=D6BE...your_client_secret...
+SF_CLIENT_ID=YOUR_CONSUMER_KEY_HERE
+SF_CLIENT_SECRET=YOUR_CONSUMER_SECRET_HERE
 SF_LOGIN_URL=https://yourcompany.my.salesforce.com
 SF_API_VERSION=v60.0
 ```

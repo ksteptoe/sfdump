@@ -95,7 +95,7 @@ Yes. The viewer opens in Explorer mode where you can search by Account name, Opp
 
 ### How do I find a specific invoice?
 
-1. Type the invoice number in the search box (e.g., "SIN002795")
+1. Type the invoice number in the search box (e.g., "SIN001234")
 2. Click the matching result to preview the document
 3. Click **Open parent record** to see the full invoice details in DB Viewer
 

@@ -11,13 +11,13 @@ class TestGlobToRegex:
     def test_literal_text_unchanged(self):
         """Plain text without wildcards passes through unchanged."""
         assert glob_to_regex("PIN010063") == "PIN010063"
-        assert glob_to_regex("SIN002469") == "SIN002469"
-        assert glob_to_regex("Softcat") == "Softcat"
+        assert glob_to_regex("SIN001234") == "SIN001234"
+        assert glob_to_regex("AcmeCorp") == "AcmeCorp"
 
     def test_asterisk_converts_to_dot_star(self):
         """Asterisk (*) converts to regex .* for any characters."""
         assert glob_to_regex("PIN01006*") == "PIN01006.*"
-        assert glob_to_regex("*Softcat*") == ".*Softcat.*"
+        assert glob_to_regex("*AcmeCorp*") == ".*AcmeCorp.*"
         assert glob_to_regex("SIN*") == "SIN.*"
         assert glob_to_regex("*") == ".*"
 
@@ -74,7 +74,7 @@ class TestGlobToRegex:
         """Real-world search patterns work correctly."""
         # Invoice number searches
         assert glob_to_regex("PIN01006*") == "PIN01006.*"
-        assert glob_to_regex("SIN00246?") == "SIN00246."
+        assert glob_to_regex("SIN00123?") == "SIN00123."
         assert glob_to_regex("PIN0100[6-9]*") == "PIN0100[6-9].*"
 
         # Filename with extension

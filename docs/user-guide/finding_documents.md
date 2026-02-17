@@ -20,7 +20,7 @@ Your web browser opens automatically with the document viewer. The search page a
 
 This is the most common task for finance users.
 
-1. Type the invoice number in the **Search** box (e.g., "PIN010063" or "SIN002469")
+1. Type the invoice number in the **Search** box (e.g., "PIN010063" or "SIN001234")
 2. Results appear automatically as you type
 
 **Results show:**
@@ -45,7 +45,7 @@ The search box supports wildcards for powerful searching:
 **Examples:**
 - `SIN*` — all sales invoices
 - `PIN01*` — all purchase invoices starting with PIN01
-- `*Softcat*` — anything containing "Softcat"
+- `*Acme*` — anything containing "Acme"
 
 Click **Search tips** below the search box for more examples.
 
@@ -68,7 +68,7 @@ If you know the project or opportunity name:
 ## Finding a Specific Invoice
 
 **Method 1: By invoice number (fastest)**
-1. Type the invoice number in the Search box (e.g., "SIN002795")
+1. Type the invoice number in the Search box (e.g., "SIN001234")
 2. Click the invoice to view details
 
 **Method 2: Through customer**
@@ -144,7 +144,7 @@ After finding a document, you can view the full record it belongs to:
 |------|---------|---------|
 | **Account** | Customer company | "Acme Corp" |
 | **Opportunity** | Specific deal or project | "Acme Corp Q2 2024" |
-| **Invoice** | Billing document | "SIN002795" |
+| **Invoice** | Billing document | "SIN001234" |
 | **Purchase Invoice** | Bill from supplier | "PIN010063" |
 
 ### Why some records have no documents

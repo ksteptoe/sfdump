@@ -62,7 +62,7 @@ ESSENTIAL_OBJECTS = [
     "Event",
     "User",
     "RecordType",
-    # Custom CRM
+    # Custom CRM (common custom objects — edit to match your org)
     "Project__c",
     "Invoices__c",
     # FinancialForce / Certinia Core
@@ -89,7 +89,7 @@ ESSENTIAL_OBJECTS = [
     "pse__Timecard_Header__c",
     "pse__Expense__c",
     "pse__Expense_Report__c",
-    # HR / Employment
+    # HR / Employment (common custom objects — edit to match your org)
     "Engineer__c",
     "JobApplication__c",
     "HR_Activity__c",
