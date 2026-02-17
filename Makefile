@@ -326,6 +326,7 @@ clean-tests:
 # -----------------------------------------------------------------------------#
 # Build & Publish
 build:
+	rm -rf $(DIST_DIR)
 	$(PYTHON) -m pip install -U build
 	$(PYTHON) -m build
 

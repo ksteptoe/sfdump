@@ -6,11 +6,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sfdump"
 dynamic = ["version"]
-description = "A project scaffolded using PyScaffold Clickstart"
+description = "Salesforce data export and archival tool with verification, SQLite database, and Streamlit viewer"
 readme = "README.rst"
 requires-python = ">=3.12"
-license = { text = "MIT" }
-authors = [{ name = "Your Name", email = "you@example.com" }]
+license = "MIT"
+license-files = ["LICENSE.txt"]
+authors = [{ name = "Kevin Steptoe", email = "ksteptoe@gmail.com" }]
+keywords = ["salesforce", "export", "backup", "archival", "data-migration"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+]
 
 # Runtime-only deps
 dependencies = [
@@ -18,7 +29,6 @@ dependencies = [
     "requests>=2.31",
     "tqdm>=4.66",
     "python-dotenv>=1.0.1",
-    "dotenv",
     "pandas",
     "openpyxl>=3.1",
     "extract-msg>=0.41",
@@ -59,8 +69,8 @@ pdf = [
 ]
 
 [project.urls]
-Homepage = "https://example.com/sfdump"
-Repository = "https://github.com/example/sfdump"
+Homepage = "https://github.com/ksteptoe/sfdump"
+Repository = "https://github.com/ksteptoe/sfdump"
 
 [project.scripts]
 sf = "sfdump.cli_simple:cli"
@@ -68,7 +78,7 @@ sfdump = "sfdump.cli:cli"
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
-local_scheme = "dirty-tag"
+local_scheme = "no-local-version"
 fallback_version = "0.0.1"
 write_to = "src/sfdump/_version.py"
 
