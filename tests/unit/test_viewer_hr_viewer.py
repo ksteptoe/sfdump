@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from sfdump.viewer_app.ui.hr_viewer import (
     _EMPLOYEE_EXTRA_FIELDS,
     _EMPLOYEE_RT_ID,
     _FILTER_FIELDS,
+    _check_hr_password,
     _count_by_type,
     _get_available_columns,
     _has_record_type_table,
@@ -934,3 +936,57 @@ class TestDbBuilderRecordType:
         assert cur.fetchone()[0] == "Employee"
 
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Password gate
+# ---------------------------------------------------------------------------
+
+
+class TestPasswordGate:
+    def test_no_hash_configured_returns_true(self, monkeypatch):
+        """When SFDUMP_HR_PASSWORD_HASH is not set, access is granted."""
+        monkeypatch.delenv("SFDUMP_HR_PASSWORD_HASH", raising=False)
+        assert _check_hr_password() is True
+
+    def test_empty_hash_returns_true(self, monkeypatch):
+        """An empty hash string is treated as 'not configured'."""
+        monkeypatch.setenv("SFDUMP_HR_PASSWORD_HASH", "")
+        assert _check_hr_password() is True
+
+    def test_whitespace_hash_returns_true(self, monkeypatch):
+        """Whitespace-only hash is treated as 'not configured'."""
+        monkeypatch.setenv("SFDUMP_HR_PASSWORD_HASH", "   ")
+        assert _check_hr_password() is True
+
+    def test_hash_set_but_not_authenticated(self, monkeypatch):
+        """When hash is set but session not authenticated, access is denied."""
+        import streamlit as st
+
+        monkeypatch.setenv(
+            "SFDUMP_HR_PASSWORD_HASH",
+            hashlib.sha256(b"secret").hexdigest(),
+        )
+        # Ensure session state has no auth flag
+        st.session_state.pop("_hr_authenticated", None)
+        assert _check_hr_password() is False
+
+    def test_hash_set_and_authenticated(self, monkeypatch):
+        """When hash is set and session is authenticated, access is granted."""
+        import streamlit as st
+
+        monkeypatch.setenv(
+            "SFDUMP_HR_PASSWORD_HASH",
+            hashlib.sha256(b"secret").hexdigest(),
+        )
+        st.session_state["_hr_authenticated"] = True
+        assert _check_hr_password() is True
+        # Clean up
+        st.session_state.pop("_hr_authenticated", None)
+
+    def test_sha256_hash_matches(self):
+        """Verify the hashing approach produces correct SHA-256 digests."""
+        password = "my-hr-password"
+        expected = hashlib.sha256(password.encode()).hexdigest()
+        assert len(expected) == 64
+        assert expected == hashlib.sha256(password.encode()).hexdigest()

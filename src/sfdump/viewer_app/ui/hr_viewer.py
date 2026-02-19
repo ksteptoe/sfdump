@@ -7,6 +7,8 @@ with drill-down to individual record detail.
 
 from __future__ import annotations
 
+import hashlib
+import os
 import re
 import sqlite3
 from pathlib import Path
@@ -284,8 +286,35 @@ def _load_regions(db_path: Path) -> list[str]:
         conn.close()
 
 
+def _check_hr_password() -> bool:
+    """Return True if the user is authenticated (or no password is configured)."""
+    pw_hash = os.environ.get("SFDUMP_HR_PASSWORD_HASH", "").strip()
+    if not pw_hash:
+        return True
+    return bool(st.session_state.get("_hr_authenticated"))
+
+
+def _render_password_gate(expected_hash: str) -> None:
+    """Show a password prompt and verify against the expected SHA-256 hash."""
+    st.subheader("HR Viewer — Authentication Required")
+    st.caption("Contact your administrator for access.")
+    pw = st.text_input("Password", type="password", key="_hr_pw_input")
+    if st.button("Login", key="_hr_pw_btn"):
+        if hashlib.sha256(pw.encode()).hexdigest() == expected_hash:
+            st.session_state["_hr_authenticated"] = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+
+
 def render_hr_viewer(*, db_path: Path) -> None:
     """Main HR viewer entry point."""
+    # Password gate — when SFDUMP_HR_PASSWORD_HASH is set, require auth first
+    pw_hash = os.environ.get("SFDUMP_HR_PASSWORD_HASH", "").strip()
+    if pw_hash and not st.session_state.get("_hr_authenticated"):
+        _render_password_gate(pw_hash)
+        return
+
     # Check contact table exists
     conn = sqlite3.connect(str(db_path))
     try:

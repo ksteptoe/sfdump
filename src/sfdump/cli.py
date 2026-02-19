@@ -192,6 +192,17 @@ cli.add_command(cast(Command, cfo_report))
 cli.add_command(cast(Command, cfo_report), name="cfo-report")
 
 
+@cli.command("hash-password", hidden=True)
+def cmd_hash_password() -> None:
+    """Generate a SHA-256 hash for use with SFDUMP_HR_PASSWORD_HASH."""
+    import hashlib
+
+    pw = click.prompt("Password", hide_input=True, confirmation_prompt=True)
+    digest = hashlib.sha256(pw.encode()).hexdigest()
+    click.echo(f"\n{digest}")
+    click.echo(f"\nAdd to .env:\n  SFDUMP_HR_PASSWORD_HASH={digest}")
+
+
 def main() -> None:
     """Entry point for `python -m sfdump.cli`."""
     # Let Click handle argv and exit codes
