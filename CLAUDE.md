@@ -36,10 +36,21 @@ make docs          # Build Sphinx docs to docs/_build/html
 ### Build & Release
 ```bash
 make build         # Build wheel + sdist
+make upload        # Build + upload to PyPI (via Twine)
 make version       # Print setuptools_scm version
 make run-cli       # Run CLI with CLI_ARGS=...
-make release KIND=patch|minor|major  # Tag + GitHub Release with ZIP (requires gh CLI)
+make release KIND=patch|minor|major  # Full release: test, tag, GitHub Release, build + PyPI upload
 ```
+
+### Standard Release Workflow
+The usual release flow after completing work:
+```bash
+git push                       # Push committed changes to remote
+make release KIND=patch        # Patch release (bug fixes, small changes)
+make release KIND=minor        # Minor release (new features)
+make release KIND=major        # Major release (breaking changes)
+```
+`make release` runs the full pipeline: test suite, git tag, GitHub Release (with wheel + ZIP), and PyPI upload — all in one command.
 
 ## Architecture
 
