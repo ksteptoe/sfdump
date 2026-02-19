@@ -332,8 +332,8 @@ build:
 
 upload: build
 	$(PYTHON) -m pip install -U twine
-	twine check dist/*
-	twine upload dist/*
+	$(PYTHON) -m twine check dist/*
+	$(PYTHON) -m twine upload dist/*
 
 # -----------------------------------------------------------------------------#
 # Version & Release helpers (setuptools_scm + Git tags)
