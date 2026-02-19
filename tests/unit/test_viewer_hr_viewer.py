@@ -961,25 +961,26 @@ class TestPasswordGate:
 
     def test_hash_set_but_not_authenticated(self, monkeypatch):
         """When hash is set but session not authenticated, access is denied."""
-        import streamlit as st
+        import sfdump.viewer_app.ui.hr_viewer as hr_mod
 
         monkeypatch.setenv(
             "SFDUMP_HR_PASSWORD_HASH",
             hashlib.sha256(b"secret").hexdigest(),
         )
-        # Use monkeypatch so cleanup is automatic (avoids xdist leakage)
-        monkeypatch.delitem(st.session_state, "_hr_authenticated", raising=False)
+        # Replace Streamlit's SessionState with a plain dict to avoid
+        # custom proxy behaviour leaking state between xdist workers.
+        monkeypatch.setattr(hr_mod.st, "session_state", {})
         assert _check_hr_password() is False
 
     def test_hash_set_and_authenticated(self, monkeypatch):
         """When hash is set and session is authenticated, access is granted."""
-        import streamlit as st
+        import sfdump.viewer_app.ui.hr_viewer as hr_mod
 
         monkeypatch.setenv(
             "SFDUMP_HR_PASSWORD_HASH",
             hashlib.sha256(b"secret").hexdigest(),
         )
-        monkeypatch.setitem(st.session_state, "_hr_authenticated", True)
+        monkeypatch.setattr(hr_mod.st, "session_state", {"_hr_authenticated": True})
         assert _check_hr_password() is True
 
     def test_sha256_hash_matches(self):
