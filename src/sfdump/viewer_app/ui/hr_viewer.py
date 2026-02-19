@@ -436,7 +436,7 @@ def _render_contact_table(
         height=min(400, 35 * len(df) + 38),
         width="stretch",
         column_config={
-            "Name": st.column_config.TextColumn("Name", width="large"),
+            "Name": st.column_config.TextColumn("Name", width=300),
         },
     )
 
