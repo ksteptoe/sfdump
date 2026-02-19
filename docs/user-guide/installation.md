@@ -46,17 +46,14 @@ powershell -ExecutionPolicy Bypass -Command `
   "irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex"
 ```
 
-**Already installed?** — The installer will detect existing installations and offer to update.
+**Already installed?** — Run `sfdump upgrade` in PowerShell to upgrade to the latest version.
 
 ## macOS / Linux Installation
 
 For macOS or Linux users:
 
 ```bash
-curl -LO https://github.com/ksteptoe/sfdump/archive/refs/heads/main.zip
-unzip main.zip
-cd sfdump-main
-make bootstrap
+pip install sfdump
 ```
 
 ## Next Steps

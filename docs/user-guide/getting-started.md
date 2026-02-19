@@ -39,15 +39,12 @@ powershell -ExecutionPolicy Bypass -Command `
   "irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex"
 ```
 
-**To update later:** Double-click `install.bat` and choose option [1] to upgrade to the latest version.
+**To update later:** Run `sfdump upgrade` in PowerShell to upgrade to the latest version.
 
 ### Installing on macOS / Linux
 
 ```bash
-curl -LO https://github.com/ksteptoe/sfdump/archive/refs/heads/main.zip
-unzip main.zip
-cd sfdump-main
-make bootstrap
+pip install sfdump
 ```
 
 ---
@@ -254,29 +251,98 @@ This opens your web browser to the sfdump viewer (usually at `http://localhost:8
 
 **Keep the terminal window open** — closing it stops the viewer.
 
-### Finding Documents
+### Home Screen
 
-The viewer opens in Explorer mode — a full-width search page:
+The viewer opens to a landing page with three viewers to choose from:
 
-1. Type a customer name, invoice number, or keyword in the search box
-2. Results show matching documents across the entire export
-3. Click any result to preview it
+| Viewer | Purpose |
+|--------|---------|
+| **Object Viewer** | Browse any Salesforce object table — drill into records, explore parent/child relationships, and view attached documents |
+| **HR Viewer** | View Contact records split by Employee and Contractor — search and filter people with key HR fields at a glance |
+| **Finance Viewer** | Search and preview all exported documents — invoices, contracts, attachments — with built-in file preview |
 
-### Browsing Records
+Click a card to enter that viewer. Every viewer has a **Home** button to return to this landing page.
 
-Click the **DB Viewer** button (top-right) to switch to the record browser:
+---
 
-1. Choose an object type (Account, Opportunity, Invoice, etc.)
-2. Search for the record you want
-3. View details, related records, and attached documents
-4. Click **Back to Explorer** in the sidebar to return to search
+### Finance Viewer
+
+The Finance Viewer is a full-width document search and preview tool.
+
+**Searching for documents:**
+
+1. Click **Finance Viewer** on the home screen
+2. Type a customer name, invoice number (e.g. `SIN001234`), or keyword in the search box
+3. Search supports glob wildcards — use `*` to match anything (e.g. `SIN001*`), `?` for a single character, or `[1-5]` for ranges
+4. Tick **PDF Only** to limit results to PDF files
+5. Expand **Additional Filters** to filter by Account Name, Opportunity Name, or Object Type
+
+**Previewing and navigating:**
+
+- Select a document from the results table to preview it inline (PDFs, images, emails, and more)
+- Click **Open parent record** to jump directly to that record in the Object Viewer
+
+Click **Home** (top-right) to return to the landing page.
+
+---
+
+### Object Viewer
+
+The Object Viewer is a two-panel record browser with a sidebar for navigation.
+
+**Sidebar controls:**
+
+- **Object** — Choose a Salesforce object type (Account, Opportunity, Invoice, etc.)
+- **Search** — Filter records by name or keyword (with optional regex)
+- **Limit** — Control how many records to load (10–5,000)
+- **Show all fields** / **Show Id columns** — Toggle field visibility
+
+**Working with records:**
+
+1. Click **Object Viewer** on the home screen
+2. Select an object type from the sidebar
+3. Click a record to see its details in three tabs:
+   - **Details** — Field values for the selected record
+   - **Children** — Related child records grouped by relationship (click **Open** to drill down)
+   - **Documents** — Files attached directly to this record
+4. The right panel shows a document tree for the selected record and its descendants, with depth and filter controls
+
+**Navigation:**
+
+- Clicking **Open** on a child record pushes it onto a breadcrumb trail in the sidebar
+- Click any breadcrumb item to jump back, or use **Back** / **Reset** to navigate the trail
+- Click **Home** in the sidebar to return to the landing page
+
+---
+
+### HR Viewer
+
+The HR Viewer provides a focused view of Contact records, split by employment type.
+
+The HR Viewer is password-protected because it contains sensitive personal data. The home screen shows a **Protected** label on the HR Viewer card. Contact your IT department for the password.
+
+**Getting started:**
+
+1. Click **HR Viewer** on the home screen
+2. Enter the password provided by your IT department and click **Login**
+3. Search by name using the search box (supports wildcards)
+4. Optionally filter by region using the dropdown
+
+**Browsing contacts:**
+
+- Results are split into two tabs: **Employees** and **Contractors**, each showing a count
+- Select a contact from the results and click **View Details** to see their full record
+- Click **Back to list** to return to the search results
+
+Click **Home** (top-right) to return to the landing page.
+
+---
 
 ### Viewing Files
 
-- Click any file name to preview it
-- PDFs and images display inline
+- PDFs and images display inline in the preview panel
 - Click **Download** to save a copy to your computer
-- Click **Open Folder** to see the file in Windows Explorer
+- Click **Open Folder** to see the file in your file explorer
 
 ### Closing the Viewer
 

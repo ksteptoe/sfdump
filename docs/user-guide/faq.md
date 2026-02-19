@@ -91,7 +91,7 @@ Anyone on your local network can access it.
 
 ### Can I search across all documents?
 
-Yes. The viewer opens in Explorer mode where you can search by Account name, Opportunity name, invoice number, or any keyword to find all related documents.
+Yes. From the home screen, open **Finance Viewer** to search by Account name, Opportunity name, invoice number, or any keyword to find all related documents.
 
 ### How do I find a specific invoice?
 
@@ -123,12 +123,11 @@ Never commit them to Git or share externally. Store them in a private folder:
 
 ### What credentials do I need?
 
-You need a Salesforce Connected App with:
+You need a Salesforce Connected App configured for **Client Credentials** OAuth flow:
 - Consumer Key (Client ID)
 - Consumer Secret
-- Your Salesforce username and password
 
-Contact your Salesforce administrator or IT department.
+No username or password is required. Contact your Salesforce administrator or IT department.
 
 ### Where are credentials stored?
 
