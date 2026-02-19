@@ -58,15 +58,25 @@ function Write-Err {
 }
 
 function Get-CurrentVersion {
+    # Try venv first
     $venvPython = Join-Path $ScriptDir ".venv\Scripts\python.exe"
-    if (-not (Test-Path $venvPython)) { return $null }
+    if (Test-Path $venvPython) {
+        try {
+            $ver = & $venvPython -c "import sfdump; print(sfdump.__version__)" 2>&1
+            if ($LASTEXITCODE -eq 0 -and $ver -match "^\d+\.\d+") {
+                return $ver.Trim()
+            }
+        } catch {}
+    }
 
+    # Fallback: check global sfdump --version
     try {
-        $ver = & $venvPython -c "import sfdump; print(sfdump.__version__)" 2>&1
-        if ($LASTEXITCODE -eq 0 -and $ver -match "^\d+\.\d+") {
-            return $ver.Trim()
+        $ver = & sfdump --version 2>&1
+        if ($LASTEXITCODE -eq 0 -and $ver -match "\d+\.\d+") {
+            return ($ver -replace ".*?(\d+\.\d+\.\S+).*", '$1').Trim()
         }
     } catch {}
+
     return $null
 }
 
@@ -101,7 +111,7 @@ function Update-Sfdump {
     if (-not $latest) {
         Write-Err "  Could not check for updates (no internet?)"
         Write-Host ""
-        $reinstall = Read-Host "Reinstall from local source files instead? (Y/n)"
+        $reinstall = Read-Host "Try installing from PyPI anyway? (Y/n)"
         if ($reinstall -eq "" -or $reinstall -match "^[Yy]") {
             Install-Sfdump | Out-Null
         }
@@ -142,7 +152,7 @@ function Update-Sfdump {
     } catch {
         Write-Err "  Upgrade failed: $($_.Exception.Message)"
         Write-Host ""
-        $reinstall = Read-Host "Reinstall from local source files instead? (Y/n)"
+        $reinstall = Read-Host "Try installing from PyPI anyway? (Y/n)"
         if ($reinstall -eq "" -or $reinstall -match "^[Yy]") {
             Install-Sfdump | Out-Null
         }
@@ -378,27 +388,22 @@ function Install-Sfdump {
     Write-Step "Upgrading pip in virtual environment..."
     & $venvPython -m pip install --upgrade pip setuptools wheel 2>&1 | Out-Null
 
-    Write-Step "Installing sfdump and dependencies..."
+    Write-Step "Installing sfdump from PyPI..."
     Write-Host "This may take a few minutes..." -ForegroundColor Gray
 
-    Push-Location $ScriptDir
-    try {
-        & $venvPython -m pip install -e ".[dev]"
+    & $venvPython -m pip install sfdump
 
-        if ($LASTEXITCODE -eq 0) {
-            Write-Success "sfdump installed successfully!"
+    if ($LASTEXITCODE -eq 0) {
+        Write-Success "sfdump installed successfully!"
 
-            # Store venv path for later use
-            $script:VenvActivate = $venvActivate
-            $script:VenvPython = $venvPython
+        # Store venv path for later use
+        $script:VenvActivate = $venvActivate
+        $script:VenvPython = $venvPython
 
-            return $true
-        } else {
-            Write-Err "Installation failed."
-            return $false
-        }
-    } finally {
-        Pop-Location
+        return $true
+    } else {
+        Write-Err "Installation failed."
+        return $false
     }
 }
 
@@ -700,24 +705,18 @@ Or for Command Prompt (cmd.exe):
 
     .venv\Scripts\activate.bat
 
-AVAILABLE COMMANDS (after activation)
--------------------------------------
-
-    sfdump --help         Show all available commands
-    sfdump login          Test Salesforce connection
-    sfdump files          Export Attachments/ContentVersions
-    sfdump build-db       Build searchable SQLite database
-    sfdump db-viewer      Launch the web viewer
-
 GETTING STARTED
 ---------------
 
 1. Activate the virtual environment (see above)
-2. Make sure your .env file is configured with Salesforce credentials
-3. Run: sfdump login
+2. Run: sf setup
+   (to configure Salesforce credentials)
+3. Run: sf test
    (to verify your connection works)
-4. Run: sfdump files --help
-   (to see export options)
+4. Run: sf dump
+   (to export your Salesforce data)
+5. Run: sf view
+   (to browse your data in the web viewer)
 
 "@ -ForegroundColor Cyan
 }

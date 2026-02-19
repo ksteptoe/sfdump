@@ -194,10 +194,21 @@ cli.add_command(cast(Command, cfo_report), name="cfo-report")
 
 @cli.command("set-password")
 @click.option(
+    "-d",
+    "--export-dir",
+    "export_dir",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    required=False,
+    help=(
+        "Root export directory (e.g. exports/export-YYYY-MM-DD). "
+        "If provided and --db is not, the DB is assumed at <export-dir>/meta/sfdata.db."
+    ),
+)
+@click.option(
     "--db",
     "db_path",
-    required=True,
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=False,
+    type=click.Path(dir_okay=False, path_type=Path),
     help="Path to the SQLite database file.",
 )
 @click.option(
@@ -206,10 +217,18 @@ cli.add_command(cast(Command, cfo_report), name="cfo-report")
     default=False,
     help="Remove password protection from the database.",
 )
-def cmd_set_password(db_path: Path, remove: bool) -> None:
+def cmd_set_password(export_dir: Path | None, db_path: Path | None, remove: bool) -> None:
     """Add, change, or remove HR viewer password on a database."""
     import hashlib
     import sqlite3
+
+    if db_path is None:
+        if export_dir is None:
+            raise click.ClickException("Either --db or --export-dir (-d) must be provided.")
+        db_path = export_dir / "meta" / "sfdata.db"
+
+    if not db_path.exists():
+        raise click.ClickException(f"Database not found: {db_path}")
 
     conn = sqlite3.connect(str(db_path))
     try:

@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Test the current branch's setup.ps1 (tests latest code changes)
+  # Test the current branch's setup.ps1 with local wheel (tests latest code changes)
   test-setup-script:
     runs-on: windows-latest
     steps:
@@ -21,8 +21,16 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run setup.ps1 -Install -SkipEnv
+      - name: Build wheel from local source
         shell: pwsh
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir dist/
+
+      - name: Run setup.ps1 -Install -SkipEnv (with local wheel)
+        shell: pwsh
+        env:
+          PIP_FIND_LINKS: ${{ github.workspace }}/dist/
         run: |
           Write-Host "Running setup.ps1 in non-interactive mode..."
           & "${{ github.workspace }}\setup.ps1" -Install -SkipEnv
@@ -178,7 +186,7 @@ jobs:
           # Reset exit code so the step passes
           exit 0
 
-  # Full end-to-end test: download release, install, and verify
+  # Test pip install from PyPI and verify commands work
   test-full-e2e:
     runs-on: windows-latest
     steps:
@@ -186,189 +194,88 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Download and extract release
+      - name: Install sfdump from PyPI
         shell: pwsh
         run: |
-          Write-Host "Downloading latest release..."
+          Write-Host "Installing sfdump from PyPI..."
+          python -m pip install --upgrade pip
+          python -m pip install sfdump
+          if ($LASTEXITCODE -ne 0) { throw "pip install sfdump failed" }
+          Write-Host "  [OK] sfdump installed from PyPI"
 
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-          $headers = @{ "User-Agent" = "sfdump-ci-test" }
+      - name: Verify sfdump and sf commands exist
+        shell: pwsh
+        run: |
+          Write-Host "Checking commands..."
 
-          # Get latest release
-          try {
-              $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ksteptoe/sfdump/releases/latest" -Headers $headers
-              Write-Host "Found release: $($release.tag_name)"
-              $asset = $release.assets | Where-Object { $_.name -match "^sfdump-.*\.zip$" } | Select-Object -First 1
-              if ($asset) {
-                  $zipUrl = $asset.browser_download_url
-              } else {
-                  $zipUrl = $release.zipball_url
+          $sfdumpPath = (Get-Command sfdump -ErrorAction SilentlyContinue).Source
+          if (-not $sfdumpPath) { throw "sfdump not found in PATH" }
+          Write-Host "  [OK] sfdump found: $sfdumpPath"
+
+          $sfPath = (Get-Command sf -ErrorAction SilentlyContinue).Source
+          if (-not $sfPath) { throw "sf not found in PATH" }
+          Write-Host "  [OK] sf found: $sfPath"
+
+      - name: Test sfdump --version
+        shell: pwsh
+        run: |
+          $version = sfdump --version
+          Write-Host "sfdump version: $version"
+          if (-not $version) { throw "sfdump --version returned empty" }
+
+      - name: Test sf --version (alias)
+        shell: pwsh
+        run: |
+          $version = sf --version
+          Write-Host "sf version: $version"
+          if (-not $version) { throw "sf --version returned empty" }
+
+      - name: Test sfdump --help shows all commands
+        shell: pwsh
+        run: |
+          Write-Host "Testing sfdump --help..."
+          $output = (sfdump --help) -join "`n"
+          Write-Host $output
+
+          $requiredCommands = @("login", "files", "verify-files", "build-db", "db-viewer")
+          foreach ($cmd in $requiredCommands) {
+              if ($output -notmatch $cmd) {
+                  throw "Missing '$cmd' command in sfdump --help"
               }
-          } catch {
-              Write-Host "No releases found, using main branch"
-              $zipUrl = "https://github.com/ksteptoe/sfdump/archive/refs/heads/main.zip"
-          }
-
-          # Download
-          $zipPath = "$env:TEMP\sfdump-e2e.zip"
-          Write-Host "Downloading: $zipUrl"
-          Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -Headers $headers
-
-          # Extract
-          $extractPath = "$env:TEMP\sfdump-e2e-extract"
-          Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-
-          # Find and copy to install location
-          $extractedFolder = Get-ChildItem $extractPath | Select-Object -First 1
-          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
-          New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-          Copy-Item -Path "$($extractedFolder.FullName)\*" -Destination $installDir -Recurse -Force
-
-          Write-Host "Installed to: $installDir"
-
-      - name: Run setup.ps1 -Install (with .env creation)
-        shell: pwsh
-        run: |
-          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
-          Write-Host "Running setup.ps1 -Install..."
-
-          Push-Location $installDir
-          try {
-              # Run with -Install but WITHOUT -SkipEnv to test .env template creation
-              # We'll need to handle the interactive prompt for .env
-              # For now, use -SkipEnv since we can't interact
-              & "$installDir\setup.ps1" -Install -SkipEnv
-          } finally {
-              Pop-Location
-          }
-
-      - name: Verify installation
-        shell: pwsh
-        run: |
-          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
-          $venvPython = "$installDir\.venv\Scripts\python.exe"
-          $sfdump = "$installDir\.venv\Scripts\sfdump.exe"
-          $sf = "$installDir\.venv\Scripts\sf.exe"
-
-          Write-Host "Verifying installation..."
-
-          # Check venv exists
-          if (-not (Test-Path $venvPython)) { throw "venv python not found" }
-          Write-Host "  [OK] .venv\Scripts\python.exe exists"
-
-          # Check executables exist
-          if (-not (Test-Path $sfdump)) { throw "sfdump.exe not found" }
-          Write-Host "  [OK] sfdump.exe exists"
-
-          if (-not (Test-Path $sf)) { throw "sf.exe not found" }
-          Write-Host "  [OK] sf.exe exists"
-
-          # Check version
-          $version = & $sfdump --version
-          Write-Host "  [OK] sfdump version: $version"
-
-      - name: Test sfdump commands work
-        shell: pwsh
-        run: |
-          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
-          $sfdump = "$installDir\.venv\Scripts\sfdump.exe"
-
-          Write-Host "Testing sfdump commands..."
-
-          # Test --help
-          $help = (& $sfdump --help) -join "`n"
-          if ($help -notmatch "login") { throw "Missing login command" }
-          Write-Host "  [OK] --help works"
-
-          # Test login --help
-          $loginHelp = (& $sfdump login --help) -join "`n"
-          if ($loginHelp -notmatch "token") { throw "login --help missing content" }
-          Write-Host "  [OK] login --help works"
-
-          # Test files --help
-          $filesHelp = (& $sfdump files --help) -join "`n"
-          if ($filesHelp -notmatch "Download") { throw "files --help missing content" }
-          Write-Host "  [OK] files --help works"
-
-          # Test build-db --help
-          $buildDbHelp = (& $sfdump build-db --help) -join "`n"
-          if ($buildDbHelp -notmatch "SQLite") { throw "build-db --help missing content" }
-          Write-Host "  [OK] build-db --help works"
-
-      - name: Test venv activation in e2e install
-        shell: pwsh
-        run: |
-          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
-
-          Write-Host "Testing venv activation..."
-
-          # Change to install directory
-          Push-Location $installDir
-          try {
-              # Activate venv
-              . ".\.venv\Scripts\Activate.ps1"
-
-              # Verify sfdump is in PATH
-              $sfdumpPath = (Get-Command sfdump -ErrorAction SilentlyContinue).Source
-              if (-not $sfdumpPath) { throw "sfdump not in PATH after activation" }
-              Write-Host "  [OK] sfdump in PATH: $sfdumpPath"
-
-              # Run commands
-              $version = sfdump --version
-              Write-Host "  [OK] sfdump --version: $version"
-
-              $help = (sfdump --help) -join "`n"
-              if ($help -notmatch "Salesforce") { throw "Help missing Salesforce" }
-              Write-Host "  [OK] sfdump --help works from activated venv"
-          } finally {
-              Pop-Location
+              Write-Host "  [OK] Found '$cmd' command"
           }
 
       - name: Test sfdump login runs (no credentials)
         shell: pwsh
         run: |
-          $installDir = "$env:USERPROFILE\sfdump-e2e-test"
-          $sfdump = "$installDir\.venv\Scripts\sfdump.exe"
-
           Write-Host "Testing sfdump login (expecting credential error)..."
 
-          # Clear any env vars
           $env:SF_CLIENT_ID = ""
           $env:SF_CLIENT_SECRET = ""
           $env:SF_LOGIN_URL = ""
 
-          # Run login - should fail with missing credentials error
-          $output = (& $sfdump login 2>&1) -join "`n"
+          $output = (sfdump login 2>&1) -join "`n"
           $exitCode = $LASTEXITCODE
 
           Write-Host "Output: $output"
           Write-Host "Exit code: $exitCode"
 
-          # Verify it failed with the expected error (not a crash)
           if ($output -notmatch "SF_CLIENT_ID|SF_LOGIN_URL|Missing|credentials") {
               throw "sfdump login didn't produce expected credential error"
           }
 
           Write-Host "  [OK] sfdump login runs correctly (fails gracefully without credentials)"
-
-          # Reset exit code so the step passes
           exit 0
-
-      - name: Cleanup
-        if: always()
-        shell: pwsh
-        run: |
-          Remove-Item "$env:TEMP\sfdump-e2e.zip" -Force -ErrorAction SilentlyContinue
-          Remove-Item "$env:TEMP\sfdump-e2e-extract" -Recurse -Force -ErrorAction SilentlyContinue
-          Remove-Item "$env:USERPROFILE\sfdump-e2e-test" -Recurse -Force -ErrorAction SilentlyContinue
-          Write-Host "Cleanup complete"
 
   # Test the release download flow (simulates fresh user experience)
   test-release-download:
     runs-on: windows-latest
     steps:
       # Don't checkout - simulating a fresh user machine
-      # Don't setup Python - user won't have it installed
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Test bootstrap.ps1 can be downloaded
         shell: pwsh
@@ -379,134 +286,27 @@ jobs:
           if ($script -notmatch "sfdump") { throw "Downloaded content doesn't look like bootstrap.ps1" }
           Write-Host "Bootstrap script downloaded successfully ($($script.Length) bytes)"
 
-      - name: Test release ZIP download
+      - name: Test pip install sfdump from PyPI
         shell: pwsh
         run: |
-          Write-Host "Testing release ZIP download..."
+          Write-Host "Installing sfdump from PyPI..."
+          python -m pip install sfdump
+          if ($LASTEXITCODE -ne 0) { throw "pip install sfdump failed" }
 
-          # Ensure TLS 1.2
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          $version = sfdump --version
+          Write-Host "  [OK] sfdump $version installed from PyPI"
 
-          # Get latest release info
-          $headers = @{ "User-Agent" = "sfdump-ci-test" }
-          $releaseApiUrl = "https://api.github.com/repos/ksteptoe/sfdump/releases/latest"
+          # Verify sf alias works too
+          $sfVersion = sf --version
+          Write-Host "  [OK] sf $sfVersion works"
 
-          try {
-              $release = Invoke-RestMethod -Uri $releaseApiUrl -Headers $headers -ErrorAction Stop
-              Write-Host "Found release: $($release.tag_name)"
-
-              # Look for sfdump ZIP
-              $asset = $release.assets | Where-Object { $_.name -match "^sfdump-.*\.zip$" } | Select-Object -First 1
-
-              if ($asset) {
-                  $zipUrl = $asset.browser_download_url
-                  Write-Host "Found ZIP asset: $($asset.name)"
-              } else {
-                  $zipUrl = $release.zipball_url
-                  Write-Host "No ZIP asset, using source archive"
-              }
-          } catch {
-              Write-Host "No releases found, using main branch"
-              $zipUrl = "https://github.com/ksteptoe/sfdump/archive/refs/heads/main.zip"
-          }
-
-          # Download the ZIP
-          $zipPath = "$env:TEMP\sfdump-test.zip"
-          Write-Host "Downloading: $zipUrl"
-          Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -Headers $headers
-
-          if (-not (Test-Path $zipPath)) { throw "ZIP download failed" }
-          $size = (Get-Item $zipPath).Length
-          Write-Host "Downloaded successfully: $([math]::Round($size/1MB, 2)) MB"
-
-      - name: Test ZIP extraction and verify contents
+      - name: Verify setup.ps1 .env template content
         shell: pwsh
         run: |
-          Write-Host "Testing ZIP extraction..."
+          Write-Host "Checking .env template in setup.ps1 from GitHub..."
 
-          $zipPath = "$env:TEMP\sfdump-test.zip"
-          $extractPath = "$env:TEMP\sfdump-extract"
-          $installDir = "$env:USERPROFILE\sfdump-test"
-
-          # Extract
-          Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-
-          # Find extracted folder
-          $extractedFolder = Get-ChildItem $extractPath | Select-Object -First 1
-          if (-not $extractedFolder) { throw "No files in archive" }
-
-          Write-Host "Extracted to: $($extractedFolder.FullName)"
-
-          # Copy to install location
-          New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-          Copy-Item -Path "$($extractedFolder.FullName)\*" -Destination $installDir -Recurse -Force
-
-          Write-Host "Installed to: $installDir"
-          Write-Host ""
-          Write-Host "Contents:"
-          Get-ChildItem $installDir | ForEach-Object { Write-Host "  $_" }
-
-      - name: Verify required files exist
-        shell: pwsh
-        run: |
-          $installDir = "$env:USERPROFILE\sfdump-test"
-
-          Write-Host "Verifying required files..."
-
-          $requiredFiles = @(
-              "setup.ps1",
-              "install.bat",
-              "bootstrap.ps1",
-              "pyproject.toml",
-              "src/sfdump/cli.py"
-          )
-
-          $missing = @()
-          foreach ($file in $requiredFiles) {
-              $path = Join-Path $installDir $file
-              if (Test-Path $path) {
-                  Write-Host "  [OK] $file"
-              } else {
-                  Write-Host "  [MISSING] $file" -ForegroundColor Red
-                  $missing += $file
-              }
-          }
-
-          if ($missing.Count -gt 0) {
-              throw "Missing required files: $($missing -join ', ')"
-          }
-
-          Write-Host ""
-          Write-Host "All required files present!" -ForegroundColor Green
-
-      - name: Verify setup.ps1 is valid PowerShell
-        shell: pwsh
-        run: |
-          $installDir = "$env:USERPROFILE\sfdump-test"
-          $setupScript = Join-Path $installDir "setup.ps1"
-
-          Write-Host "Checking setup.ps1 syntax..."
-
-          $errors = $null
-          $null = [System.Management.Automation.Language.Parser]::ParseFile($setupScript, [ref]$null, [ref]$errors)
-
-          if ($errors.Count -gt 0) {
-              Write-Host "Syntax errors found:" -ForegroundColor Red
-              $errors | ForEach-Object { Write-Host "  $_" }
-              throw "setup.ps1 has syntax errors"
-          }
-
-          Write-Host "setup.ps1 syntax is valid!" -ForegroundColor Green
-
-      - name: Verify .env template in setup.ps1
-        shell: pwsh
-        run: |
-          $installDir = "$env:USERPROFILE\sfdump-test"
-          $setupScript = Join-Path $installDir "setup.ps1"
-
-          Write-Host "Checking .env template content..."
-
-          $content = Get-Content $setupScript -Raw
+          $content = irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/setup.ps1
+          if (-not $content) { throw "Failed to download setup.ps1" }
 
           # Verify correct environment variables are in the template
           $requiredVars = @(
@@ -534,12 +334,3 @@ jobs:
 
           Write-Host ""
           Write-Host ".env template is correct!" -ForegroundColor Green
-
-      - name: Cleanup
-        if: always()
-        shell: pwsh
-        run: |
-          Remove-Item "$env:TEMP\sfdump-test.zip" -Force -ErrorAction SilentlyContinue
-          Remove-Item "$env:TEMP\sfdump-extract" -Recurse -Force -ErrorAction SilentlyContinue
-          Remove-Item "$env:USERPROFILE\sfdump-test" -Recurse -Force -ErrorAction SilentlyContinue
-          Write-Host "Cleanup complete"

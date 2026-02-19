@@ -8,7 +8,6 @@ This guide explains how to install **sfdump** on your computer.
 - **40 GB+ free disk space** for Salesforce exports
 - **Salesforce credentials** — contact your IT department for:
   - Connected App credentials (Client ID and Secret)
-  - Your Salesforce username and password
 
 ## Windows Installation
 
@@ -30,12 +29,10 @@ irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex
 
 The installer will:
 
-1. Download sfdump to your home folder (`C:\Users\YourName\sfdump`)
-2. Install Python if needed (no admin rights required)
-3. Ask for your Salesforce credentials
-4. Create a `.env` configuration file
+1. Install Python if needed (no admin rights required)
+2. Install sfdump from PyPI
 
-Answer the prompts to complete setup.
+After the installer finishes, run `sf setup` to configure your Salesforce credentials.
 
 ### Troubleshooting
 
@@ -46,7 +43,7 @@ powershell -ExecutionPolicy Bypass -Command `
   "irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex"
 ```
 
-**Already installed?** — Run `sfdump upgrade` in PowerShell to upgrade to the latest version.
+**To update later:** Run `pip install --upgrade sfdump` or `sfdump upgrade` in PowerShell.
 
 ## macOS / Linux Installation
 

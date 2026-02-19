@@ -129,9 +129,9 @@ E2E tests verify the complete `sf dump` flow including:
 
 ## Windows Installer
 
-For non-technical Windows users, there's a menu-driven installer:
+For non-technical Windows users:
 
-- `bootstrap.ps1` - One-liner install from GitHub (downloads latest release)
-- `install.bat` / `setup.ps1` - Interactive setup with Python installation, disk space check, .env configuration
-- Targets 40GB+ free disk space for Salesforce exports
+- `bootstrap.ps1` - One-liner install: checks Python, installs if missing, `pip install sfdump` from PyPI
+- `install.bat` / `setup.ps1` - Interactive menu with install/upgrade/uninstall, disk space check, .env configuration
 - No admin rights required (per-user Python install)
+- After install, user runs `sf setup` to configure Salesforce credentials

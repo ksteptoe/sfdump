@@ -1108,3 +1108,72 @@ class TestSetPassword:
         new_hash = _get_viewer_config(db_with_password, "hr_password_hash")
         assert new_hash == hashlib.sha256(b"newpass").hexdigest()
         assert new_hash != old_hash
+
+    def test_set_password_with_export_dir(self, tmp_path: Path):
+        """set-password -d <export-dir> resolves to meta/sfdata.db."""
+        from click.testing import CliRunner
+
+        from sfdump.cli import cli
+
+        meta = tmp_path / "meta"
+        meta.mkdir()
+        db_path = meta / "sfdata.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE viewer_config (key TEXT PRIMARY KEY, value TEXT)")
+        conn.commit()
+        conn.close()
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["set-password", "-d", str(tmp_path)], input="mypass\nmypass\n")
+        assert result.exit_code == 0
+        assert "Password set" in result.output
+
+        val = _get_viewer_config(db_path, "hr_password_hash")
+        assert val == hashlib.sha256(b"mypass").hexdigest()
+
+    def test_set_password_remove_with_export_dir(self, tmp_path: Path):
+        """set-password --remove -d <export-dir> works."""
+        from click.testing import CliRunner
+
+        from sfdump.cli import cli
+
+        meta = tmp_path / "meta"
+        meta.mkdir()
+        db_path = meta / "sfdata.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE viewer_config (key TEXT PRIMARY KEY, value TEXT)")
+        conn.execute(
+            "INSERT INTO viewer_config VALUES (?, ?)",
+            ("hr_password_hash", hashlib.sha256(b"old").hexdigest()),
+        )
+        conn.commit()
+        conn.close()
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["set-password", "-d", str(tmp_path), "--remove"])
+        assert result.exit_code == 0
+        assert "removed" in result.output
+
+        assert _get_viewer_config(db_path, "hr_password_hash") is None
+
+    def test_set_password_requires_db_or_export_dir(self):
+        """set-password errors when neither --db nor -d is given."""
+        from click.testing import CliRunner
+
+        from sfdump.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["set-password"], input="pw\npw\n")
+        assert result.exit_code != 0
+        assert "Either --db or --export-dir" in result.output
+
+    def test_set_password_export_dir_missing_db(self, tmp_path: Path):
+        """set-password -d errors when meta/sfdata.db doesn't exist."""
+        from click.testing import CliRunner
+
+        from sfdump.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["set-password", "-d", str(tmp_path)], input="pw\npw\n")
+        assert result.exit_code != 0
+        assert "Database not found" in result.output

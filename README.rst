@@ -108,13 +108,6 @@ Open PowerShell (press Win+R, type ``powershell``, press Enter) and paste::
 
 This downloads and installs everything automatically.
 
-**Option 2: Manual Download**
-
-1. Go to https://github.com/ksteptoe/sfdump
-2. Click the green "Code" button > "Download ZIP"
-3. Extract the ZIP file
-4. Double-click ``install.bat``
-
 **Detailed Instructions**
 
 See `INSTALL.md <INSTALL.md>`_ for step-by-step instructions with screenshots
@@ -132,11 +125,12 @@ macOS / Linux
 
 ::
 
+    pip install sfdump
+
+For development (contributors)::
+
     git clone https://github.com/ksteptoe/sfdump.git
     cd sfdump
-    pip install -e ".[dev]"
-
-    # Or using make
     make bootstrap
 
 Quick Start

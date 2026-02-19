@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Bootstrap installer for sfdump - downloads and installs from GitHub.
+    Bootstrap installer for sfdump - installs Python if needed and installs sfdump from PyPI.
 .DESCRIPTION
     This script can be run directly from the internet to install sfdump:
 
@@ -12,20 +12,17 @@
         2. Right-click > Run with PowerShell
 
 .NOTES
-    - Downloads the latest RELEASE from GitHub (stable, tested version)
-    - Falls back to main branch if no releases exist
-    - Installs to current directory by default (prompts for confirmation)
-    - Checks for existing installations in home directory
+    - Installs Python if missing (no admin required)
+    - Installs sfdump from PyPI via pip
     - No admin required
-    - Automatically runs the setup wizard
+    - After install, run `sf setup` to configure Salesforce credentials
 #>
 
 $ErrorActionPreference = "Stop"
 
-# Configuration
-$GitHubRepo = "ksteptoe/sfdump"
-$DefaultInstallDir = (Get-Location).Path
-$HomeInstallDir = "$env:USERPROFILE\sfdump"
+$MinPythonVersion = [Version]"3.12.0"
+$PythonInstallerUrl = "https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe"
+$PythonInstallerPath = "$env:TEMP\python-installer.exe"
 
 function Write-Step {
     param([string]$Message)
@@ -43,6 +40,121 @@ function Write-Err {
 }
 
 # ============================================================================
+# Python Detection & Installation
+# ============================================================================
+
+function Test-PythonInstalled {
+    # Check PATH first (important for CI where Python is set up via actions/setup-python)
+    try {
+        $pythonPath = (Get-Command python -ErrorAction SilentlyContinue).Source
+        if ($pythonPath -and -not ($pythonPath -like "*WindowsApps*")) {
+            $version = & python --version 2>&1
+            if ($version -match "Python (\d+\.\d+\.\d+)") {
+                return $pythonPath
+            }
+        }
+    } catch {}
+
+    # Check common Python locations (skip WindowsApps stub)
+    $pythonPaths = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+        "C:\Python313\python.exe",
+        "C:\Python312\python.exe",
+        "$env:ProgramFiles\Python313\python.exe",
+        "$env:ProgramFiles\Python312\python.exe"
+    )
+
+    foreach ($path in $pythonPaths) {
+        if (Test-Path $path) {
+            return $path
+        }
+    }
+
+    # Try py launcher
+    try {
+        $pyPath = (Get-Command py -ErrorAction SilentlyContinue).Source
+        if ($pyPath -and -not ($pyPath -like "*WindowsApps*")) {
+            $pyVersion = & py --version 2>&1
+            if ($LASTEXITCODE -eq 0 -and $pyVersion -match "Python \d+\.\d+") {
+                return "py"
+            }
+        }
+    } catch {}
+
+    return $null
+}
+
+function Get-PythonVersion {
+    param([string]$PythonPath)
+    try {
+        if ($PythonPath -eq "py") {
+            $version = & py --version 2>&1
+        } else {
+            $version = & $PythonPath --version 2>&1
+        }
+        if ($version -match "Python (\d+\.\d+\.\d+)") {
+            return [Version]$Matches[1]
+        }
+    } catch {}
+    return $null
+}
+
+function Install-Python {
+    Write-Step "Downloading Python installer..."
+
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($PythonInstallerUrl, $PythonInstallerPath)
+    } catch {
+        Write-Err "ERROR: Failed to download Python installer."
+        Write-Host "Please download Python manually from: https://www.python.org/downloads/" -ForegroundColor Yellow
+        Write-Host "IMPORTANT: Check 'Add Python to PATH' during installation!" -ForegroundColor Yellow
+        return $false
+    }
+
+    Write-Step "Installing Python for current user (no admin required)..."
+    Write-Host "This takes 2-5 minutes. Please wait..." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "    Installing" -NoNewline
+
+    $userPythonPath = "$env:LOCALAPPDATA\Programs\Python\Python312"
+    $installArgs = @(
+        "/quiet",
+        "InstallAllUsers=0",
+        "PrependPath=1",
+        "Include_launcher=1",
+        "Include_pip=1",
+        "DefaultJustForMeTargetDir=`"$userPythonPath`""
+    )
+
+    $process = Start-Process -FilePath $PythonInstallerPath -ArgumentList $installArgs -PassThru
+
+    while (-not $process.HasExited) {
+        Write-Host "." -NoNewline
+        Start-Sleep -Seconds 2
+    }
+
+    Write-Host " Done!" -ForegroundColor Green
+
+    Remove-Item $PythonInstallerPath -Force -ErrorAction SilentlyContinue
+
+    if ($process.ExitCode -ne 0) {
+        Write-Err "ERROR: Python installation failed with exit code $($process.ExitCode)"
+        Write-Host "Please install Python manually from: https://www.python.org/downloads/" -ForegroundColor Yellow
+        return $false
+    }
+
+    # Refresh PATH
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$userPythonPath;$userPythonPath\Scripts;$env:Path"
+
+    Write-Success "Python installed successfully!"
+    return $true
+}
+
+# ============================================================================
 # Main
 # ============================================================================
 
@@ -56,56 +168,9 @@ Write-Host @"
 
 Write-Host @"
 
-This will download and install sfdump from GitHub.
-
-  Source: https://github.com/$GitHubRepo
+This will install sfdump from PyPI (https://pypi.org/project/sfdump/).
 
 "@
-
-# Check for existing installations
-$existingInstalls = @()
-if (Test-Path "$HomeInstallDir\setup.ps1") {
-    $existingInstalls += $HomeInstallDir
-}
-if (($DefaultInstallDir -ne $HomeInstallDir) -and (Test-Path "$DefaultInstallDir\setup.ps1")) {
-    $existingInstalls += $DefaultInstallDir
-}
-
-if ($existingInstalls.Count -gt 0) {
-    Write-Host "Existing installation(s) found:" -ForegroundColor Yellow
-    foreach ($path in $existingInstalls) {
-        Write-Host "  - $path" -ForegroundColor Yellow
-    }
-    Write-Host ""
-}
-
-# Prompt for install location with current directory as default
-Write-Host "Where would you like to install sfdump?" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  Default: $DefaultInstallDir"
-Write-Host ""
-$customPath = Read-Host "Press Enter for default, or type a different path"
-
-if ([string]::IsNullOrWhiteSpace($customPath)) {
-    $InstallDir = $DefaultInstallDir
-} else {
-    $InstallDir = $customPath.Trim()
-}
-
-Write-Host ""
-Write-Host "  Install location: $InstallDir" -ForegroundColor Green
-Write-Host ""
-
-# Check if this location already has sfdump
-if (Test-Path "$InstallDir\setup.ps1") {
-    $choice = Read-Host "sfdump already exists here. Reinstall/update? (Y/n)"
-    if ($choice -notmatch "^[Yy]?$") {
-        Write-Host "`nTo run the existing installer:"
-        Write-Host "  cd `"$InstallDir`"" -ForegroundColor White
-        Write-Host "  .\install.bat" -ForegroundColor White
-        exit 0
-    }
-}
 
 $continue = Read-Host "Continue with installation? (Y/n)"
 if ($continue -notmatch "^[Yy]?$") {
@@ -113,140 +178,116 @@ if ($continue -notmatch "^[Yy]?$") {
     exit 0
 }
 
-# Download
-Write-Step "Checking for latest release..."
+# --- Check for Python ---
+Write-Step "Checking for Python..."
 
-$zipPath = "$env:TEMP\sfdump-download.zip"
-$extractPath = "$env:TEMP\sfdump-extract"
-$zipUrl = $null
-$version = "main"
+$pythonPath = Test-PythonInstalled
 
-try {
-    # Ensure TLS 1.2 for GitHub
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-    # Try to get latest release from GitHub API
-    $releaseApiUrl = "https://api.github.com/repos/$GitHubRepo/releases/latest"
-
-    try {
-        $headers = @{ "User-Agent" = "sfdump-bootstrap" }
-        $release = Invoke-RestMethod -Uri $releaseApiUrl -Headers $headers -ErrorAction Stop
-
-        # Look for the sfdump ZIP in release assets
-        $asset = $release.assets | Where-Object { $_.name -match "^sfdump-.*\.zip$" } | Select-Object -First 1
-
-        if ($asset) {
-            $zipUrl = $asset.browser_download_url
-            $version = $release.tag_name
-            Write-Host "    Found release: $version" -ForegroundColor Green
-        } else {
-            Write-Host "    Release found but no ZIP asset, using source archive" -ForegroundColor Yellow
-            $zipUrl = $release.zipball_url
-            $version = $release.tag_name
-        }
-    } catch {
-        Write-Host "    No releases found, using main branch" -ForegroundColor Yellow
-        $zipUrl = "https://github.com/$GitHubRepo/archive/refs/heads/main.zip"
-        $version = "main"
-    }
-
-    Write-Step "Downloading sfdump ($version)..."
-    Write-Host "    Source: $zipUrl"
-    Write-Host "    Downloading" -NoNewline
-
-    $webClient = New-Object System.Net.WebClient
-    $webClient.Headers.Add("User-Agent", "sfdump-bootstrap")
-
-    # Simple progress indicator
-    $timer = [System.Diagnostics.Stopwatch]::StartNew()
-
-    Register-ObjectEvent -InputObject $webClient -EventName DownloadProgressChanged -Action {
-        if ($timer.ElapsedMilliseconds -gt 500) {
-            Write-Host "." -NoNewline
-            $timer.Restart()
-        }
-    } | Out-Null
-
-    $webClient.DownloadFile($zipUrl, $zipPath)
-
-    Write-Host " Done!" -ForegroundColor Green
-
-} catch {
-    Write-Err "`nERROR: Failed to download from GitHub."
-    Write-Host "Please check your internet connection and try again."
-    Write-Host "`nAlternatively, download manually from:"
-    Write-Host "  https://github.com/$GitHubRepo/releases" -ForegroundColor Cyan
-    exit 1
-}
-
-# Extract
-Write-Step "Extracting files..."
-
-try {
-    # Clean up any previous extract
-    if (Test-Path $extractPath) {
-        Remove-Item $extractPath -Recurse -Force
-    }
-
-    # Extract zip
-    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-
-    # Find the extracted folder (GitHub adds branch name suffix)
-    $extractedFolder = Get-ChildItem $extractPath | Select-Object -First 1
-
-    if (-not $extractedFolder) {
-        throw "No files found in downloaded archive"
-    }
-
-    # Create install directory if needed
-    if (-not (Test-Path $InstallDir)) {
-        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-    }
-
-    # Copy files to install location
-    Write-Host "    Installing to: $InstallDir"
-    Copy-Item -Path "$($extractedFolder.FullName)\*" -Destination $InstallDir -Recurse -Force
-
-    Write-Success "    Files extracted successfully!"
-
-} catch {
-    Write-Err "ERROR: Failed to extract files."
-    Write-Host $_.Exception.Message
-    exit 1
-} finally {
-    # Clean up temp files
-    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-    Remove-Item $extractPath -Recurse -Force -ErrorAction SilentlyContinue
-}
-
-# Run the installer
-Write-Step "Launching setup wizard..."
-Write-Host ""
-
-Push-Location $InstallDir
-try {
-    # Run the PowerShell setup script
-    & "$InstallDir\setup.ps1"
-
+if (-not $pythonPath) {
+    Write-Host "Python not found." -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "TIP: For future upgrades, run:" -ForegroundColor Cyan
-    Write-Host "  pip install --upgrade sfdump" -ForegroundColor White
-    Write-Host ""
-} catch {
-    if ($_.Exception.Message -match "cannot be loaded because running scripts is disabled") {
-        Write-Err "`nERROR: PowerShell execution policy is blocking the setup script."
-        Write-Host ""
-        Write-Host "Run the setup script with bypass (recommended):" -ForegroundColor Yellow
-        Write-Host ""
-        Write-Host "  Open PowerShell and run:" -ForegroundColor White
-        Write-Host "  powershell -ExecutionPolicy Bypass -File `"$InstallDir\setup.ps1`"" -ForegroundColor Cyan
-        Write-Host ""
-        Write-Host "Or use the batch file alternative:" -ForegroundColor Yellow
-        Write-Host "  $InstallDir\install.bat" -ForegroundColor Cyan
-        Write-Host ""
+
+    Write-Host @"
+NOTE: If you see 'Python was not found' errors, Windows may have
+a Microsoft Store redirect enabled. The installer will work around this.
+
+"@ -ForegroundColor Gray
+
+    $installPython = Read-Host "Install Python now? (Y/n)"
+    if ($installPython -eq "" -or $installPython -match "^[Yy]") {
+        if (-not (Install-Python)) {
+            exit 1
+        }
+        $pythonPath = Test-PythonInstalled
+        if (-not $pythonPath) {
+            Write-Err "Python still not found after installation."
+            exit 1
+        }
     } else {
-        throw
+        Write-Host "Please install Python 3.12+ manually from: https://www.python.org/downloads/"
+        exit 1
     }
-} finally {
-    Pop-Location
 }
+
+$pyVersion = Get-PythonVersion $pythonPath
+if ($pyVersion -lt $MinPythonVersion) {
+    Write-Err "Python $pyVersion is too old. sfdump requires Python $MinPythonVersion or newer."
+    Write-Host "Please upgrade Python from: https://www.python.org/downloads/"
+    exit 1
+}
+
+Write-Success "  Python $pyVersion found"
+
+# --- Install sfdump from PyPI ---
+Write-Step "Installing sfdump from PyPI..."
+
+if ($pythonPath -eq "py") {
+    $pythonCmd = "py"
+} else {
+    $pythonCmd = $pythonPath
+}
+
+try {
+    & $pythonCmd -m pip install --upgrade pip 2>&1 | Out-Null
+    & $pythonCmd -m pip install sfdump
+
+    if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
+} catch {
+    Write-Err "`nERROR: Failed to install sfdump."
+    Write-Host "Please check your internet connection and try again."
+    Write-Host ""
+    Write-Host "You can also try installing manually:" -ForegroundColor Yellow
+    Write-Host "  pip install sfdump" -ForegroundColor Cyan
+    exit 1
+}
+
+# --- Verify installation ---
+Write-Step "Verifying installation..."
+
+try {
+    $version = & $pythonCmd -m sfdump --version 2>&1
+    if ($version) {
+        Write-Success "  sfdump $version installed successfully!"
+    } else {
+        # Try the sfdump command directly (may be in PATH)
+        $version = & sfdump --version 2>&1
+        Write-Success "  sfdump $version installed successfully!"
+    }
+} catch {
+    Write-Success "  sfdump installed (could not determine version)"
+}
+
+# --- Done ---
+Write-Host @"
+
+============================================================
+            Installation Complete!
+============================================================
+
+NEXT STEPS
+----------
+
+1. Configure your Salesforce credentials:
+
+    sf setup
+
+2. Test your connection:
+
+    sf test
+
+3. Export your Salesforce data:
+
+    sf dump
+
+4. Browse your data:
+
+    sf view
+
+UPGRADING
+---------
+
+To upgrade sfdump later, run:
+
+    pip install --upgrade sfdump
+
+"@ -ForegroundColor Cyan

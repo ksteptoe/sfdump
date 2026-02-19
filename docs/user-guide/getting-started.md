@@ -28,9 +28,10 @@ irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex
 ```
 
 The installer will:
-- Download sfdump to your home folder (`C:\Users\YourName\sfdump`)
 - Install Python if needed (no admin rights required)
-- Guide you through credential setup
+- Install sfdump from PyPI
+
+After the installer finishes, run `sf setup` to configure your Salesforce credentials.
 
 **If you see "Running scripts is disabled"**, use this command instead:
 

@@ -34,39 +34,10 @@ irm https://raw.githubusercontent.com/ksteptoe/sfdump/main/bootstrap.ps1 | iex
 4. Paste the command above (right-click to paste) and press **Enter**
 
 The installer will:
-- Download sfdump from GitHub
-- Install Python (if needed)
-- Set up everything automatically
-- Guide you through configuration
+- Install Python if needed (no admin rights required)
+- Install sfdump from PyPI via `pip install sfdump`
 
----
-
-## Manual Install (Alternative)
-
-If the quick install doesn't work, follow these steps:
-
-### Step 1: Download sfdump
-
-1. Go to: **https://github.com/ksteptoe/sfdump**
-2. Click the green **"Code"** button
-3. Click **"Download ZIP"**
-4. Save the file to your Downloads folder
-
-### Step 2: Extract the ZIP file
-
-1. Open your **Downloads** folder
-2. Find **sfdump-main.zip**
-3. Right-click on it
-4. Select **"Extract All..."**
-5. Choose where to extract (e.g., `C:\Users\YourName\sfdump`)
-6. Click **Extract**
-
-### Step 3: Run the installer
-
-1. Open the extracted **sfdump-main** folder
-2. Double-click **install.bat**
-3. If Windows asks "Do you want to allow this app...?" click **Yes**
-4. Follow the on-screen prompts
+After the installer finishes, run `sf setup` to configure your Salesforce credentials.
 
 ---
 
@@ -117,27 +88,6 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 Then run the installer again.
 
-### Download fails or times out
-
-Your network may block GitHub. Try:
-1. Use a different network (e.g., mobile hotspot)
-2. Download the ZIP manually (see Manual Install above)
-3. Ask IT to whitelist `github.com` and `raw.githubusercontent.com`
-
-### Installer window closes immediately
-
-The installer hit an error. To see what went wrong:
-1. Open PowerShell (see instructions above)
-2. Navigate to the sfdump folder:
-   ```powershell
-   cd C:\Users\YourName\sfdump
-   ```
-3. Run the installer manually:
-   ```powershell
-   .\setup.ps1
-   ```
-4. The error message will stay visible
-
 ---
 
 ## After Installation
@@ -158,8 +108,6 @@ To run commands, open PowerShell or Command Prompt and type the command.
 
 ## Updating sfdump
 
-**Recommended (all platforms):**
-
 ```bash
 pip install --upgrade sfdump
 ```
@@ -170,27 +118,17 @@ Or use the CLI:
 sfdump upgrade
 ```
 
-**Windows installer alternative:**
-
-1. Open the sfdump folder
-2. Double-click **install.bat**
-3. Choose option **[1] Upgrade to latest version**
-
 Your `.env` credentials and exported data are not affected.
 
 ---
 
 ## Uninstalling
 
-1. Open the sfdump folder
-2. Double-click `install.bat`
-3. Choose option **4** (Uninstall)
-4. Select what to remove:
-   - **sfdump only** - keeps Python installed
-   - **Complete removal** - removes Python too
+```bash
+pip uninstall sfdump
+```
 
 Your data files (.env, exported files, databases) are **not deleted** automatically.
-To remove everything, delete the sfdump folder after uninstalling.
 
 ---
 
