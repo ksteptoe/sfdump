@@ -7,6 +7,7 @@ This module defines a Click command that wraps the core
 from __future__ import annotations
 
 import logging
+import sqlite3
 from pathlib import Path
 from typing import Optional
 
@@ -47,6 +48,13 @@ LOG = logging.getLogger(__name__)
     help="Whether to overwrite an existing SQLite database file.",
 )
 @click.option(
+    "--hr-password",
+    "hr_password",
+    is_flag=True,
+    default=False,
+    help="Prompt for an HR viewer password to bake into the database.",
+)
+@click.option(
     "-v",
     "--verbose",
     count=True,
@@ -56,6 +64,7 @@ def build_db_command(
     export_dir: Path,
     db_path: Optional[Path],
     overwrite: bool,
+    hr_password: bool,
     verbose: int,
 ) -> None:
     """Build a SQLite database for offline viewing of exported Salesforce data."""
@@ -91,5 +100,22 @@ def build_db_command(
     except ValueError as exc:
         # e.g. no CSVs found, wrong layout, etc.
         raise click.ClickException(str(exc)) from exc
+
+    # Bake HR password into viewer_config if requested
+    if hr_password:
+        import hashlib
+
+        pw = click.prompt("HR viewer password", hide_input=True, confirmation_prompt=True)
+        digest = hashlib.sha256(pw.encode()).hexdigest()
+        conn = sqlite3.connect(str(db_path))
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO viewer_config (key, value) VALUES (?, ?)",
+                ("hr_password_hash", digest),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        click.echo("HR password protection baked into database.")
 
     click.echo(f"SQLite viewer database created at {db_path}")

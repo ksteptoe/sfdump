@@ -192,15 +192,54 @@ cli.add_command(cast(Command, cfo_report))
 cli.add_command(cast(Command, cfo_report), name="cfo-report")
 
 
+@cli.command("set-password")
+@click.option(
+    "--db",
+    "db_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Path to the SQLite database file.",
+)
+@click.option(
+    "--remove",
+    is_flag=True,
+    default=False,
+    help="Remove password protection from the database.",
+)
+def cmd_set_password(db_path: Path, remove: bool) -> None:
+    """Add, change, or remove HR viewer password on a database."""
+    import hashlib
+    import sqlite3
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS viewer_config (key TEXT PRIMARY KEY, value TEXT)")
+        if remove:
+            conn.execute("DELETE FROM viewer_config WHERE key = 'hr_password_hash'")
+            conn.commit()
+            click.echo(f"Password protection removed from {db_path}")
+        else:
+            pw = click.prompt("Password", hide_input=True, confirmation_prompt=True)
+            digest = hashlib.sha256(pw.encode()).hexdigest()
+            conn.execute(
+                "INSERT OR REPLACE INTO viewer_config (key, value) VALUES (?, ?)",
+                ("hr_password_hash", digest),
+            )
+            conn.commit()
+            click.echo(f"Password set on {db_path}")
+    finally:
+        conn.close()
+
+
 @cli.command("hash-password", hidden=True)
 def cmd_hash_password() -> None:
-    """Generate a SHA-256 hash for use with SFDUMP_HR_PASSWORD_HASH."""
+    """Generate a SHA-256 hash (for scripting or manual use)."""
     import hashlib
 
     pw = click.prompt("Password", hide_input=True, confirmation_prompt=True)
     digest = hashlib.sha256(pw.encode()).hexdigest()
     click.echo(f"\n{digest}")
-    click.echo(f"\nAdd to .env:\n  SFDUMP_HR_PASSWORD_HASH={digest}")
+    click.echo("\nPrefer: sfdump set-password --db <path>")
 
 
 def main() -> None:

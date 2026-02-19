@@ -240,6 +240,9 @@ def build_sqlite_from_export(
             log.info("Ensuring index %s on %s(%s)", idx.name, idx.table, cols_sql)
             cur.execute(create_idx_sql)
 
+        # Viewer configuration table (used by set-password, build-db --hr-password)
+        cur.execute("CREATE TABLE IF NOT EXISTS viewer_config (key TEXT PRIMARY KEY, value TEXT)")
+
         conn.commit()
     finally:
         conn.close()

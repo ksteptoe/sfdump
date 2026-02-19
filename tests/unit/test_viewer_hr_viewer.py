@@ -20,6 +20,7 @@ from sfdump.viewer_app.ui.hr_viewer import (
     _check_hr_password,
     _count_by_type,
     _get_available_columns,
+    _get_viewer_config,
     _has_record_type_table,
     _load_contact_detail,
     _load_contacts,
@@ -939,49 +940,76 @@ class TestDbBuilderRecordType:
 
 
 # ---------------------------------------------------------------------------
-# Password gate
+# Viewer config table
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def db_with_password(tmp_path: Path) -> Path:
+    """Create a database with viewer_config table containing an HR password hash."""
+    db_path = tmp_path / "protected.db"
+    conn = sqlite3.connect(str(db_path))
+    cur = conn.cursor()
+    cur.execute("CREATE TABLE viewer_config (key TEXT PRIMARY KEY, value TEXT)")
+    cur.execute(
+        "INSERT INTO viewer_config VALUES (?, ?)",
+        ("hr_password_hash", hashlib.sha256(b"secret").hexdigest()),
+    )
+    conn.commit()
+    conn.close()
+    return db_path
+
+
+class TestViewerConfig:
+    def test_read_existing_key(self, db_with_password: Path):
+        result = _get_viewer_config(db_with_password, "hr_password_hash")
+        assert result == hashlib.sha256(b"secret").hexdigest()
+
+    def test_read_missing_key(self, db_with_password: Path):
+        result = _get_viewer_config(db_with_password, "nonexistent")
+        assert result is None
+
+    def test_no_viewer_config_table(self, hr_db: Path):
+        """Returns None when viewer_config table doesn't exist."""
+        result = _get_viewer_config(hr_db, "hr_password_hash")
+        assert result is None
+
+    def test_none_db_path(self):
+        result = _get_viewer_config(None, "hr_password_hash")
+        assert result is None
+
+    def test_nonexistent_db(self, tmp_path: Path):
+        result = _get_viewer_config(tmp_path / "nope.db", "hr_password_hash")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Password gate (DB-based)
 # ---------------------------------------------------------------------------
 
 
 class TestPasswordGate:
-    def test_no_hash_configured_returns_true(self, monkeypatch):
-        """When SFDUMP_HR_PASSWORD_HASH is not set, access is granted."""
-        monkeypatch.delenv("SFDUMP_HR_PASSWORD_HASH", raising=False)
-        assert _check_hr_password() is True
+    def test_no_password_in_db_grants_access(self, hr_db: Path):
+        """When no password hash in DB, access is granted."""
+        assert _check_hr_password(db_path=hr_db) is True
 
-    def test_empty_hash_returns_true(self, monkeypatch):
-        """An empty hash string is treated as 'not configured'."""
-        monkeypatch.setenv("SFDUMP_HR_PASSWORD_HASH", "")
-        assert _check_hr_password() is True
+    def test_no_db_path_grants_access(self):
+        """When db_path is None, access is granted."""
+        assert _check_hr_password(db_path=None) is True
 
-    def test_whitespace_hash_returns_true(self, monkeypatch):
-        """Whitespace-only hash is treated as 'not configured'."""
-        monkeypatch.setenv("SFDUMP_HR_PASSWORD_HASH", "   ")
-        assert _check_hr_password() is True
-
-    def test_hash_set_but_not_authenticated(self, monkeypatch):
-        """When hash is set but session not authenticated, access is denied."""
+    def test_password_blocks_without_auth(self, monkeypatch, db_with_password: Path):
+        """When hash is in DB but session not authenticated, access is denied."""
         import sfdump.viewer_app.ui.hr_viewer as hr_mod
 
-        monkeypatch.setenv(
-            "SFDUMP_HR_PASSWORD_HASH",
-            hashlib.sha256(b"secret").hexdigest(),
-        )
-        # Replace Streamlit's SessionState with a plain dict to avoid
-        # custom proxy behaviour leaking state between xdist workers.
         monkeypatch.setattr(hr_mod.st, "session_state", {})
-        assert _check_hr_password() is False
+        assert _check_hr_password(db_path=db_with_password) is False
 
-    def test_hash_set_and_authenticated(self, monkeypatch):
-        """When hash is set and session is authenticated, access is granted."""
+    def test_password_allows_when_authenticated(self, monkeypatch, db_with_password: Path):
+        """When hash is in DB and session is authenticated, access is granted."""
         import sfdump.viewer_app.ui.hr_viewer as hr_mod
 
-        monkeypatch.setenv(
-            "SFDUMP_HR_PASSWORD_HASH",
-            hashlib.sha256(b"secret").hexdigest(),
-        )
         monkeypatch.setattr(hr_mod.st, "session_state", {"_hr_authenticated": True})
-        assert _check_hr_password() is True
+        assert _check_hr_password(db_path=db_with_password) is True
 
     def test_sha256_hash_matches(self):
         """Verify the hashing approach produces correct SHA-256 digests."""
@@ -989,3 +1017,94 @@ class TestPasswordGate:
         expected = hashlib.sha256(password.encode()).hexdigest()
         assert len(expected) == 64
         assert expected == hashlib.sha256(password.encode()).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# DB builder: viewer_config table
+# ---------------------------------------------------------------------------
+
+
+class TestDbBuilderViewerConfig:
+    def test_viewer_config_table_always_created(self, tmp_path: Path):
+        """The viewer_config table is always created, even without a password."""
+        from sfdump.viewer import build_sqlite_from_export
+
+        export_dir = tmp_path / "export"
+        export_dir.mkdir()
+        csv_dir = export_dir / "csv"
+        csv_dir.mkdir()
+
+        (csv_dir / "Contact.csv").write_text(
+            f"Id,Name,RecordTypeId\n001,Alice,{_EMPLOYEE_RT_ID}\n",
+            encoding="utf-8",
+        )
+
+        db_path = tmp_path / "sfdata.db"
+        build_sqlite_from_export(export_dir, db_path)
+
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='viewer_config'")
+        assert cur.fetchone() is not None
+
+        # No password row by default
+        cur.execute("SELECT value FROM viewer_config WHERE key = 'hr_password_hash'")
+        assert cur.fetchone() is None
+
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# set-password CLI command
+# ---------------------------------------------------------------------------
+
+
+class TestSetPassword:
+    def test_set_password_on_existing_db(self, hr_db: Path):
+        """set-password creates viewer_config and inserts hash."""
+        from click.testing import CliRunner
+
+        from sfdump.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["set-password", "--db", str(hr_db)], input="hello\nhello\n")
+        assert result.exit_code == 0
+        assert "Password set" in result.output
+
+        val = _get_viewer_config(hr_db, "hr_password_hash")
+        assert val == hashlib.sha256(b"hello").hexdigest()
+
+    def test_remove_password(self, db_with_password: Path):
+        """set-password --remove deletes the hash."""
+        from click.testing import CliRunner
+
+        from sfdump.cli import cli
+
+        # Confirm it's there
+        assert _get_viewer_config(db_with_password, "hr_password_hash") is not None
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["set-password", "--db", str(db_with_password), "--remove"])
+        assert result.exit_code == 0
+        assert "removed" in result.output
+
+        assert _get_viewer_config(db_with_password, "hr_password_hash") is None
+
+    def test_change_password(self, db_with_password: Path):
+        """Running set-password again replaces the existing hash."""
+        from click.testing import CliRunner
+
+        from sfdump.cli import cli
+
+        old_hash = _get_viewer_config(db_with_password, "hr_password_hash")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["set-password", "--db", str(db_with_password)], input="newpass\nnewpass\n"
+        )
+        assert result.exit_code == 0
+
+        new_hash = _get_viewer_config(db_with_password, "hr_password_hash")
+        assert new_hash == hashlib.sha256(b"newpass").hexdigest()
+        assert new_hash != old_hash

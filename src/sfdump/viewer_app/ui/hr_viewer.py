@@ -8,7 +8,6 @@ with drill-down to individual record detail.
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import sqlite3
 from pathlib import Path
@@ -286,9 +285,34 @@ def _load_regions(db_path: Path) -> list[str]:
         conn.close()
 
 
-def _check_hr_password() -> bool:
-    """Return True if the user is authenticated (or no password is configured)."""
-    pw_hash = os.environ.get("SFDUMP_HR_PASSWORD_HASH", "").strip()
+def _get_viewer_config(db_path: Path | None, key: str) -> str | None:
+    """Read a value from the viewer_config table, or None if missing."""
+    if db_path is None:
+        return None
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='viewer_config'"
+            )
+            if cur.fetchone() is None:
+                return None
+            cur.execute("SELECT value FROM viewer_config WHERE key = ?", [key])
+            row = cur.fetchone()
+            return row[0] if row else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+def _check_hr_password(db_path: Path | None = None) -> bool:
+    """Return True if the user is authenticated (or no password is configured).
+
+    Reads the password hash from the viewer_config table in the database.
+    """
+    pw_hash = _get_viewer_config(db_path, "hr_password_hash")
     if not pw_hash:
         return True
     return bool(st.session_state.get("_hr_authenticated"))
@@ -309,8 +333,8 @@ def _render_password_gate(expected_hash: str) -> None:
 
 def render_hr_viewer(*, db_path: Path) -> None:
     """Main HR viewer entry point."""
-    # Password gate — when SFDUMP_HR_PASSWORD_HASH is set, require auth first
-    pw_hash = os.environ.get("SFDUMP_HR_PASSWORD_HASH", "").strip()
+    # Password gate — check viewer_config table in the database
+    pw_hash = _get_viewer_config(db_path, "hr_password_hash")
     if pw_hash and not st.session_state.get("_hr_authenticated"):
         _render_password_gate(pw_hash)
         return

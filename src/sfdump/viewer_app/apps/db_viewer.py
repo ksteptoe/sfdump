@@ -58,9 +58,9 @@ def _render_home(*, db_path: Path, export_root: Optional[Path]) -> None:
             "View Contact records split by **Employee** and **Contractor**. "
             "Search and filter people with key HR fields at a glance."
         )
-        import os
+        from sfdump.viewer_app.ui.hr_viewer import _get_viewer_config
 
-        if os.environ.get("SFDUMP_HR_PASSWORD_HASH", "").strip():
+        if _get_viewer_config(db_path, "hr_password_hash"):
             st.caption("🔒 Protected")
         if st.button("Open HR Viewer", type="primary", width="stretch"):
             st.session_state[_VIEW_KEY] = "hr_viewer"
