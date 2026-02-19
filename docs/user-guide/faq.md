@@ -119,6 +119,19 @@ Never commit them to Git or share externally. Store them in a private folder:
 | Redacted | `[REDACTED]` placeholders | External sharing, auditors, documentation |
 | Full | Actual IDs and filenames | Internal IT review, troubleshooting |
 
+### How do I set the HR Viewer password?
+
+The HR Viewer is password-protected. An administrator sets the password using:
+
+```bash
+sfdump set-password                                  # auto-detects latest export
+sfdump set-password -d exports/export-2026-01-26     # specify export directory
+sfdump set-password --db path/to/sfdata.db           # specify database file
+sfdump set-password --remove                         # remove password protection
+```
+
+The password is stored as a SHA-256 hash in the `viewer_config` table inside the SQLite database. You can also bake the password in at build time with `sfdump build-db --hr-password`.
+
 ## Technical
 
 ### What credentials do I need?

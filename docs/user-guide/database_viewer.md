@@ -26,31 +26,28 @@ To view a specific export:
 sf view ./exports/export-2026-01-15
 ```
 
-## Two Views
+## Home Screen
 
-The viewer has two modes you can switch between:
+The viewer opens to a landing page with three viewers to choose from:
 
-| View | Purpose | Default? |
-|------|---------|----------|
-| **Explorer** | Full-width document search across all exported files | Yes (landing page) |
-| **DB Viewer** | Record browser with sidebar controls and relationship navigation | No (click "DB Viewer" button) |
+| Viewer | Purpose |
+|--------|---------|
+| **Object Viewer** | Browse any Salesforce object table — drill into records, explore parent/child relationships, and view attached documents |
+| **HR Viewer** | View Contact records split by Employee and Contractor — search and filter people with key HR fields at a glance |
+| **Finance Viewer** | Search and preview all exported documents — invoices, contracts, attachments — with built-in file preview |
 
-### Switching Between Views
+Click a card to enter that viewer. Every viewer has a **Home** button to return to this landing page.
 
-- **Explorer → DB Viewer**: Click the **DB Viewer** button in the top-right corner
-- **DB Viewer → Explorer**: Click **Back to Explorer** at the top of the sidebar
-- **Explorer → DB Viewer (via record)**: Click **Open parent record** on any search result to jump to that record in DB Viewer
+## Finance Viewer
 
-## Explorer (Default View)
-
-The Explorer is a full-width document search with no sidebar. This is where most users spend their time.
+The Finance Viewer is a full-width document search and preview tool. This is where most users spend their time finding documents.
 
 **Search by invoice number (PIN/SIN):**
-1. Type the invoice number in the Search box (e.g., "PIN010063")
+1. Type the invoice number in the Search box (e.g., "SIN001234")
 2. Results show the record name first for easy identification
 
 **Using wildcards:**
-- `PIN01006*` — finds PIN010060, PIN010061, etc.
+- `SIN0016*` — finds SIN001600, SIN001601, etc.
 - `SIN*` — finds all sales invoices
 - `PIN0100[6-9]*` — finds a range (PIN01006x through PIN01009x)
 
@@ -65,9 +62,14 @@ Click **Search tips** for more wildcard examples.
 - Check "PDF only" to show only PDFs
 - Results show record_name first, then file_name
 
-## DB Viewer
+**Navigating to records:**
+- Click **Open parent record** on any search result to jump to that record in the Object Viewer
 
-The DB Viewer has a sidebar and two-column layout for browsing records and their relationships:
+Click **Home** (top-right) to return to the landing page.
+
+## Object Viewer
+
+The Object Viewer has a sidebar and two-column layout for browsing records and their relationships:
 
 | Area | Purpose |
 |------|---------|
@@ -91,9 +93,9 @@ The **Details** tab shows important fields for the selected record:
 
 Toggle "Show all fields" in the sidebar to see everything.
 
-## Navigating Relationships
+### Navigating Relationships
 
-The **Children** tab (in DB Viewer) shows related records. This is how you drill down through your data.
+The **Children** tab shows related records. This is how you drill down through your data.
 
 **Example navigation:**
 
@@ -109,28 +111,51 @@ The **Children** tab (in DB Viewer) shows related records. This is how you drill
 - **Back button** — return to previous record
 - **Reset** — return to the starting point
 
-## Finding Documents
+### Documents Tab
 
-### From the Explorer
-
-The easiest way to find documents — just search:
-
-1. Type a customer name, invoice number, or keyword
-2. Results show all matching documents across the entire export
-3. Click any result to preview it
-
-### From a Record (DB Viewer)
-
-Select any record in DB Viewer and click the **Documents** tab to see:
+Select any record and click the **Documents** tab to see:
 
 - Documents attached to the current record
 - Documents from parent records in your navigation path
 
 **Example:** Viewing an Invoice shows documents from the Invoice, its parent Opportunity, and the parent Account.
 
-### Jumping Between Views
+## HR Viewer
 
-When viewing a document in Explorer, click **Open parent record** to jump to DB Viewer with that record selected. This lets you explore the record's relationships and other attached documents.
+The HR Viewer provides a focused view of Contact records, split by employment type.
+
+The HR Viewer is password-protected because it contains sensitive personal data. The home screen shows a **Protected** label on the HR Viewer card.
+
+**Getting started:**
+
+1. Click **HR Viewer** on the home screen
+2. Enter the password and click **Login**
+3. Search by name using the search box (supports wildcards)
+4. Optionally filter by region using the dropdown
+
+**Browsing contacts:**
+
+- Results are split into two tabs: **Employees** and **Contractors**, each showing a count
+- Select a contact from the results and click **View Details** to see their full record
+- Click **Back to list** to return to the search results
+
+**Setting the password:**
+
+An administrator sets the HR Viewer password using:
+
+```
+sfdump set-password
+```
+
+This auto-detects the latest export. You can also specify a path:
+
+```
+sfdump set-password -d exports/export-2026-01-26
+sfdump set-password --db path/to/sfdata.db
+sfdump set-password --remove    # remove password protection
+```
+
+Click **Home** (top-right) to return to the landing page.
 
 ## Previewing Documents
 
@@ -154,12 +179,13 @@ All previewable file types also include a download button.
 
 ### Find All Documents for a Customer
 
-1. Type the customer/account name in the Search box
-2. Review all related documents
+1. Open **Finance Viewer** from the home screen
+2. Type the customer/account name in the Search box
+3. Review all related documents
 
 ### Review Invoices for a Deal
 
-1. Click **DB Viewer** to switch to record browser
+1. Open **Object Viewer** from the home screen
 2. Select **Account** → search for customer
 3. Navigate to **Children** → **Opportunities**
 4. Open the specific opportunity
@@ -168,8 +194,9 @@ All previewable file types also include a download button.
 
 ### Find a Specific Invoice
 
-1. Type the invoice number in the Search box (e.g., "SIN001234")
-2. Click **Open parent record** to view the full invoice details in DB Viewer
+1. Open **Finance Viewer** from the home screen
+2. Type the invoice number in the Search box (e.g., "SIN001234")
+3. Click **Open parent record** to view the full invoice details in Object Viewer
 
 ## Tips
 

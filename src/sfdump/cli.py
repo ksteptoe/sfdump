@@ -268,7 +268,7 @@ def cmd_hash_password() -> None:
     pw = click.prompt("Password", hide_input=True, confirmation_prompt=True)
     digest = hashlib.sha256(pw.encode()).hexdigest()
     click.echo(f"\n{digest}")
-    click.echo("\nPrefer: sfdump set-password --db <path>")
+    click.echo("\nPrefer: sfdump set-password  (auto-detects latest export)")
 
 
 def main() -> None:
