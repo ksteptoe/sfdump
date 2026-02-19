@@ -320,7 +320,7 @@ The Object Viewer is a two-panel record browser with a sidebar for navigation.
 
 The HR Viewer provides a focused view of Contact records, split by employment type.
 
-The HR Viewer is password-protected because it contains sensitive personal data. The home screen shows a **Protected** label on the HR Viewer card. Contact your IT department for the password.
+The HR Viewer is password-protected because it contains sensitive personal data. The home screen shows a **Protected** label on the HR Viewer card. Contact your IT administrator for the password (administrators: see the [Security guide](../admin-guide/security.md)).
 
 **Getting started:**
 

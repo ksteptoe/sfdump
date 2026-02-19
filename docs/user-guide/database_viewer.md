@@ -139,21 +139,7 @@ The HR Viewer is password-protected because it contains sensitive personal data.
 - Select a contact from the results and click **View Details** to see their full record
 - Click **Back to list** to return to the search results
 
-**Setting the password:**
-
-An administrator sets the HR Viewer password using:
-
-```
-sfdump set-password
-```
-
-This auto-detects the latest export. You can also specify a path:
-
-```
-sfdump set-password -d exports/export-2026-01-26
-sfdump set-password --db path/to/sfdata.db
-sfdump set-password --remove    # remove password protection
-```
+**Password management:** See the [Administrators Guide — Security](../admin-guide/security.md) for how to set, change, and remove the HR Viewer password.
 
 Click **Home** (top-right) to return to the landing page.
 
