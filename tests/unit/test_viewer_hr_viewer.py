@@ -14,11 +14,13 @@ from sfdump.viewer_app.ui.hr_viewer import (
     _DETAIL_FIELDS,
     _EMPLOYEE_EXTRA_FIELDS,
     _EMPLOYEE_RT_ID,
+    _FILTER_FIELDS,
     _count_by_type,
     _get_available_columns,
     _has_record_type_table,
     _load_contact_detail,
     _load_contacts,
+    _load_regions,
 )
 
 
@@ -62,7 +64,8 @@ def hr_db(tmp_path: Path) -> Path:
             Nationality__c TEXT,
             Active__c TEXT,
             MailingCity TEXT,
-            MailingCountry TEXT
+            MailingCountry TEXT,
+            Region__c TEXT
         )
     """)
 
@@ -100,6 +103,7 @@ def hr_db(tmp_path: Path) -> Path:
             "true",
             "London",
             "UK",
+            "Europe",
         ),
         (
             "EMP002",
@@ -133,6 +137,7 @@ def hr_db(tmp_path: Path) -> Path:
             "true",
             "Bristol",
             "UK",
+            "Europe",
         ),
         (
             "EMP003",
@@ -166,11 +171,12 @@ def hr_db(tmp_path: Path) -> Path:
             "true",
             "London",
             "UK",
+            "Europe",
         ),
     ]
     for emp in employees:
         cur.execute(
-            "INSERT INTO contact VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO contact VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             emp,
         )
 
@@ -208,6 +214,7 @@ def hr_db(tmp_path: Path) -> Path:
             "true",
             "Mumbai",
             "India",
+            "India",
         ),
         (
             "CON002",
@@ -241,17 +248,18 @@ def hr_db(tmp_path: Path) -> Path:
             "true",
             "London",
             "UK",
+            "Europe",
         ),
     ]
     for con in contractors:
         cur.execute(
-            "INSERT INTO contact VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO contact VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             con,
         )
 
     # Insert a customer contact (should not appear in HR viewer)
     cur.execute(
-        "INSERT INTO contact VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO contact VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             "CUST001",
             "Frank Customer",
@@ -261,6 +269,7 @@ def hr_db(tmp_path: Path) -> Path:
             "Buyer",
             "Procurement",
             "frank@customer.com",
+            "",
             "",
             "",
             "",
@@ -370,12 +379,22 @@ class TestFieldDefinitions:
         assert "Comments_Hiring__c" in col_names
         assert "Son_Comments_HR__c" in col_names
 
+    def test_filter_fields_has_region(self):
+        col_names = [col for col, _ in _FILTER_FIELDS]
+        assert "Region__c" in col_names
+        assert "Location__c" in col_names
+
+    def test_detail_fields_has_region(self):
+        col_names = [col for col, _ in _DETAIL_FIELDS]
+        assert "Region__c" in col_names
+
     def test_all_field_tuples_are_pairs(self):
         """Every field definition should be (column_name, label) pair."""
         for fields in [
             _COMMON_FIELDS,
             _CONTRACTOR_EXTRA_FIELDS,
             _EMPLOYEE_EXTRA_FIELDS,
+            _FILTER_FIELDS,
             _DETAIL_FIELDS,
         ]:
             for item in fields:
@@ -591,6 +610,133 @@ class TestLoadContactDetail:
         for key, value in detail.items():
             assert isinstance(key, str)
             assert isinstance(value, str)
+
+
+# ---------------------------------------------------------------------------
+# Wildcard search
+# ---------------------------------------------------------------------------
+
+
+class TestWildcardSearch:
+    def test_star_wildcard(self, hr_db: Path):
+        """Star wildcard matches any characters."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="ali*")
+        assert len(df) == 1
+        assert df.iloc[0]["Name"] == "Alice Smith"
+
+    def test_question_mark_wildcard(self, hr_db: Path):
+        """Question mark matches single character."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="?ob jones")
+        assert len(df) == 1
+        assert df.iloc[0]["Name"] == "Bob Jones"
+
+    def test_star_contains(self, hr_db: Path):
+        """Star on both sides matches contains."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="*engineer*")
+        # Alice is Engineer, Bob is in Engineering dept
+        assert len(df) >= 1
+
+    def test_wildcard_case_insensitive(self, hr_db: Path):
+        """Wildcard search is case-insensitive."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="ALICE*")
+        assert len(df) == 1
+
+    def test_wildcard_no_match(self, hr_db: Path):
+        """Wildcard with no match returns empty."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="xyz*zzz")
+        assert len(df) == 0
+
+    def test_plain_search_still_works(self, hr_db: Path):
+        """Plain text without wildcards still matches as substring."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="alice")
+        assert len(df) == 1
+
+
+# ---------------------------------------------------------------------------
+# Region filter
+# ---------------------------------------------------------------------------
+
+
+class TestRegionFilter:
+    def test_filter_by_europe(self, hr_db: Path):
+        """Filtering by Europe returns European employees."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, region="Europe")
+        assert len(df) == 3  # All employees are in Europe
+
+    def test_filter_by_india(self, hr_db: Path):
+        """Filtering by India returns Indian contractors."""
+        fields = _COMMON_FIELDS + _CONTRACTOR_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _CONTRACTOR_RT_ID, fields, region="India")
+        assert len(df) == 1
+        assert df.iloc[0]["Name"] == "Dave Brown"
+
+    def test_filter_by_nonexistent_region(self, hr_db: Path):
+        """Filtering by non-existent region returns empty."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, region="Mars")
+        assert len(df) == 0
+
+    def test_filter_region_case_insensitive(self, hr_db: Path):
+        """Region filter is case-insensitive."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, region="europe")
+        assert len(df) == 3
+
+    def test_region_and_search_combined(self, hr_db: Path):
+        """Region filter and search work together."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="alice", region="Europe")
+        assert len(df) == 1
+        assert df.iloc[0]["Name"] == "Alice Smith"
+
+    def test_empty_region_returns_all(self, hr_db: Path):
+        """Empty region string returns all contacts."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, region="")
+        assert len(df) == 3
+
+
+# ---------------------------------------------------------------------------
+# Load regions
+# ---------------------------------------------------------------------------
+
+
+class TestLoadRegions:
+    def test_returns_sorted_regions(self, hr_db: Path):
+        regions = _load_regions(hr_db)
+        assert isinstance(regions, list)
+        assert "Europe" in regions
+        assert "India" in regions
+        assert regions == sorted(regions)
+
+    def test_excludes_empty_regions(self, hr_db: Path):
+        regions = _load_regions(hr_db)
+        assert "" not in regions
+
+    def test_excludes_customer_regions(self, hr_db: Path):
+        """Regions from non-employee/contractor contacts are excluded."""
+        regions = _load_regions(hr_db)
+        # Customer has empty region, so this just checks no unexpected values
+        for r in regions:
+            assert r in ("Europe", "India")
+
+    def test_no_region_column(self, tmp_path: Path):
+        """Returns empty list if Region__c column doesn't exist."""
+        db_path = tmp_path / "minimal.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE contact (Id TEXT PRIMARY KEY, Name TEXT, RecordTypeId TEXT)")
+        conn.commit()
+        conn.close()
+
+        regions = _load_regions(db_path)
+        assert regions == []
 
 
 # ---------------------------------------------------------------------------

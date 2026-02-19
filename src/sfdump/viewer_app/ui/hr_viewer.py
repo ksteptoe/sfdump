@@ -13,6 +13,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from sfdump.utils import glob_to_regex
+
 # RecordType IDs for Employee and Contractor (from RecordType.csv)
 _EMPLOYEE_RT_ID = "012200000002Ns3AAE"
 _CONTRACTOR_RT_ID = "012200000002NryAAE"
@@ -42,6 +44,12 @@ _EMPLOYEE_EXTRA_FIELDS = [
     ("Confirmed_Start_Date__c", "Start Date"),
 ]
 
+# Extra columns loaded for filtering (not displayed in table)
+_FILTER_FIELDS = [
+    ("Location__c", "Location"),
+    ("Region__c", "Region"),
+]
+
 _DETAIL_FIELDS = [
     ("Id", "ID"),
     ("Name", "Name"),
@@ -69,6 +77,7 @@ _DETAIL_FIELDS = [
     ("Son_Comments_HR__c", "HR Comments"),
     ("Son_Hiring_Status__c", "Hiring Status"),
     ("Location__c", "Location"),
+    ("Region__c", "Region"),
     ("Nationality__c", "Nationality"),
     ("Active__c", "Active"),
     ("MailingCity", "City"),
@@ -93,6 +102,7 @@ def _load_contacts(
     record_type_id: str,
     fields: list[tuple[str, str]],
     search: str = "",
+    region: str = "",
 ) -> pd.DataFrame:
     """Load contacts of a given RecordType, selecting only available fields."""
     conn = sqlite3.connect(str(db_path))
@@ -137,10 +147,15 @@ def _load_contacts(
 
     df = pd.DataFrame(rows, columns=col_labels)
 
+    # Region filter (exact match)
+    if region and "Region" in df.columns:
+        df = df[df["Region"].astype(str).str.lower() == region.lower()]
+
+    # Wildcard search (glob pattern, applied across all fields)
     if search:
-        search_lower = search.lower()
-        mask = df.apply(lambda row: any(search_lower in str(v).lower() for v in row), axis=1)
-        df = df[mask]
+        pattern = glob_to_regex(search.lower())
+        search_blob = df.apply(lambda row: " ".join(str(v).lower() for v in row), axis=1)
+        df = df[search_blob.str.contains(pattern, na=False, regex=True)]
 
     return df
 
@@ -197,6 +212,26 @@ def _count_by_type(db_path: Path) -> dict[str, int]:
     return result
 
 
+def _load_regions(db_path: Path) -> list[str]:
+    """Return sorted list of distinct Region__c values."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.cursor()
+        available = _get_available_columns(cur)
+        if "Region__c" not in available:
+            return []
+        cur.execute(
+            "SELECT DISTINCT Region__c FROM contact "
+            "WHERE Region__c IS NOT NULL AND Region__c != '' "
+            "AND RecordTypeId IN (?, ?) "
+            "ORDER BY Region__c",
+            [_EMPLOYEE_RT_ID, _CONTRACTOR_RT_ID],
+        )
+        return [row[0] for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
 def render_hr_viewer(*, db_path: Path) -> None:
     """Main HR viewer entry point."""
     # Check contact table exists
@@ -218,19 +253,69 @@ def render_hr_viewer(*, db_path: Path) -> None:
     emp_count = counts.get("Employee", 0)
     con_count = counts.get("Contractor", 0)
 
-    # Search box
-    search = st.text_input(
-        "Search contacts",
-        placeholder="Type to filter by name, email, title, comments...",
-        key="hr_search",
-    )
-
     # Detail view state
     detail_key = "_hr_detail_contact_id"
     detail_id = st.session_state.get(detail_key)
 
     if detail_id:
         _render_contact_detail(db_path, detail_id, detail_key)
+        return
+
+    st.subheader("Contact Search")
+    st.caption("Search across Employees and Contractors")
+
+    # Search box
+    q = st.text_input(
+        "Search",
+        value="",
+        key="hr_search",
+        placeholder="e.g. Alice*, *Smith, *Engineer*, Dave?Brown...",
+        help="Search by name, email, title, or any field. Supports wildcards.",
+    ).strip()
+
+    # Search tips (collapsed by default)
+    with st.expander("Search tips"):
+        st.markdown(
+            """
+| Pattern | Meaning | Example |
+|---------|---------|---------|
+| `*` | Any characters | `Ali*` matches Alice, Alison, ... |
+| `?` | Single character | `?ob` matches Bob, Rob, ... |
+| `[A-M]*` | Range | `[A-M]*` matches names starting A to M |
+| `*smith*` | Contains | `*smith*` matches any name containing "smith" |
+| `*@gmail*` | Email domain | `*@gmail*` matches Gmail addresses |
+| `[!A]*` | Not starting with | `[!A]*` matches names not starting with A |
+"""
+        )
+
+    # Region filter and match count on same row
+    col_region, col_count = st.columns([1, 3])
+    with col_region:
+        regions = _load_regions(db_path)
+        region = ""
+        if regions:
+            region_options = ["All Regions"] + regions
+            selected_region = st.selectbox(
+                "Region",
+                options=region_options,
+                index=0,
+                key="hr_region",
+            )
+            if selected_region != "All Regions":
+                region = selected_region
+
+    has_filter = bool(q or region)
+
+    with col_count:
+        if has_filter:
+            st.markdown("")  # spacing
+        else:
+            st.markdown(
+                f"**{emp_count + con_count:,}** contacts available "
+                f"({emp_count:,} employees, {con_count:,} contractors)"
+            )
+
+    if not has_filter:
         return
 
     # Tabs for Employee / Contractor
@@ -246,7 +331,8 @@ def render_hr_viewer(*, db_path: Path) -> None:
             db_path=db_path,
             record_type_id=_EMPLOYEE_RT_ID,
             extra_fields=_EMPLOYEE_EXTRA_FIELDS,
-            search=search,
+            search=q,
+            region=region,
             key_prefix="emp",
             detail_key=detail_key,
         )
@@ -256,7 +342,8 @@ def render_hr_viewer(*, db_path: Path) -> None:
             db_path=db_path,
             record_type_id=_CONTRACTOR_RT_ID,
             extra_fields=_CONTRACTOR_EXTRA_FIELDS,
-            search=search,
+            search=q,
+            region=region,
             key_prefix="con",
             detail_key=detail_key,
         )
@@ -268,22 +355,24 @@ def _render_contact_table(
     record_type_id: str,
     extra_fields: list[tuple[str, str]],
     search: str,
+    region: str,
     key_prefix: str,
     detail_key: str,
 ) -> None:
     """Render a table of contacts for a given record type."""
-    fields = _COMMON_FIELDS + extra_fields
+    fields = _COMMON_FIELDS + extra_fields + _FILTER_FIELDS
 
-    df = _load_contacts(db_path, record_type_id, fields, search)
+    df = _load_contacts(db_path, record_type_id, fields, search, region)
 
     if df.empty:
-        st.info("No contacts found." + (" Try a different search." if search else ""))
+        st.info("No contacts found. Try a different search or region.")
         return
 
-    st.caption(f"{len(df)} record(s)")
+    st.markdown(f"**{len(df)}** record(s) found")
 
-    # Display columns (exclude Id from display)
-    display_cols = [c for c in df.columns if c != "Id"]
+    # Display columns (exclude Id and filter-only columns from display)
+    hide_cols = {"Id", "Location", "Region"}
+    display_cols = [c for c in df.columns if c not in hide_cols]
 
     st.dataframe(
         df[display_cols],
