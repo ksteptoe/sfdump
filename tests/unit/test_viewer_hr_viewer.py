@@ -1156,16 +1156,17 @@ class TestSetPassword:
 
         assert _get_viewer_config(db_path, "hr_password_hash") is None
 
-    def test_set_password_requires_db_or_export_dir(self):
-        """set-password errors when neither --db nor -d is given."""
+    def test_set_password_errors_when_no_export_found(self, tmp_path: Path, monkeypatch):
+        """set-password errors when no export dir and no --db/-d given."""
         from click.testing import CliRunner
 
         from sfdump.cli import cli
 
+        monkeypatch.chdir(tmp_path)
         runner = CliRunner()
         result = runner.invoke(cli, ["set-password"], input="pw\npw\n")
         assert result.exit_code != 0
-        assert "Either --db or --export-dir" in result.output
+        assert "No export found" in result.output
 
     def test_set_password_export_dir_missing_db(self, tmp_path: Path):
         """set-password -d errors when meta/sfdata.db doesn't exist."""
@@ -1177,3 +1178,30 @@ class TestSetPassword:
         result = runner.invoke(cli, ["set-password", "-d", str(tmp_path)], input="pw\npw\n")
         assert result.exit_code != 0
         assert "Database not found" in result.output
+
+    def test_set_password_auto_detects_latest_export(self, tmp_path: Path, monkeypatch):
+        """set-password with no args uses the latest export's DB."""
+
+        from click.testing import CliRunner
+
+        from sfdump.cli import cli
+
+        # Create a fake export directory structure
+        export_dir = tmp_path / "exports" / "export-2026-01-26"
+        meta = export_dir / "meta"
+        meta.mkdir(parents=True)
+        db_path = meta / "sfdata.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE viewer_config (key TEXT PRIMARY KEY, value TEXT)")
+        conn.commit()
+        conn.close()
+
+        monkeypatch.chdir(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["set-password"], input="autopass\nautopass\n")
+        assert result.exit_code == 0
+        assert "Password set" in result.output
+        assert "Using latest export" in result.output
+
+        val = _get_viewer_config(db_path, "hr_password_hash")
+        assert val == hashlib.sha256(b"autopass").hexdigest()

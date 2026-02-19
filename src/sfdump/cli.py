@@ -218,13 +218,23 @@ cli.add_command(cast(Command, cfo_report), name="cfo-report")
     help="Remove password protection from the database.",
 )
 def cmd_set_password(export_dir: Path | None, db_path: Path | None, remove: bool) -> None:
-    """Add, change, or remove HR viewer password on a database."""
+    """Add, change, or remove HR viewer password on a database.
+
+    If neither --db nor -d is given, uses the latest export in ./exports/.
+    """
     import hashlib
     import sqlite3
 
+    from .orchestrator import find_latest_export
+
     if db_path is None:
         if export_dir is None:
-            raise click.ClickException("Either --db or --export-dir (-d) must be provided.")
+            export_dir = find_latest_export()
+            if export_dir is None:
+                raise click.ClickException(
+                    "No export found in ./exports/. Specify --db <path> or -d <export-dir>."
+                )
+            click.echo(f"Using latest export: {export_dir}")
         db_path = export_dir / "meta" / "sfdata.db"
 
     if not db_path.exists():
