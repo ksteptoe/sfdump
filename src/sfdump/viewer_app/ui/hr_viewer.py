@@ -378,7 +378,7 @@ def _render_contact_table(
         df[display_cols],
         hide_index=True,
         height=min(400, 35 * len(df) + 38),
-        use_container_width=True,
+        width="stretch",
     )
 
     # Record selector for detail view

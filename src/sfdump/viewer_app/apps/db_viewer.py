@@ -48,7 +48,7 @@ def _render_home(*, db_path: Path, export_root: Optional[Path]) -> None:
             "Browse any Salesforce object table. Drill into records, "
             "explore parent/child relationships, and view attached documents."
         )
-        if st.button("Open Object Viewer", type="primary", use_container_width=True):
+        if st.button("Open Object Viewer", type="primary", width="stretch"):
             st.session_state[_VIEW_KEY] = "db_viewer"
             st.rerun()
 
@@ -58,7 +58,7 @@ def _render_home(*, db_path: Path, export_root: Optional[Path]) -> None:
             "View Contact records split by **Employee** and **Contractor**. "
             "Search and filter people with key HR fields at a glance."
         )
-        if st.button("Open HR Viewer", type="primary", use_container_width=True):
+        if st.button("Open HR Viewer", type="primary", width="stretch"):
             st.session_state[_VIEW_KEY] = "hr_viewer"
             st.rerun()
 
@@ -68,7 +68,7 @@ def _render_home(*, db_path: Path, export_root: Optional[Path]) -> None:
             "Search and preview all exported documents — invoices, contracts, "
             "attachments, and more — with built-in PDF/file preview."
         )
-        if st.button("Open Finance Viewer", type="primary", use_container_width=True):
+        if st.button("Open Finance Viewer", type="primary", width="stretch"):
             st.session_state[_VIEW_KEY] = "explorer"
             st.rerun()
 
@@ -308,7 +308,7 @@ def _render_db_viewer(*, db_path: Path, export_root: Optional[Path]) -> None:
 
     # Sidebar: "Home" at top, then normal controls
     with st.sidebar:
-        if st.button("Home", type="secondary", use_container_width=True, key="db_home_btn"):
+        if st.button("Home", type="secondary", width="stretch", key="db_home_btn"):
             st.session_state[_VIEW_KEY] = "home"
             st.rerun()
         st.divider()
