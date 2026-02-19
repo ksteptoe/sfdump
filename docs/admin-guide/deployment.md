@@ -104,7 +104,7 @@ sf dump
 
 ### Linux / macOS Cron
 
-```cron
+```text
 0 2 * * 0  cd /path/to/sfdump && sf dump >> /var/log/sfdump.log 2>&1
 ```
 

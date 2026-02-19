@@ -70,6 +70,11 @@ latex_elements = {
     "papersize": "a4paper",
     "pointsize": "11pt",
     "preamble": r"""
+% Fix babel/polyglossia \xpg@aux written to .toc but undefined under pdflatex
+\makeatletter
+\providecommand{\xpg@aux}[2]{}
+\makeatother
+
 \usepackage[T1]{fontenc}
 \usepackage{tgtermes}  % TeX Gyre Termes (Times-like font)
 

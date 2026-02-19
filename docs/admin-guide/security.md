@@ -132,7 +132,7 @@ sf setup
 
 Or create the `.env` file manually:
 
-```env
+```bash
 SF_AUTH_FLOW=client_credentials
 SF_CLIENT_ID=3MVG9_YOUR_CONSUMER_KEY_HERE
 SF_CLIENT_SECRET=YOUR_CONSUMER_SECRET_HERE
