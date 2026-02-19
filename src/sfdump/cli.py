@@ -260,6 +260,17 @@ def cmd_set_password(export_dir: Path | None, db_path: Path | None, remove: bool
         conn.close()
 
 
+@cli.command("docs")
+def cmd_docs() -> None:
+    """Open the sfdump documentation (PDF)."""
+    from importlib.resources import as_file, files
+
+    pdf = files("sfdump").joinpath("data", "sf.pdf")
+    with as_file(pdf) as path:
+        click.launch(str(path))
+        click.echo(f"Opening {path.name}")
+
+
 @cli.command("hash-password", hidden=True)
 def cmd_hash_password() -> None:
     """Generate a SHA-256 hash (for scripting or manual use)."""

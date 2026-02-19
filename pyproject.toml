@@ -76,6 +76,9 @@ Repository = "https://github.com/ksteptoe/sfdump"
 sf = "sfdump.cli_simple:cli"
 sfdump = "sfdump.cli:cli"
 
+[tool.setuptools.package-data]
+sfdump = ["data/*.pdf"]
+
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "no-local-version"

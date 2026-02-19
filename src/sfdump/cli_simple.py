@@ -612,6 +612,19 @@ def inventory(path: Path | None, json_only: bool) -> None:
     ctx.invoke(inventory_cmd, export_root=path, json_only=json_only, verbose=False)
 
 
+@cli.command()
+def docs() -> None:
+    """
+    Open the sfdump documentation (PDF).
+    """
+    from importlib.resources import as_file, files
+
+    pdf = files("sfdump").joinpath("data", "sf.pdf")
+    with as_file(pdf) as path:
+        click.launch(str(path))
+        click.echo(f"Opening {path.name}")
+
+
 def main() -> None:
     """Entry point for the sf command."""
     cli()
