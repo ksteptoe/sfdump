@@ -967,8 +967,8 @@ class TestPasswordGate:
             "SFDUMP_HR_PASSWORD_HASH",
             hashlib.sha256(b"secret").hexdigest(),
         )
-        # Ensure session state has no auth flag
-        st.session_state.pop("_hr_authenticated", None)
+        # Use monkeypatch so cleanup is automatic (avoids xdist leakage)
+        monkeypatch.delitem(st.session_state, "_hr_authenticated", raising=False)
         assert _check_hr_password() is False
 
     def test_hash_set_and_authenticated(self, monkeypatch):
@@ -979,10 +979,8 @@ class TestPasswordGate:
             "SFDUMP_HR_PASSWORD_HASH",
             hashlib.sha256(b"secret").hexdigest(),
         )
-        st.session_state["_hr_authenticated"] = True
+        monkeypatch.setitem(st.session_state, "_hr_authenticated", True)
         assert _check_hr_password() is True
-        # Clean up
-        st.session_state.pop("_hr_authenticated", None)
 
     def test_sha256_hash_matches(self):
         """Verify the hashing approach produces correct SHA-256 digests."""
