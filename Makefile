@@ -502,6 +502,7 @@ release:
 	fi
 	@echo "=== Building and uploading to PyPI ==="
 	$(MAKE) upload
+	rm -rf $(DIST_DIR)
 
 # -----------------------------------------------------------------------------#
 # CLI convenience
