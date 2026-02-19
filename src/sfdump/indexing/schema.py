@@ -186,6 +186,12 @@ OBJECTS: Dict[str, SFObject] = {
         label="General Ledger Account",
         table_name="c2g__codaGeneralLedgerAccount__c",
     ),
+    # Metadata objects
+    "RecordType": SFObject(
+        api_name="RecordType",
+        label="Record Type",
+        table_name="record_type",
+    ),
     # Add further exported objects here as we need them
 }
 

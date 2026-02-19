@@ -141,7 +141,7 @@ help:
 	@echo "  make changelog           - show changes since last Git tag"
 	@echo "  make changelog-md        - write docs/CHANGELOG.md from Git history"
 	@echo "  make release-show        - show scm ver, installed ver, last Git tag"
-	@echo "  make release             - run tests, tag, and create GitHub Release (KIND=patch|minor|major)"
+	@echo "  make release             - run tests, tag, GitHub Release, build + upload to PyPI (KIND=patch|minor|major)"
 	@echo "  make release-patch       - tag vX.Y.(Z+1) + GitHub Release"
 	@echo "  make release-minor       - tag vX.(Y+1).0 + GitHub Release"
 	@echo "  make release-major       - tag v(X+1).0.0 + GitHub Release"
@@ -482,8 +482,8 @@ release-major: fetch-tags check-clean
 	$(MAKE) gh-release VERSION=$$NEW
 	$(MAKE) release-unstash
 
-# Meta-release: run tests, show changelog, then dispatch to patch/minor/major
-# Creates git tag AND GitHub Release with downloadable ZIP
+# Meta-release: run tests, show changelog, tag, GitHub Release, build wheel, upload to PyPI
+# Creates git tag AND GitHub Release with downloadable ZIP + wheel, then uploads to PyPI
 release:
 	@echo "=== Running full test suite before release ==="
 	$(MAKE) test-all
@@ -500,6 +500,8 @@ release:
 	  echo "Unknown KIND=$(KIND). Use: patch | minor | major"; \
 	  exit 1; \
 	fi
+	@echo "=== Building and uploading to PyPI ==="
+	$(MAKE) upload
 
 # -----------------------------------------------------------------------------#
 # CLI convenience

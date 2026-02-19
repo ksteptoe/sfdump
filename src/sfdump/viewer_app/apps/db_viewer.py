@@ -19,6 +19,59 @@ from sfdump.viewer_app.ui.record_tabs import render_children_with_navigation
 
 _VIEW_KEY = "_sfdump_view"
 
+# ---------------------------------------------------------------------------
+# Home landing page — three-way navigation
+# ---------------------------------------------------------------------------
+
+
+def _render_home(*, db_path: Path, export_root: Optional[Path]) -> None:
+    """Landing page with three viewer options."""
+    # Hide sidebar
+    st.markdown(
+        """
+        <style>
+          section[data-testid="stSidebar"] { display: none; }
+          button[data-testid="stSidebarCollapsedControl"] { display: none; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.title("SF Dump Viewer")
+    st.markdown("Select a viewer to get started:")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("### Object Viewer")
+        st.markdown(
+            "Browse any Salesforce object table. Drill into records, "
+            "explore parent/child relationships, and view attached documents."
+        )
+        if st.button("Open Object Viewer", type="primary", use_container_width=True):
+            st.session_state[_VIEW_KEY] = "db_viewer"
+            st.rerun()
+
+    with col2:
+        st.markdown("### HR Viewer")
+        st.markdown(
+            "View Contact records split by **Employee** and **Contractor**. "
+            "Search and filter people with key HR fields at a glance."
+        )
+        if st.button("Open HR Viewer", type="primary", use_container_width=True):
+            st.session_state[_VIEW_KEY] = "hr_viewer"
+            st.rerun()
+
+    with col3:
+        st.markdown("### Finance Viewer")
+        st.markdown(
+            "Search and preview all exported documents — invoices, contracts, "
+            "attachments, and more — with built-in PDF/file preview."
+        )
+        if st.button("Open Finance Viewer", type="primary", use_container_width=True):
+            st.session_state[_VIEW_KEY] = "explorer"
+            st.rerun()
+
 
 def _export_root_from_db_path(db_path: Path) -> Optional[Path]:
     """Best-effort: infer EXPORT_ROOT from db_path (EXPORT_ROOT/meta/sfdata.db)."""
@@ -166,12 +219,16 @@ def main() -> None:
     db_path = initial_db
     export_root = _export_root_from_db_path(db_path)
 
-    view = st.session_state.get(_VIEW_KEY, "explorer")
+    view = st.session_state.get(_VIEW_KEY, "home")
 
     if view == "db_viewer":
         _render_db_viewer(db_path=db_path, export_root=export_root)
-    else:
+    elif view == "hr_viewer":
+        _render_hr_viewer(db_path=db_path, export_root=export_root)
+    elif view == "explorer":
         _render_explorer(db_path=db_path, export_root=export_root)
+    else:
+        _render_home(db_path=db_path, export_root=export_root)
 
 
 # ---------------------------------------------------------------------------
@@ -191,14 +248,14 @@ def _render_explorer(*, db_path: Path, export_root: Optional[Path]) -> None:
         unsafe_allow_html=True,
     )
 
-    # Header row with title + DB Viewer button
+    # Header row with title + Home button
     col_title, col_btn = st.columns([4, 1])
     with col_title:
-        st.title("SF Dump Viewer")
+        st.title("SF Dump Viewer — Finance")
     with col_btn:
         st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
-        if st.button("DB Viewer", type="secondary"):
-            st.session_state[_VIEW_KEY] = "db_viewer"
+        if st.button("Home", type="secondary", key="explorer_home_btn"):
+            st.session_state[_VIEW_KEY] = "home"
             st.rerun()
 
     if export_root is None:
@@ -211,17 +268,48 @@ def _render_explorer(*, db_path: Path, export_root: Optional[Path]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# HR Viewer — Contact records split by Employee / Contractor
+# ---------------------------------------------------------------------------
+
+
+def _render_hr_viewer(*, db_path: Path, export_root: Optional[Path]) -> None:
+    # Hide sidebar
+    st.markdown(
+        """
+        <style>
+          section[data-testid="stSidebar"] { display: none; }
+          button[data-testid="stSidebarCollapsedControl"] { display: none; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_title, col_btn = st.columns([4, 1])
+    with col_title:
+        st.title("SF Dump Viewer — HR")
+    with col_btn:
+        st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
+        if st.button("Home", type="secondary", key="hr_home_btn"):
+            st.session_state[_VIEW_KEY] = "home"
+            st.rerun()
+
+    from sfdump.viewer_app.ui.hr_viewer import render_hr_viewer
+
+    render_hr_viewer(db_path=db_path)
+
+
+# ---------------------------------------------------------------------------
 # DB Viewer view — sidebar controls + 2-column record browser
 # ---------------------------------------------------------------------------
 
 
 def _render_db_viewer(*, db_path: Path, export_root: Optional[Path]) -> None:
-    st.title("SF Dump Viewer")
+    st.title("SF Dump Viewer — Objects")
 
-    # Sidebar: "Back to Explorer" at top, then normal controls
+    # Sidebar: "Home" at top, then normal controls
     with st.sidebar:
-        if st.button("Back to Explorer", type="secondary", use_container_width=True):
-            st.session_state[_VIEW_KEY] = "explorer"
+        if st.button("Home", type="secondary", use_container_width=True, key="db_home_btn"):
+            st.session_state[_VIEW_KEY] = "home"
             st.rerun()
         st.divider()
 
