@@ -227,6 +227,11 @@ Push-Location $InstallDir
 try {
     # Run the PowerShell setup script
     & "$InstallDir\setup.ps1"
+
+    Write-Host ""
+    Write-Host "TIP: For future upgrades, run:" -ForegroundColor Cyan
+    Write-Host "  pip install --upgrade sfdump" -ForegroundColor White
+    Write-Host ""
 } catch {
     if ($_.Exception.Message -match "cannot be loaded because running scripts is disabled") {
         Write-Err "`nERROR: PowerShell execution policy is blocking the setup script."

@@ -1,10 +1,24 @@
-# Installing sfdump on Windows
+# Installing sfdump
 
-This guide is for users who are starting from scratch with nothing installed.
+## Install from PyPI (All Platforms)
+
+If you already have Python 3.12+ installed:
+
+```bash
+pip install sfdump
+```
+
+This works on Windows, macOS, and Linux.
 
 ---
 
-## Quick Install (Recommended)
+## Windows (Starting from Nothing)
+
+This section is for users who are starting from scratch with nothing installed.
+
+---
+
+### Quick Install (Recommended)
 
 **Copy and paste this single command into PowerShell:**
 
@@ -144,13 +158,25 @@ To run commands, open PowerShell or Command Prompt and type the command.
 
 ## Updating sfdump
 
-To update to the latest version:
+**Recommended (all platforms):**
+
+```bash
+pip install --upgrade sfdump
+```
+
+Or use the CLI:
+
+```bash
+sfdump upgrade
+```
+
+**Windows installer alternative:**
 
 1. Open the sfdump folder
 2. Double-click **install.bat**
 3. Choose option **[1] Upgrade to latest version**
 
-The installer will check GitHub for the latest release, show you the current vs latest version, download the update, and reinstall automatically. Your `.env` credentials and exported data are not affected.
+Your `.env` credentials and exported data are not affected.
 
 ---
 

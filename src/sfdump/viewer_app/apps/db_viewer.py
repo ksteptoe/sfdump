@@ -109,73 +109,6 @@ def _initial_db_path_from_argv() -> Optional[Path]:
     return None
 
 
-def _run_upgrade(latest: str) -> None:
-    """Run pip install from the latest GitHub release asset and prompt restart."""
-    import subprocess
-    import sys as _sys
-
-    from sfdump.update_check import get_latest_release
-
-    release = get_latest_release()
-    if release is None or not release.get("asset_url"):
-        st.error("Could not find a release asset to install.")
-        return
-
-    asset_url = release["asset_url"]
-
-    if _sys.platform == "win32":
-        # On Windows, pip can fail with WinError 32 if files are locked by the
-        # running Streamlit process.  Spawn a detached cmd window so the user
-        # can close the viewer while pip runs.
-        import tempfile
-
-        script = tempfile.NamedTemporaryFile(
-            mode="w", suffix=".cmd", delete=False, prefix="sfdump_upgrade_"
-        )
-        script.write(f"""\
-@echo off
-echo.
-echo Installing sfdump {latest} ...
-echo.
-"{_sys.executable}" -m pip install "{asset_url}"
-if %ERRORLEVEL% EQU 0 (
-    echo.
-    echo Successfully upgraded to {latest}.
-    echo You can now restart the viewer with: sfdump db-viewer
-) else (
-    echo.
-    echo pip install failed. See output above for details.
-)
-echo.
-pause
-""")
-        script.close()
-
-        CREATE_NEW_CONSOLE = 0x00000010
-        subprocess.Popen(
-            ["cmd.exe", "/c", script.name],
-            creationflags=CREATE_NEW_CONSOLE,
-        )
-        st.success(
-            f"Upgrade to {latest} started in a new window. "
-            "Please close this viewer and reopen it once the upgrade finishes."
-        )
-        _check_for_update.clear()
-    else:
-        with st.spinner(f"Upgrading to {latest}..."):
-            result = subprocess.run(
-                [_sys.executable, "-m", "pip", "install", asset_url],
-                capture_output=True,
-                text=True,
-            )
-
-        if result.returncode == 0:
-            st.success(f"Upgraded to {latest}. Please restart the viewer to use the new version.")
-            _check_for_update.clear()
-        else:
-            st.error(f"Upgrade failed:\n```\n{result.stderr}\n```")
-
-
 @st.cache_data(ttl=3600)
 def _check_for_update() -> tuple[bool, str, str]:
     """Cached update check (1-hour TTL). Returns (available, current, latest)."""
@@ -187,17 +120,14 @@ def _check_for_update() -> tuple[bool, str, str]:
 def main() -> None:
     st.set_page_config(page_title="SF Dump Viewer", layout="wide")
 
-    # Update banner with upgrade button (silent on failure)
+    # Update banner (silent on failure)
     try:
         available, current, latest = _check_for_update()
         if available:
-            col_msg, col_btn = st.columns([4, 1])
-            with col_msg:
-                st.info(f"A new version of sfdump is available: **{latest}** (you have {current}).")
-            with col_btn:
-                st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
-                if st.button("Upgrade now", type="primary", key="upgrade_btn"):
-                    _run_upgrade(latest)
+            st.info(
+                f"A new version of sfdump is available: **{latest}** (you have {current}).  \n"
+                f"Upgrade: `pip install --upgrade sfdump`"
+            )
     except Exception:
         pass
 

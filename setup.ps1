@@ -73,31 +73,18 @@ function Get-CurrentVersion {
 function Get-LatestRelease {
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $releaseApiUrl = "https://api.github.com/repos/$GitHubRepo/releases/latest"
-        $headers = @{ "User-Agent" = "sfdump-setup" }
-        $release = Invoke-RestMethod -Uri $releaseApiUrl -Headers $headers -ErrorAction Stop
+        $pypiUrl = "https://pypi.org/pypi/sfdump/json"
+        $response = Invoke-RestMethod -Uri $pypiUrl -ErrorAction Stop
 
-        $version = $release.tag_name -replace "^v", ""
+        $version = $response.info.version
 
-        # Look for wheel first (version baked in, faster install, no build deps)
-        $whlAsset = $release.assets |
-            Where-Object { $_.name -match "^sfdump-.*\.whl$" } |
-            Select-Object -First 1
-        $whlUrl = if ($whlAsset) { $whlAsset.browser_download_url } else { "" }
-
-        # Also find the source ZIP (needed for fresh editable installs)
-        $zipAsset = $release.assets |
-            Where-Object { $_.name -match "^sfdump-.*\.zip$" } |
-            Select-Object -First 1
-        $zipUrl = if ($zipAsset) { $zipAsset.browser_download_url } else { $release.zipball_url }
-
-        return @{ Version = $version; ZipUrl = $zipUrl; WhlUrl = $whlUrl; TagName = $release.tag_name }
+        return @{ Version = $version }
     } catch {
         return $null
     }
 }
 
-function Update-SfdumpFromGitHub {
+function Update-Sfdump {
     Show-Banner
 
     Write-Step "Checking for updates..."
@@ -136,87 +123,29 @@ function Update-SfdumpFromGitHub {
         }
     }
 
-    # Prefer wheel for upgrades (version baked in, no build deps needed)
-    if ($latest.WhlUrl) {
-        Write-Step "Installing wheel for $($latest.TagName)..."
+    Write-Step "Upgrading sfdump via pip..."
 
-        $venvPython = Join-Path $ScriptDir ".venv\Scripts\python.exe"
-        if (-not (Test-Path $venvPython)) {
-            Write-Err "  Virtual environment not found. Use option 1 for a fresh install."
-            return
-        }
-
-        try {
-            & $venvPython -m pip install $latest.WhlUrl
-            if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
-            $newVersion = Get-CurrentVersion
-            if ($newVersion) {
-                Write-Host ""
-                Write-Success "  Upgrade complete! Now running sfdump v$newVersion"
-            }
-        } catch {
-            Write-Err "  Wheel install failed: $($_.Exception.Message)"
-            Write-Host ""
-            $reinstall = Read-Host "Reinstall from local source files instead? (Y/n)"
-            if ($reinstall -eq "" -or $reinstall -match "^[Yy]") {
-                Install-Sfdump | Out-Null
-            }
-        }
+    $venvPython = Join-Path $ScriptDir ".venv\Scripts\python.exe"
+    if (-not (Test-Path $venvPython)) {
+        Write-Err "  Virtual environment not found. Use option 1 for a fresh install."
         return
     }
 
-    # Fallback: download source ZIP, extract, and editable-install
-    Write-Step "Downloading $($latest.TagName)..."
-
-    $zipPath = "$env:TEMP\sfdump-update.zip"
-    $extractPath = "$env:TEMP\sfdump-update-extract"
-
     try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $webClient = New-Object System.Net.WebClient
-        $webClient.Headers.Add("User-Agent", "sfdump-setup")
-        $webClient.DownloadFile($latest.ZipUrl, $zipPath)
-        Write-Success "  Downloaded successfully"
+        & $venvPython -m pip install --upgrade sfdump
+        if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
+        $newVersion = Get-CurrentVersion
+        if ($newVersion) {
+            Write-Host ""
+            Write-Success "  Upgrade complete! Now running sfdump v$newVersion"
+        }
     } catch {
-        Write-Err "  Download failed: $($_.Exception.Message)"
+        Write-Err "  Upgrade failed: $($_.Exception.Message)"
         Write-Host ""
         $reinstall = Read-Host "Reinstall from local source files instead? (Y/n)"
         if ($reinstall -eq "" -or $reinstall -match "^[Yy]") {
             Install-Sfdump | Out-Null
         }
-        return
-    }
-
-    Write-Step "Extracting and updating source files..."
-    try {
-        if (Test-Path $extractPath) {
-            Remove-Item $extractPath -Recurse -Force
-        }
-
-        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-
-        $extractedFolder = Get-ChildItem $extractPath | Select-Object -First 1
-        if (-not $extractedFolder) {
-            throw "No files found in downloaded archive"
-        }
-
-        Copy-Item -Path "$($extractedFolder.FullName)\*" -Destination $ScriptDir -Recurse -Force
-        Write-Success "  Source files updated"
-    } catch {
-        Write-Err "  Extract failed: $($_.Exception.Message)"
-        return
-    } finally {
-        Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-        Remove-Item $extractPath -Recurse -Force -ErrorAction SilentlyContinue
-    }
-
-    Write-Step "Installing updated dependencies..."
-    Install-Sfdump | Out-Null
-
-    $newVersion = Get-CurrentVersion
-    if ($newVersion) {
-        Write-Host ""
-        Write-Success "  Upgrade complete! Now running sfdump v$newVersion"
     }
 }
 
@@ -835,7 +764,7 @@ while ($running) {
         "1" {
             if (Test-SfdumpInstalled) {
                 # Upgrade existing installation
-                Update-SfdumpFromGitHub
+                Update-Sfdump
             } else {
                 # Fresh install
                 Show-Banner

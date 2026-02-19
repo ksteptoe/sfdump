@@ -97,7 +97,7 @@ def cli(ctx: click.Context, loglevel: Optional[int]) -> None:
             if available:
                 click.echo(
                     f"\n  Update available: {current} -> {latest}"
-                    f"\n  Run 'sfdump upgrade' to install.\n",
+                    f"\n  Run 'sfdump upgrade' or 'pip install --upgrade sfdump'.\n",
                     err=True,
                 )
     except Exception:

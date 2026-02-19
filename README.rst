@@ -86,6 +86,17 @@ auto-generated at ``meta/inventory.json`` after every ``sf dump`` run.
 Installation
 ============
 
+All Platforms (PyPI)
+--------------------
+
+If you have Python 3.12+ installed::
+
+    pip install sfdump
+
+To upgrade::
+
+    pip install --upgrade sfdump
+
 Windows (Starting from Nothing)
 -------------------------------
 
