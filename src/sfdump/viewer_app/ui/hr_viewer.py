@@ -7,6 +7,7 @@ with drill-down to individual record detail.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 
@@ -44,8 +45,10 @@ _EMPLOYEE_EXTRA_FIELDS = [
     ("Confirmed_Start_Date__c", "Start Date"),
 ]
 
-# Extra columns loaded for filtering (not displayed in table)
+# Extra columns loaded for filtering/search (not displayed in table)
 _FILTER_FIELDS = [
+    ("FirstName", "First Name"),
+    ("LastName", "Last Name"),
     ("Location__c", "Location"),
     ("Region__c", "Region"),
 ]
@@ -83,6 +86,48 @@ _DETAIL_FIELDS = [
     ("MailingCity", "City"),
     ("MailingCountry", "Country"),
 ]
+
+
+def _name_variants(row: pd.Series) -> list[str]:
+    """Build name variant strings for search matching.
+
+    Generates variants in these orders:
+    1. FirstName LastName
+    2. KnownAs LastName (if KnownAs differs from FirstName)
+    3. LastName FirstName
+    4. LastName KnownAs (if KnownAs differs from FirstName)
+    """
+    first = str(row.get("First Name") or "").strip()
+    last = str(row.get("Last Name") or "").strip()
+    known = str(row.get("Known As") or "").strip()
+
+    has_distinct_known = known and known.lower() != first.lower()
+    variants: list[str] = []
+
+    # Forward: first last
+    if first and last:
+        variants.append(f"{first} {last}")
+    elif first:
+        variants.append(first)
+    elif last:
+        variants.append(last)
+
+    # Forward with known-as
+    if has_distinct_known:
+        if last:
+            variants.append(f"{known} {last}")
+        else:
+            variants.append(known)
+
+    # Reversed: last first
+    if first and last:
+        variants.append(f"{last} {first}")
+
+    # Reversed with known-as
+    if has_distinct_known and last:
+        variants.append(f"{last} {known}")
+
+    return variants
 
 
 def _get_available_columns(cursor: sqlite3.Cursor) -> set[str]:
@@ -151,11 +196,18 @@ def _load_contacts(
     if region and "Region" in df.columns:
         df = df[df["Region"].astype(str).str.lower() == region.lower()]
 
-    # Wildcard search (glob pattern, applied across all fields)
+    # Name-only search (glob pattern matched against name variants)
     if search:
-        pattern = glob_to_regex(search.lower())
-        search_blob = df.apply(lambda row: " ".join(str(v).lower() for v in row), axis=1)
-        df = df[search_blob.str.contains(pattern, na=False, regex=True)]
+        raw = search.lower()
+        # Auto-wrap plain text (no glob chars) in wildcards for "contains" behaviour
+        if not any(c in raw for c in "*?["):
+            raw = f"*{raw}*"
+        regex = re.compile(glob_to_regex(raw))
+
+        def _matches(row: pd.Series) -> bool:
+            return any(regex.fullmatch(v.lower()) for v in _name_variants(row))
+
+        df = df[df.apply(_matches, axis=1)]
 
     return df
 
@@ -269,8 +321,8 @@ def render_hr_viewer(*, db_path: Path) -> None:
         "Search",
         value="",
         key="hr_search",
-        placeholder="e.g. Alice*, *Smith, *Engineer*, Dave?Brown...",
-        help="Search by name, email, title, or any field. Supports wildcards.",
+        placeholder="e.g. Kevin *, *Smith, Ali*, Smith Kev*...",
+        help="Search by name (first, last, or known-as). Supports wildcards.",
     ).strip()
 
     # Search tips (collapsed by default)
@@ -279,12 +331,16 @@ def render_hr_viewer(*, db_path: Path) -> None:
             """
 | Pattern | Meaning | Example |
 |---------|---------|---------|
-| `*` | Any characters | `Ali*` matches Alice, Alison, ... |
-| `?` | Single character | `?ob` matches Bob, Rob, ... |
-| `[A-M]*` | Range | `[A-M]*` matches names starting A to M |
-| `*smith*` | Contains | `*smith*` matches any name containing "smith" |
-| `*@gmail*` | Email domain | `*@gmail*` matches Gmail addresses |
-| `[!A]*` | Not starting with | `[!A]*` matches names not starting with A |
+| `Kevin *` | First name + any surname | Matches Kevin Smith, Kevin Jones, ... |
+| `*smith` | Surname ends with | Matches any name ending in "smith" |
+| `Ali*` | Starts with | Matches Alice Smith, Alison Green, ... |
+| `Smith *` | Surname first | Finds via reversed name order |
+| `?ob *` | Single char wildcard | Matches Bob, Rob + any surname |
+| `[A-M]*` | Range | Names starting A to M |
+| `kevin` | Plain text (no wildcards) | Auto-wraps as `*kevin*` — contains match |
+
+Search matches against first name, last name, and "known as" name.
+Names are matched in both orders (e.g. "Kevin Smith" and "Smith Kevin").
 """
         )
 
@@ -371,7 +427,7 @@ def _render_contact_table(
     st.markdown(f"**{len(df)}** record(s) found")
 
     # Display columns (exclude Id and filter-only columns from display)
-    hide_cols = {"Id", "Location", "Region"}
+    hide_cols = {"Id", "First Name", "Last Name", "Location", "Region"}
     display_cols = [c for c in df.columns if c not in hide_cols]
 
     st.dataframe(
@@ -379,6 +435,9 @@ def _render_contact_table(
         hide_index=True,
         height=min(400, 35 * len(df) + 38),
         width="stretch",
+        column_config={
+            "Name": st.column_config.TextColumn("Name", width="large"),
+        },
     )
 
     # Record selector for detail view

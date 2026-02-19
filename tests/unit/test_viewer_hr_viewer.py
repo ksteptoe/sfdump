@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from sfdump.viewer_app.ui.hr_viewer import (
@@ -21,6 +22,7 @@ from sfdump.viewer_app.ui.hr_viewer import (
     _load_contact_detail,
     _load_contacts,
     _load_regions,
+    _name_variants,
 )
 
 
@@ -384,6 +386,11 @@ class TestFieldDefinitions:
         assert "Region__c" in col_names
         assert "Location__c" in col_names
 
+    def test_filter_fields_has_name_parts(self):
+        col_names = [col for col, _ in _FILTER_FIELDS]
+        assert "FirstName" in col_names
+        assert "LastName" in col_names
+
     def test_detail_fields_has_region(self):
         col_names = [col for col, _ in _DETAIL_FIELDS]
         assert "Region__c" in col_names
@@ -487,7 +494,7 @@ class TestCountByType:
 
 class TestLoadContacts:
     def test_load_employees(self, hr_db: Path):
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
         df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields)
 
         assert len(df) == 3
@@ -496,54 +503,61 @@ class TestLoadContacts:
         assert "Title" in df.columns
 
     def test_load_contractors(self, hr_db: Path):
-        fields = _COMMON_FIELDS + _CONTRACTOR_EXTRA_FIELDS
+        fields = _COMMON_FIELDS + _CONTRACTOR_EXTRA_FIELDS + _FILTER_FIELDS
         df = _load_contacts(hr_db, _CONTRACTOR_RT_ID, fields)
 
         assert len(df) == 2
         assert "Salary" in df.columns  # Contractor-specific field
 
-    def test_search_filters_by_name(self, hr_db: Path):
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+    def test_search_filters_by_first_name(self, hr_db: Path):
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
         df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="alice")
 
         assert len(df) == 1
         assert df.iloc[0]["Name"] == "Alice Smith"
 
-    def test_search_filters_by_title(self, hr_db: Path):
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
-        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="manager")
+    def test_search_filters_by_last_name(self, hr_db: Path):
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="jones")
 
         assert len(df) == 1
         assert df.iloc[0]["Name"] == "Bob Jones"
 
+    def test_search_does_not_match_title(self, hr_db: Path):
+        """Search is name-only; titles should not match."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="manager")
+
+        assert len(df) == 0
+
     def test_search_case_insensitive(self, hr_db: Path):
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
         df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="ALICE")
 
         assert len(df) == 1
 
     def test_search_no_match_returns_empty(self, hr_db: Path):
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
         df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="nonexistent")
 
         assert len(df) == 0
 
     def test_empty_search_returns_all(self, hr_db: Path):
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
         df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="")
 
         assert len(df) == 3
 
     def test_includes_id_column(self, hr_db: Path):
         """Id column is always included for drill-down."""
-        fields = _COMMON_FIELDS
+        fields = _COMMON_FIELDS + _FILTER_FIELDS
         df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields)
 
         assert "Id" in df.columns
 
     def test_with_record_type_table(self, hr_db_with_record_type: Path):
         """Works with record_type table JOIN approach."""
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
         df = _load_contacts(hr_db_with_record_type, _EMPLOYEE_RT_ID, fields)
 
         assert len(df) == 3
@@ -618,44 +632,152 @@ class TestLoadContactDetail:
 
 
 class TestWildcardSearch:
-    def test_star_wildcard(self, hr_db: Path):
-        """Star wildcard matches any characters."""
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
-        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="ali*")
+    def test_star_wildcard_first_name(self, hr_db: Path):
+        """Star wildcard matches first name prefix."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="Ali*")
         assert len(df) == 1
         assert df.iloc[0]["Name"] == "Alice Smith"
 
+    def test_first_name_star_matches_any_surname(self, hr_db: Path):
+        """'Alice *' matches FirstName=Alice with any surname."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="Alice *")
+        assert len(df) == 1
+        assert df.iloc[0]["Name"] == "Alice Smith"
+
+    def test_first_name_partial_surname(self, hr_db: Path):
+        """'Alice Sm*' matches FirstName=Alice, Surname starting Sm."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="Alice Sm*")
+        assert len(df) == 1
+        assert df.iloc[0]["Name"] == "Alice Smith"
+
+    def test_first_name_star_excludes_wrong_first(self, hr_db: Path):
+        """'Alice *' should NOT match Bob Jones."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="Alice *")
+        names = df["Name"].tolist()
+        assert "Bob Jones" not in names
+
     def test_question_mark_wildcard(self, hr_db: Path):
         """Question mark matches single character."""
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
-        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="?ob jones")
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="?ob *")
         assert len(df) == 1
         assert df.iloc[0]["Name"] == "Bob Jones"
 
-    def test_star_contains(self, hr_db: Path):
-        """Star on both sides matches contains."""
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+    def test_reversed_name_order(self, hr_db: Path):
+        """Searching surname-first matches via reversed variant."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="Smith *")
+        assert len(df) == 1
+        assert df.iloc[0]["Name"] == "Alice Smith"
+
+    def test_known_as_search(self, hr_db: Path):
+        """Searching by known-as name finds the contact."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="Bobby *")
+        assert len(df) == 1
+        assert df.iloc[0]["Name"] == "Bob Jones"
+
+    def test_known_as_reversed(self, hr_db: Path):
+        """Searching surname + known-as finds the contact."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="Jones Bobby")
+        assert len(df) == 1
+        assert df.iloc[0]["Name"] == "Bob Jones"
+
+    def test_star_contains_name(self, hr_db: Path):
+        """Star on both sides matches name substring."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="*mith*")
+        assert len(df) == 1
+        assert df.iloc[0]["Name"] == "Alice Smith"
+
+    def test_does_not_match_non_name_fields(self, hr_db: Path):
+        """Search should not match against email, title, comments, etc."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
+        # "Engineer" is Alice's title, not a name
         df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="*engineer*")
-        # Alice is Engineer, Bob is in Engineering dept
-        assert len(df) >= 1
+        assert len(df) == 0
 
     def test_wildcard_case_insensitive(self, hr_db: Path):
         """Wildcard search is case-insensitive."""
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
         df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="ALICE*")
         assert len(df) == 1
 
     def test_wildcard_no_match(self, hr_db: Path):
         """Wildcard with no match returns empty."""
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
         df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="xyz*zzz")
         assert len(df) == 0
 
-    def test_plain_search_still_works(self, hr_db: Path):
-        """Plain text without wildcards still matches as substring."""
-        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS
+    def test_plain_search_auto_wraps(self, hr_db: Path):
+        """Plain text without wildcards auto-wraps in *...* for contains."""
+        fields = _COMMON_FIELDS + _EMPLOYEE_EXTRA_FIELDS + _FILTER_FIELDS
         df = _load_contacts(hr_db, _EMPLOYEE_RT_ID, fields, search="alice")
         assert len(df) == 1
+
+
+# ---------------------------------------------------------------------------
+# Name variants
+# ---------------------------------------------------------------------------
+
+
+class TestNameVariants:
+    def test_first_last(self):
+        """Generates FirstName LastName variant."""
+        row = pd.Series({"First Name": "Alice", "Last Name": "Smith", "Known As": ""})
+        variants = _name_variants(row)
+        assert "Alice Smith" in variants
+
+    def test_reversed(self):
+        """Generates LastName FirstName variant."""
+        row = pd.Series({"First Name": "Alice", "Last Name": "Smith", "Known As": ""})
+        variants = _name_variants(row)
+        assert "Smith Alice" in variants
+
+    def test_known_as_variant(self):
+        """Generates KnownAs LastName variant when different from FirstName."""
+        row = pd.Series({"First Name": "Robert", "Last Name": "Jones", "Known As": "Bobby"})
+        variants = _name_variants(row)
+        assert "Bobby Jones" in variants
+        assert "Jones Bobby" in variants
+
+    def test_known_as_same_as_first_skipped(self):
+        """Skips KnownAs variant when it matches FirstName."""
+        row = pd.Series({"First Name": "Dave", "Last Name": "Brown", "Known As": "Dave"})
+        variants = _name_variants(row)
+        # Should have FirstLast and LastFirst, but no duplicate known-as variants
+        assert variants == ["Dave Brown", "Brown Dave"]
+
+    def test_no_known_as(self):
+        """Works when KnownAs is empty."""
+        row = pd.Series({"First Name": "Carol", "Last Name": "White", "Known As": ""})
+        variants = _name_variants(row)
+        assert "Carol White" in variants
+        assert "White Carol" in variants
+        assert len(variants) == 2
+
+    def test_first_only(self):
+        """Handles contact with only first name."""
+        row = pd.Series({"First Name": "Alice", "Last Name": "", "Known As": ""})
+        variants = _name_variants(row)
+        assert variants == ["Alice"]
+
+    def test_last_only(self):
+        """Handles contact with only last name."""
+        row = pd.Series({"First Name": "", "Last Name": "Smith", "Known As": ""})
+        variants = _name_variants(row)
+        assert variants == ["Smith"]
+
+    def test_known_as_case_insensitive_dedup(self):
+        """KnownAs 'bob' is treated as same as FirstName 'Bob'."""
+        row = pd.Series({"First Name": "Bob", "Last Name": "Jones", "Known As": "bob"})
+        variants = _name_variants(row)
+        assert variants == ["Bob Jones", "Jones Bob"]
 
 
 # ---------------------------------------------------------------------------
