@@ -103,3 +103,4 @@ docs/_generated/
 *.local.json
 tests/__pycache__/
 SIN001063.pdf
+Correct_SIN001063.pdf
